@@ -60,6 +60,17 @@ export default function ProjectsPage() {
     } else setClientServices([])
   }, [form.clientId])
 
+  // Auto-suggest the department head as manager when a service is picked
+  useEffect(() => {
+    if (!form.clientServiceId) return
+    const svc = clientServices.find((s: any) => s.id === form.clientServiceId)
+    const deptId = svc?.departmentId
+    if (!deptId) return
+    const dept = departments.find((d: any) => d.id === deptId)
+    const headUserId = dept?.manager?.user?.id
+    if (headUserId) setForm(p => ({ ...p, managerId: p.managerId || headUserId }))
+  }, [form.clientServiceId, clientServices, departments])
+
   const openAssign = () => {
     setForm({ clientId: '', clientServiceId: '', managerId: '', memberIds: [], role: 'MEMBER' })
     setModal('assign')
@@ -229,7 +240,7 @@ export default function ProjectsPage() {
         <div className="space-y-3">
           <Select label="Client *" value={form.clientId} onChange={e => setForm(p => ({...p, clientId: e.target.value, clientServiceId: ''}))} options={[{ value: '', label: 'Pick a client...' }, ...clients.map((c: any) => ({ value: c.id, label: `${c.clientName} — ${c.companyName}` }))] } />
           <Select label="Service *" value={form.clientServiceId} onChange={e => setForm(p => ({...p, clientServiceId: e.target.value}))} disabled={!form.clientId} options={[{ value: '', label: form.clientId ? 'Pick a service...' : 'Pick client first' }, ...clientServices.map((s: any) => ({ value: s.id, label: `${s.serviceName} — ${s.status}` }))]} />
-          <Select label="Manager (dept head)" value={form.managerId} onChange={e => setForm(p => ({...p, managerId: e.target.value}))} options={[{ value: '', label: '— No manager —' }, ...users.filter(u => u.role === 'MANAGER').map((u: any) => ({ value: u.id, label: `${u.name} (${u.employee?.department?.name || '—'})` }))]} />  
+          <Select label="Manager (dept head)" value={form.managerId} onChange={e => setForm(p => ({...p, managerId: e.target.value}))} options={[{ value: '', label: '— No manager —' }, ...users.map((u: any) => ({ value: u.id, label: `${u.name} · ${(u.role || '').replace(/_/g, ' ')}${u.employee?.department?.name ? ` (${u.employee.department.name})` : ''}` }))]} />
             
           <div>
             <label className="label">Team Members</label>

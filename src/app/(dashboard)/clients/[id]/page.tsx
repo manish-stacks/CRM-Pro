@@ -38,6 +38,7 @@ export default function ClientDetailPage() {
   const [modal, setModal] = useState<'none' | 'service' | 'renew' | 'portal' | 'edit'>('none')
   const [saving, setSaving] = useState(false)
   const [showPwd, setShowPwd] = useState<string | null>(null)
+  const [customPwd, setCustomPwd] = useState('')
 
   const [serviceCatalog, setServiceCatalog] = useState<any[]>([])
   const [target, setTarget] = useState<any>(null)
@@ -148,6 +149,20 @@ export default function ClientDetailPage() {
         toast.success('Portal access disabled')
         setModal('none')
       }
+      fetchClient()
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Failed')
+    } finally { setSaving(false) }
+  }
+
+  const setCustomPassword = async () => {
+    if (customPwd.trim().length < 6) { toast.error('Password kam se kam 6 characters'); return }
+    setSaving(true)
+    try {
+      await api.post(`/clients/${id}/portal-access`, { action: 'set', password: customPwd.trim() })
+      toast.success('Client ka password set ho gaya')
+      setCustomPwd('')
+      setModal('none')
       fetchClient()
     } catch (e: any) {
       toast.error(e.response?.data?.error || 'Failed')
@@ -546,6 +561,26 @@ export default function ClientDetailPage() {
                   </button>
                 </>
               )}
+
+              {/* Admin sets/updates a specific password (no email, admin shares manually) */}
+              <div className="border-t border-gray-100 pt-3 mt-1">
+                <label className="label flex items-center gap-1"><KeyRound size={12} /> Set custom password (admin)</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={customPwd}
+                    onChange={e => setCustomPwd(e.target.value)}
+                    placeholder="Naya password (min 6 chars)"
+                    className="input flex-1"
+                  />
+                  <Button variant="primary" onClick={setCustomPassword} loading={saving} disabled={customPwd.trim().length < 6}>
+                    Set
+                  </Button>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Lead convert ke baad client ka portal password yahan se set/update karo. Ye email/WhatsApp nahi bhejta — password khud client ko de dena.
+                </p>
+              </div>
             </div>
           )}
         </Modal>
@@ -946,9 +981,9 @@ function TeamSection({ clientId, services, canEdit, user, onChanged }: {
                   onChange={e => setForm(p => ({ ...p, managerId: e.target.value }))}
                   options={[
                     { value: '', label: '— Select head —' },
-                    ...staff.filter((u: any) => u.role === 'MANAGER').map((u: any) => ({
+                    ...staff.map((u: any) => ({
                       value: u.id,
-                      label: `${u.name}${u.employee?.department?.name ? ` (${u.employee.department.name})` : ''}`,
+                      label: `${u.name} · ${(u.role || '').replace(/_/g, ' ')}${u.employee?.department?.name ? ` (${u.employee.department.name})` : ''}`,
                     })),
                   ]}
                 />

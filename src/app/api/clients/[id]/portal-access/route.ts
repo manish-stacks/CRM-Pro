@@ -10,6 +10,7 @@ import { requireAuth } from '@/lib/auth'
 import { successResponse, errorResponse, notFoundResponse } from '@/lib/api'
 import { logFromRequest } from '@/lib/audit'
 import { activateClientPortal } from '@/lib/welcomeFlow'
+import { hash } from 'bcryptjs'
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -17,12 +18,31 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (auth instanceof Response) return auth
   const session = (auth as any).session
 
-  const { action } = await req.json()
+  const { action, password } = await req.json()
   const client = await prisma.client.findUnique({
     where: { id },
     select: { id: true, email: true, phone: true, portalPasswordSet: true, clientName: true },
   })
   if (!client) return notFoundResponse('Client')
+
+  // Admin sets/updates a specific password (not random)
+  if (action === 'set') {
+    if (!password || String(password).length < 6) {
+      return errorResponse('Password kam se kam 6 characters ka hona chahiye')
+    }
+    const passwordHash = await hash(String(password), 10)
+    await prisma.client.update({
+      where: { id },
+      data: { portalPassword: passwordHash, portalPasswordSet: true },
+    })
+    await logFromRequest(req, {
+      userId: session.userId,
+      action: 'SET_PORTAL_PASSWORD',
+      entityType: 'Client',
+      entityId: id,
+    })
+    return successResponse({ ok: true, set: true })
+  }
 
   if (action === 'activate' || action === 'regenerate') {
     try {

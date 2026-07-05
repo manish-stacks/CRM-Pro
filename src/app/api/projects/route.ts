@@ -29,14 +29,9 @@ export async function GET(req: NextRequest) {
   if (departmentId) where.clientService = { ...(where.clientService || {}), departmentId }
 
   // Role scope
-  if (session.role === 'EMPLOYEE') {
-    where.memberId = session.userId
-  } else if (session.role === 'MANAGER') {
-    where.OR = [
-      { managerId: session.userId },
-      { memberId: session.userId },
-    ]
-  } else if (['TELECALLER', 'MARKETING_EXECUTIVE'].includes(session.role) && !hasMinRole(session.role, 'MANAGER')) {
+  if (hasMinRole(session.role, 'ADMIN')) {
+    // Admin / Super admin → no extra scope, sees everything
+  } else if (['TELECALLER', 'MARKETING_EXECUTIVE'].includes(session.role)) {
     // Only see projects for their assigned clients
     const clients = await prisma.client.findMany({
       where: session.role === 'TELECALLER'
@@ -45,6 +40,19 @@ export async function GET(req: NextRequest) {
       select: { id: true },
     })
     where.clientService = { ...(where.clientService || {}), clientId: { in: clients.map(c => c.id) } }
+  } else {
+    // EMPLOYEE / MANAGER (and anyone who heads a project regardless of app-role):
+    // see their own assignments + EVERY assignment (manager + members) of services they head.
+    const managed = await prisma.projectAssignment.findMany({
+      where: { managerId: session.userId },
+      select: { clientServiceId: true },
+    })
+    const managedServiceIds = Array.from(new Set(managed.map(m => m.clientServiceId)))
+    where.OR = [
+      { managerId: session.userId },
+      { memberId: session.userId },
+      ...(managedServiceIds.length ? [{ clientServiceId: { in: managedServiceIds } }] : []),
+    ]
   }
 
   const [assignments, total] = await Promise.all([
@@ -71,13 +79,22 @@ export async function POST(req: NextRequest) {
   const session = await getRequestSession(req)
   if (!session) return unauthorizedResponse()
 
-  if (!hasMinRole(session.role, 'MANAGER')) return errorResponse('Forbidden', 403)
-
   const body = await req.json()
   const { clientServiceId, managerId, memberIds = [], role = 'MEMBER' } = body
 
   if (!clientServiceId) return errorResponse('clientServiceId required')
   if (!managerId && memberIds.length === 0) return errorResponse('Either managerId or memberIds required')
+
+  // Permission: admins/managers can assign anything. A project HEAD (any app-role) can
+  // add members to the service they head — but NOT change the head (managerId).
+  if (!hasMinRole(session.role, 'MANAGER')) {
+    const isHead = await prisma.projectAssignment.findFirst({
+      where: { clientServiceId, managerId: session.userId, isActive: true },
+      select: { id: true },
+    })
+    if (!isHead) return errorResponse('Forbidden', 403)
+    if (managerId) return errorResponse('Only an admin can change the project head', 403)
+  }
 
   const svc = await prisma.clientService.findUnique({
     where: { id: clientServiceId },

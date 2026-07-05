@@ -19,13 +19,17 @@ export default function PaymentsPage() {
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
-  const [showFilter, setShowFilter] = useState(false)
+  const [showFilter, setShowFilter] = useState(false);
   const [filters, setFilters] = useState({ status: '', clientId: '', dateFrom: '', dateTo: '' })
-  const [showPmtModal, setShowPmtModal] = useState(false)
-  const [saving, setSaving] = useState(false)
+  const [showInvModal, setShowInvModal] = useState(false);
+  const [showPmtModal, setShowPmtModal] = useState(false);
+  const [showEditInv, setShowEditInv] = useState<any>(null);
+  const [saving, setSaving] = useState(false);
 
+  const [invForm, setInvForm] = useState({ clientId: '', dueDate: '', notes: '', items: [{ description: '', quantity: 1, unitPrice: '', total: 0 }] })
   const [pmtForm, setPmtForm] = useState({ invoiceId: '', amount: '', method: 'UPI', reference: '', paidAt: new Date().toISOString().split('T')[0], nextDueDate: '' })
-  const router = useRouter()
+  const router = useRouter();
+
   const fetchData = useCallback(async () => {
     setLoading(true)
     try {
@@ -46,6 +50,32 @@ export default function PaymentsPage() {
       .catch(() => { })
   }, [])
   useEffect(() => { loadDueInvoices() }, [loadDueInvoices])
+
+  const invoiceSubtotal = invForm.items.reduce((s, i) => s + (i.total || 0), 0)
+
+  const updateItem = (idx: number, field: string, val: string | number) => {
+    setInvForm(prev => {
+      const items = [...prev.items]
+      items[idx] = { ...items[idx], [field]: val }
+      if (field === 'quantity' || field === 'unitPrice') {
+        items[idx].total = Number(items[idx].quantity) * Number(items[idx].unitPrice)
+      }
+      return { ...prev, items }
+    })
+  }
+
+  const createInvoice = async () => {
+    if (!invForm.clientId) { toast.error('Select a client'); return }
+    setSaving(true)
+    try {
+      await api.post('/payments', { type: 'invoice', ...invForm, totalAmount: invoiceSubtotal })
+      toast.success('Invoice created!')
+      setShowInvModal(false)
+      fetchData()
+      loadDueInvoices()
+    } catch (e: any) { toast.error(e.response?.data?.error || 'Failed') }
+    finally { setSaving(false) }
+  }
 
   const recordPayment = async () => {
     if (!pmtForm.invoiceId || !pmtForm.amount) { toast.error('Invoice and amount required'); return }
@@ -202,7 +232,38 @@ export default function PaymentsPage() {
       )}
       <Pagination page={page} totalPages={Math.ceil(total / 20)} onPageChange={setPage} />
 
-
+      {/* Create Invoice */}
+      <Modal open={showInvModal} onClose={() => setShowInvModal(false)} title="New Invoice" className="max-w-2xl">
+        <div className="space-y-4">
+          <div className="form-grid">
+            <Select label="Client *" value={invForm.clientId} onChange={e => setInvForm(p => ({ ...p, clientId: e.target.value }))} options={[{ value: '', label: 'Select client...' }, ...clients.map(c => ({ value: c.id, label: c.companyName }))]} />
+            <Input label="Due Date" type="date" value={invForm.dueDate} onChange={e => setInvForm(p => ({ ...p, dueDate: e.target.value }))} />
+          </div>
+          <div>
+            <div className="flex justify-between mb-2">
+              <label className="label mb-0">Items</label>
+              <Button variant="ghost" size="sm" onClick={() => setInvForm(p => ({ ...p, items: [...p.items, { description: '', quantity: 1, unitPrice: '', total: 0 }] }))}>+ Add</Button>
+            </div>
+            {invForm.items.map((item, i) => (
+              <div key={i} className="grid grid-cols-12 gap-2 mb-2 bg-gray-50 rounded-lg p-2 items-center">
+                <input className="input col-span-5 py-1.5 text-sm" placeholder="Description" value={item.description} onChange={e => updateItem(i, 'description', e.target.value)} />
+                <input className="input col-span-2 py-1.5 text-sm" type="number" min="1" value={item.quantity} onChange={e => updateItem(i, 'quantity', Number(e.target.value))} />
+                <input className="input col-span-3 py-1.5 text-sm" type="number" placeholder="Price" value={item.unitPrice} onChange={e => updateItem(i, 'unitPrice', Number(e.target.value))} />
+                <div className="col-span-2 flex items-center justify-between">
+                  <span className="text-sm font-medium text-green-600">{formatCurrency(item.total)}</span>
+                  {invForm.items.length > 1 && <button onClick={() => setInvForm(p => ({ ...p, items: p.items.filter((_, idx) => idx !== i) }))} className="text-red-400 hover:text-red-600 text-xs ml-1">✕</button>}
+                </div>
+              </div>
+            ))}
+            <div className="text-right font-bold text-green-600">Total: {formatCurrency(invoiceSubtotal)}</div>
+          </div>
+          <Input label="Notes" value={invForm.notes} onChange={e => setInvForm(p => ({ ...p, notes: e.target.value }))} placeholder="Optional notes..." />
+          <div className="flex justify-end gap-3">
+            <Button variant="secondary" onClick={() => setShowInvModal(false)}>Cancel</Button>
+            <Button variant="primary" onClick={createInvoice} loading={saving}>Create Invoice</Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Record Payment */}
       <Modal open={showPmtModal} onClose={() => setShowPmtModal(false)} title="Record Payment" className="max-w-md">
@@ -210,6 +271,15 @@ export default function PaymentsPage() {
           <Select label="Invoice *" value={pmtForm.invoiceId} onChange={e => setPmtForm(p => ({ ...p, invoiceId: e.target.value }))}
             options={[{ value: '', label: 'Select invoice...' }, ...dueInvoices.map((i: any) => ({ value: i.id, label: `${i.invoiceNumber || i.id} — ${i.client?.companyName || ''} (Due: ${formatCurrency(i.dueAmount || 0)})` }))]}
           />
+          {dueInvoices.length === 0 && (
+            <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800">
+              Koi <b>pending invoice</b> nahi mila (sirf balance-due wale dikhte hain). Part payment ke liye pehle full amount ka invoice banao.
+              <button type="button" onClick={() => { setShowPmtModal(false); setInvForm({ clientId: '', dueDate: '', notes: '', items: [{ description: '', quantity: 1, unitPrice: '', total: 0 }] }); setShowInvModal(true) }}
+                className="mt-2 block w-full text-center bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2 text-sm font-medium">
+                + New Invoice banao
+              </button>
+            </div>
+          )}
           <div className="form-grid">
             <Input label="Amount *" type="number" value={pmtForm.amount} onChange={e => setPmtForm(p => ({ ...p, amount: e.target.value }))} />
             <Select label="Method" value={pmtForm.method} onChange={e => setPmtForm(p => ({ ...p, method: e.target.value }))} options={['CASH', 'UPI', 'BANK_TRANSFER', 'CHEQUE', 'CARD'].map(m => ({ value: m, label: m.replace('_', ' ') }))} />
