@@ -1,0 +1,1017 @@
+// ============================================================
+// HBS CRM v2.0 — Complete Prisma Schema
+// All 30+ models covering: HRM, CRM, Client Portal,
+// Project Assignment, Reports, Tickets, Chat, Integrations
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// USER & AUTH
+// ============================================================
+
+model User {
+  id               String    @id @default(cuid())
+  email            String    @unique
+  password         String
+  name             String
+  role             String    @default("EMPLOYEE") // SUPER_ADMIN, ADMIN, MANAGER, EMPLOYEE, TELECALLER, MARKETING_EXECUTIVE, CLIENT
+  avatar           String?
+  phone            String?
+  altPhone         String?
+  dateOfBirth      DateTime?
+  isActive         Boolean   @default(true) // Admin can disable/enable
+  disabledAt       DateTime?
+  disabledReason   String?
+  lastLoginAt      DateTime?
+  expoPushToken    String?   // mobile push (Expo/FCM)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  employee               Employee?
+  clientProfile          Client?              @relation("ClientUser")
+  clientsAssigned        Client[]             @relation("ClientAssignedTo")
+  clientsAsTelecaller    Client[]             @relation("ClientTelecaller")
+  clientsAsMarketing     Client[]             @relation("ClientMarketing")
+  clientsAsReporting     Client[]             @relation("ClientReporting")
+  createdLeads           Lead[]               @relation("CreatedLeads")
+  assignedLeads          Lead[]               @relation("AssignedLeads")
+  meetingLeads           Lead[]               @relation("MeetingAssignedLeads")
+  createdProposals       Proposal[]           @relation("ProposalCreatedBy")
+  sentMessages           Message[]            @relation("SentMessages")
+  receivedMessages       Message[]            @relation("ReceivedMessages")
+  chatMemberships        ChatMember[]
+  createdTickets         SupportTicket[]      @relation("TicketCreator")
+  assignedTickets        SupportTicket[]      @relation("TicketAssignee")
+  supportTicketReplies   SupportTicketReply[] @relation("SupportTicketReplyAuthor")
+  employeeTicketsCreated EmployeeTicket[]     @relation("EmpTicketCreator")
+  employeeTicketsAssigned EmployeeTicket[]    @relation("EmpTicketAssignee")
+  employeeTicketReplies  EmployeeTicketReply[] @relation("EmployeeTicketReplyAuthor")
+  uploadedReports        ClientReport[]       @relation("ReportUploader")
+  loginActivities        LoginActivity[]
+  activityLogs           ActivityLog[]
+  notifications          Notification[]
+  leadActivities         LeadActivity[]
+  leadAssignmentsFrom    LeadAssignmentHistory[] @relation("AssignFrom")
+  leadAssignmentsTo      LeadAssignmentHistory[] @relation("AssignTo")
+  leadAssignmentsBy      LeadAssignmentHistory[] @relation("AssignBy")
+  managedProjects        ProjectAssignment[]  @relation("ProjectManager")
+  projectMemberships     ProjectAssignment[]  @relation("ProjectMember")
+  locationPings          LocationPing[]       @relation("UserLocationPings")
+  clientVisits           ClientVisit[]        @relation("UserClientVisits")
+
+  @@index([email])
+  @@index([role])
+  @@index([isActive])
+  @@map("users")
+}
+
+model LoginActivity {
+  id         String   @id @default(cuid())
+  userId     String
+  loginAt    DateTime @default(now())
+  logoutAt   DateTime?
+  ipAddress  String?
+  userAgent  String?  @db.Text
+  device     String?  // Desktop, Mobile, Tablet
+  browser    String?  // Chrome 130, Safari 17 etc
+  os         String?  // Windows, macOS, Android, iOS
+  latitude   Float?
+  longitude  Float?
+  location   String?  // City, Region
+  status     String   @default("SUCCESS") // SUCCESS, FAILED
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, loginAt])
+  @@map("login_activities")
+}
+
+model ActivityLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  action     String   // CREATE, UPDATE, DELETE, ASSIGN, LOGIN, LOGOUT, EXPORT etc
+  entityType String   // Lead, Client, Employee, Proposal, Invoice etc
+  entityId   String?
+  changes    String?  @db.Text // JSON diff
+  ipAddress  String?
+  metadata   String?  @db.Text // JSON
+  createdAt  DateTime @default(now())
+
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([entityType, entityId])
+  @@map("activity_logs")
+}
+
+// ============================================================
+// HRM: DEPARTMENTS, EMPLOYEES, ATTENDANCE, LEAVE, PAYROLL
+// ============================================================
+
+model Department {
+  id          String     @id @default(cuid())
+  name        String     @unique
+  slug        String     @unique
+  description String?
+  color       String?    // Tailwind color for UI badges
+  icon        String?    // Lucide icon name
+  managerId   String?    // Current dept head (User.id)
+  isActive    Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  manager             Employee?             @relation("DepartmentManager", fields: [managerId], references: [id])
+  employees           Employee[]
+  clientServices      ClientService[]
+  supportTickets      SupportTicket[]
+  employeeTickets     EmployeeTicket[]
+  managerHistory      DepartmentManagerHistory[]
+
+  @@map("departments")
+}
+
+model DepartmentManagerHistory {
+  id             String     @id @default(cuid())
+  departmentId   String
+  managerId      String     // Employee.id
+  assignedById   String     // User.id who assigned
+  assignedAt     DateTime   @default(now())
+  removedAt      DateTime?
+  reason         String?
+
+  department     Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+
+  @@index([departmentId, assignedAt])
+  @@map("department_manager_history")
+}
+
+model Employee {
+  id                String    @id @default(cuid())
+  userId            String    @unique
+  employeeId        String    @unique // HBS00001 etc
+  departmentId      String?
+  reportingToId     String?   // team lead this employee reports to (for multi-lead depts)
+  position          String?
+  salary            Float     @default(0)
+  workMode          String    @default("WFO") // WFO, WFH, HYBRID
+  joiningDate       DateTime?
+
+  // Personal
+  dateOfBirth       DateTime?
+  gender            String?
+  bloodGroup        String?
+  fatherName        String?
+  motherName        String?
+  maritalStatus     String?
+
+  // Contact
+  address           String?
+  city              String?
+  state             String?
+  pincode           String?
+  emergencyContact  String?
+  emergencyPhone    String?
+
+  // ID Proofs
+  idProofType       String?
+  idProofNumber     String?
+  idProofUrl        String?
+  panNumber         String?
+  aadharNumber      String?
+  aadharFrontUrl    String?  // Cloudinary URL
+  aadharBackUrl     String?  // Cloudinary URL
+
+  // Bank
+  bankName          String?
+  accountNumber     String?
+  ifscCode          String?
+  accountHolderName String?
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  user              User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  department        Department? @relation(fields: [departmentId], references: [id])
+  managedDept       Department[] @relation("DepartmentManager")
+  reportingTo       Employee?   @relation("TeamLead", fields: [reportingToId], references: [id], onDelete: SetNull)
+  teamMembers       Employee[]  @relation("TeamLead")
+  attendance        Attendance[]
+  leaves            Leave[]
+  payslips          Payslip[]
+  leaveBalance      LeaveBalance?
+
+  @@index([employeeId])
+  @@index([departmentId])
+  @@map("employees")
+}
+
+model Attendance {
+  id             String    @id @default(cuid())
+  employeeId     String
+  date           DateTime  @db.Date
+  punchIn        DateTime?
+  punchOut       DateTime?
+  workMode       String    @default("WFO") // WFO, WFH, FIELD
+  status         String    @default("PRESENT") // PRESENT, ABSENT, HALF_DAY, LEAVE, HOLIDAY
+  hoursWorked    Float?
+  notes          String?
+
+  // Late-mark (computed on punch-in vs office start + grace)
+  isLate         Boolean   @default(false)
+  lateBy         Int?      // minutes after office start (only when isLate)
+
+  // Geolocation - Punch In
+  punchInLat     Float?
+  punchInLng     Float?
+  punchInAddress String?
+  punchInIp      String?
+  punchInDevice  String?   // Desktop, Mobile, Tablet
+  punchInBrowser String?
+  punchInOs      String?
+
+  // Geolocation - Punch Out
+  punchOutLat     Float?
+  punchOutLng     Float?
+  punchOutAddress String?
+  punchOutIp      String?
+  punchOutDevice  String?
+  punchOutBrowser String?
+  punchOutOs      String?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, date])
+  @@index([date])
+  @@index([status])
+  @@map("attendance")
+}
+
+// ============================================================
+// FIELD TRACKING (Marketing Person location breadcrumbs)
+// ============================================================
+
+model LocationPing {
+  id           String   @id @default(cuid())
+  userId       String   // The tracked user (marketing person)
+  attendanceId String?  // Links to the day's attendance session (check-in..check-out)
+  latitude     Float
+  longitude    Float
+  accuracy     Float?   // GPS accuracy in meters
+  speed        Float?   // m/s if moving
+  heading      Float?   // 0-360 degrees
+  altitude     Float?
+  address      String?  // Reverse-geocoded (optional)
+  battery      Int?     // Battery % at time of ping
+  isMoving     Boolean  @default(false)
+  source       String   @default("foreground") // foreground, background
+  recordedAt   DateTime // Client-side timestamp (device)
+  createdAt    DateTime @default(now())
+
+  user         User     @relation("UserLocationPings", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, recordedAt])
+  @@index([attendanceId])
+  @@map("location_pings")
+}
+
+model ClientVisit {
+  id           String    @id @default(cuid())
+  userId       String    // Marketing person who visited
+  clientId     String?   // Linked client (if existing)
+  clientName   String    // Snapshot name (for quick display)
+  purpose      String?
+  notes        String?
+  status       String    @default("PENDING") // PENDING, IN_PROGRESS, COMPLETED, CANCELLED
+  scheduledDate DateTime? @db.Date
+  scheduledTime String?
+
+  // Check-in at the client location
+  checkInAt    DateTime?
+  checkInLat   Float?
+  checkInLng   Float?
+  checkInAddress String?
+
+  // Check-out
+  checkOutAt   DateTime?
+  checkOutLat  Float?
+  checkOutLng  Float?
+
+  durationMins Int?      // Auto-calculated on checkout
+
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user         User      @relation("UserClientVisits", fields: [userId], references: [id], onDelete: Cascade)
+  client       Client?   @relation("ClientVisits", fields: [clientId], references: [id], onDelete: SetNull)
+
+  @@index([userId, scheduledDate])
+  @@index([clientId])
+  @@index([status])
+  @@map("client_visits")
+}
+
+model Leave {
+  id              String    @id @default(cuid())
+  employeeId      String
+  leaveType       String    @default("PAID") // PAID, UNPAID, SICK, CASUAL, MATERNITY, PATERNITY
+  duration        String    @default("SINGLE_DAY") // SINGLE_DAY, MULTIPLE_DAYS, SHORT_HOURLY
+  startDate       DateTime  @db.Date
+  endDate         DateTime  @db.Date
+  days            Float     // 1, 2, 0.5 for half day, hours/8 for hourly
+  hourlyStart     String?   // "14:00"
+  hourlyEnd       String?   // "16:00"
+  hourlyHours     Float?    // 2.0
+  reason          String    @db.Text
+  status          String    @default("PENDING") // PENDING, APPROVED, REJECTED, CANCELLED
+  approvedBy      String?
+  approvedAt      DateTime?
+  rejectionReason String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  employee        Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId, status])
+  @@index([startDate, endDate])
+  @@map("leaves")
+}
+
+model LeaveBalance {
+  id          String   @id @default(cuid())
+  employeeId  String   @unique
+  paidLeaves  Float    @default(12)
+  sickLeaves  Float    @default(6)
+  casualLeaves Float   @default(6)
+  usedPaid    Float    @default(0)
+  usedSick    Float    @default(0)
+  usedCasual  Float    @default(0)
+  year        Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, year])
+  @@map("leave_balances")
+}
+
+model Payslip {
+  id            String    @id @default(cuid())
+  employeeId    String
+  month         Int
+  year          Int
+
+  // Earnings
+  basicSalary   Float     @default(0)
+  hra           Float     @default(0)
+  conveyance    Float     @default(0)
+  medical       Float     @default(0)
+  specialAllow  Float     @default(0)
+  otherEarnings Float     @default(0)
+  grossSalary   Float     @default(0)
+
+  // Deductions
+  pf            Float     @default(0)
+  esi           Float     @default(0)
+  tds           Float     @default(0)
+  professionTax Float     @default(0)
+  otherDeduct   Float     @default(0)
+  totalDeduct   Float     @default(0)
+
+  netSalary     Float     @default(0)
+
+  // Attendance for the month
+  workingDays   Int       @default(0)
+  presentDays   Float     @default(0)
+  halfDays      Float     @default(0)
+  leaveDays     Float     @default(0)
+  lopDays       Float     @default(0) // Loss of pay
+
+  status        String    @default("PENDING") // PENDING, PAID, HOLD
+  paidAt        DateTime?
+  paymentMethod String?
+  paymentRef    String?
+  notes         String?
+  generatedAt   DateTime  @default(now())
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  employee      Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, month, year])
+  @@index([month, year])
+  @@map("payslips")
+}
+
+// ============================================================
+// CRM: LEADS
+// ============================================================
+
+model Lead {
+  id                   String    @id @default(cuid())
+  leadNumber           String    @unique // LEAD-000001
+  companyName          String?
+  clientName           String
+  clientPhone          String
+  clientEmail          String?
+  alternatePhone       String?
+  link                 String?   // Website / social link
+  address              String?
+  city                 String?
+  state                String?
+  source               String    @default("WEBSITE") // WEBSITE, REFERRAL, SOCIAL_MEDIA, COLD_CALL, EMAIL, WALKIN, OTHER
+  service              String?   // Service pitched
+  productPitched       String?
+  price                Float?
+  status               String    @default("NEW") // NEW, NOT_INTERESTED, FOLLOW_UP, RINGING, MEETING_SCHEDULED, CALLBACK, CONVERTED, CLOSED
+  remark               String?   @db.Text
+  notes                String?   @db.Text
+
+  // Follow-up scheduling
+  followUpDate         DateTime?
+  followUpTime         String?   // "14:30"
+
+  // Meeting scheduling (when MEETING_SCHEDULED)
+  meetingDate          DateTime?
+  meetingTime          String?   // "10:00"
+  meetingSlot          String?   // "10:00 - 11:00 AM"
+  meetingLocation      String?
+  meetingNotes         String?   @db.Text
+  meetingAssignedToId  String?   // MARKETING_EXECUTIVE assigned for meeting
+
+  convertedAt          DateTime?
+  closedAt             DateTime?
+  closeReason          String?
+
+  createdById          String
+  assignedToId         String?   // Current assignee (Telecaller most of the time)
+
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  createdBy            User      @relation("CreatedLeads", fields: [createdById], references: [id])
+  assignedTo           User?     @relation("AssignedLeads", fields: [assignedToId], references: [id])
+  meetingAssignedTo    User?     @relation("MeetingAssignedLeads", fields: [meetingAssignedToId], references: [id])
+  proposals            Proposal[]
+  client               Client?
+  activities           LeadActivity[]
+  assignmentHistory    LeadAssignmentHistory[]
+
+  @@index([status])
+  @@index([source])
+  @@index([assignedToId])
+  @@index([createdById])
+  @@index([meetingAssignedToId])
+  @@index([followUpDate])
+  @@index([meetingDate])
+  @@map("leads")
+}
+
+model LeadActivity {
+  id             String   @id @default(cuid())
+  leadId         String
+  type           String   // CALL, REMARK, FOLLOWUP_SCHEDULED, STATUS_CHANGE, MEETING_SCHEDULED, ASSIGNMENT, NOTE, EMAIL, WHATSAPP
+  title          String
+  description    String?  @db.Text
+  fromStatus     String?
+  toStatus       String?
+  nextActionDate DateTime?
+  nextActionTime String?
+  metadata       String?  @db.Text // JSON: any extra data
+  createdById    String
+  createdAt      DateTime @default(now())
+
+  lead           Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  createdBy      User     @relation(fields: [createdById], references: [id])
+
+  @@index([leadId, createdAt])
+  @@map("lead_activities")
+}
+
+model LeadAssignmentHistory {
+  id             String   @id @default(cuid())
+  leadId         String
+  fromUserId     String?
+  toUserId       String
+  assignedById   String
+  reason         String?
+  createdAt      DateTime @default(now())
+
+  lead           Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  fromUser       User?    @relation("AssignFrom", fields: [fromUserId], references: [id])
+  toUser         User     @relation("AssignTo", fields: [toUserId], references: [id])
+  assignedBy     User     @relation("AssignBy", fields: [assignedById], references: [id])
+
+  @@index([leadId])
+  @@map("lead_assignment_history")
+}
+
+// ============================================================
+// CRM: PROPOSALS, CLIENTS, INVOICES, PAYMENTS, SERVICES
+// ============================================================
+
+model Proposal {
+  id             String         @id @default(cuid())
+  proposalNumber String         @unique
+  leadId         String?
+  clientId       String?
+  title          String
+  notes          String?        @db.Text
+  discount       Float          @default(0)
+  discountType   String         @default("FIXED") // FIXED, PERCENT
+  gstApplicable  Boolean        @default(false)
+  gstRate        Float          @default(18)
+  gstAmount      Float          @default(0)
+  subtotal       Float          @default(0)
+  totalAmount    Float          @default(0)
+  finalAmount    Float          @default(0)
+  status         String         @default("DRAFT") // DRAFT, SENT, VIEWED, ACCEPTED, REJECTED, EXPIRED
+  validUntil     DateTime?
+  shareToken     String?        @unique
+  viewedAt       DateTime?
+  respondedAt    DateTime?
+  whatsappSentAt DateTime?
+  emailSentAt    DateTime?
+  terms          String?        @db.Text
+  createdById    String
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  lead           Lead?          @relation(fields: [leadId], references: [id])
+  client         Client?        @relation(fields: [clientId], references: [id])
+  items          ProposalItem[]
+  createdBy      User           @relation("ProposalCreatedBy", fields: [createdById], references: [id])
+
+  @@index([status])
+  @@index([clientId])
+  @@map("proposals")
+}
+
+model ProposalItem {
+  id          String   @id @default(cuid())
+  proposalId  String
+  serviceId   String?  // Ref to ServiceCatalog
+  serviceName String?
+  description String
+  quantity    Int      @default(1)
+  unitPrice   Float
+  total       Float
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  proposal    Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+
+  @@map("proposal_items")
+}
+
+model Client {
+  id                   String          @id @default(cuid())
+  userId               String?         @unique // Linked User for portal login
+  leadId               String?         @unique
+  clientCode           String          @unique // CLT-000001
+  companyName          String
+  clientName           String
+  phone                String
+  altPhone             String?
+  email                String?
+  address              String?
+  state                String?
+  city                 String?
+  pincode              String?
+  gstApplicable        Boolean         @default(false)
+  gstNo                String?
+  onboardingDate       DateTime?       @db.Date
+  status               String          @default("ACTIVE") // ACTIVE, INACTIVE, CHURNED
+  expoPushToken        String?         // mobile push (Expo/FCM)
+  image                String?         // Cloudinary URL
+
+  // Portal login (separate from User model for legacy support)
+  portalPassword       String?         // Hashed - allows client portal login
+  portalPasswordSet    Boolean         @default(false)
+  lastPortalLoginAt    DateTime?
+
+  // Assignments
+  telecallerId         String?         // TELECALLER responsible
+  marketingPersonId    String?         // MARKETING_EXECUTIVE who onboarded
+  reportingPersonId    String?         // Primary point of contact
+  assignedToId         String?         // Generic assignee
+  createdById          String?
+
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+
+  user                 User?           @relation("ClientUser", fields: [userId], references: [id])
+  lead                 Lead?           @relation(fields: [leadId], references: [id])
+  telecaller           User?           @relation("ClientTelecaller", fields: [telecallerId], references: [id])
+  marketingPerson      User?           @relation("ClientMarketing", fields: [marketingPersonId], references: [id])
+  reportingPerson      User?           @relation("ClientReporting", fields: [reportingPersonId], references: [id])
+  assignedTo           User?           @relation("ClientAssignedTo", fields: [assignedToId], references: [id])
+  services             ClientService[]
+  proposals            Proposal[]
+  invoices             Invoice[]
+  reports              ClientReport[]
+  supportTickets       SupportTicket[]
+  visits               ClientVisit[]   @relation("ClientVisits")
+
+  @@index([status])
+  @@index([telecallerId])
+  @@index([marketingPersonId])
+  @@index([reportingPersonId])
+  @@map("clients")
+}
+
+model ServiceCatalog {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  name        String   @unique
+  description String?
+  category    String?  // SEO, DEVELOPMENT, MARKETING, DESIGN, MAINTENANCE
+  departmentId String? // Default handling dept
+  basePrice   Float    @default(0)
+  billingCycle String  @default("ONE_TIME") // ONE_TIME, MONTHLY, QUARTERLY, YEARLY
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("service_catalog")
+}
+
+model ClientService {
+  id                String    @id @default(cuid())
+  clientId          String
+  serviceCatalogId  String?
+  serviceName       String
+  description       String?   @db.Text
+  category          String?
+  departmentId      String?   // Handling department
+  startDate         DateTime  @db.Date
+  expiryDate        DateTime? @db.Date
+  amount            Float     @default(0)
+  billingCycle      String    @default("ONE_TIME")
+  status            String    @default("ACTIVE") // ACTIVE, EXPIRED, PAUSED, CANCELLED, RENEWING
+  autoRenew         Boolean   @default(false)
+  renewalNote       String?
+  lastRenewedAt     DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  client            Client              @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  department        Department?         @relation(fields: [departmentId], references: [id])
+  projectAssignment ProjectAssignment[]
+  reports           ClientReport[]
+
+  @@index([status])
+  @@index([expiryDate])
+  @@index([clientId])
+  @@map("client_services")
+}
+
+model ProjectAssignment {
+  id              String        @id @default(cuid())
+  clientServiceId String
+  managerId       String?       // Dept head / manager (User.id)
+  memberId        String?       // Employee assigned (User.id)
+  role            String        @default("MEMBER") // MANAGER, MEMBER, LEAD
+  assignedAt      DateTime      @default(now())
+  removedAt       DateTime?
+  isActive        Boolean       @default(true)
+
+  clientService   ClientService @relation(fields: [clientServiceId], references: [id], onDelete: Cascade)
+  manager         User?         @relation("ProjectManager", fields: [managerId], references: [id])
+  member          User?         @relation("ProjectMember", fields: [memberId], references: [id])
+
+  @@index([clientServiceId, isActive])
+  @@map("project_assignments")
+}
+
+model ClientReport {
+  id               String    @id @default(cuid())
+  clientId         String
+  clientServiceId  String?
+  title            String
+  description      String?   @db.Text
+  reportType       String    @default("TEXT") // TEXT, IMAGE, PDF, MIXED
+  fileUrl          String?   // Cloudinary URL
+  fileType         String?
+  fileSize         Int?
+  reportPeriod     String?   // "January 2026", "Week 1 - Jan 2026"
+  reportDate       DateTime  @db.Date
+  content          String?   @db.Text // Rich text content if TEXT/MIXED
+  uploadedById     String
+  createdAt        DateTime  @default(now())
+
+  client           Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientService    ClientService? @relation(fields: [clientServiceId], references: [id])
+  uploadedBy       User           @relation("ReportUploader", fields: [uploadedById], references: [id])
+
+  @@index([clientId, reportDate])
+  @@map("client_reports")
+}
+
+model Invoice {
+  id            String        @id @default(cuid())
+  invoiceNumber String        @unique
+  clientId      String
+  proposalId    String?       // If invoice generated from proposal
+
+  subtotal      Float         @default(0)
+  discount      Float         @default(0)
+  discountType  String        @default("FIXED")
+  gstApplicable Boolean       @default(false)
+  gstRate       Float         @default(18)
+  gstAmount     Float         @default(0)
+  totalAmount   Float         @default(0)
+
+  paidAmount    Float         @default(0)
+  dueAmount     Float         @default(0)
+
+  status        String        @default("PENDING") // DRAFT, PENDING, PARTIAL, PAID, OVERDUE, CANCELLED
+  dueDate       DateTime?     @db.Date
+  notes         String?       @db.Text
+  terms         String?       @db.Text
+  paymentLink   String?       // Online payment URL (optional)
+  whatsappSentAt DateTime?
+  emailSentAt   DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  client        Client        @relation(fields: [clientId], references: [id])
+  payments      Payment[]
+  items         InvoiceItem[]
+
+  @@index([status])
+  @@index([clientId])
+  @@index([dueDate])
+  @@map("invoices")
+}
+
+model InvoiceItem {
+  id          String  @id @default(cuid())
+  invoiceId   String
+  serviceName String?
+  description String
+  quantity    Int     @default(1)
+  unitPrice   Float
+  total       Float
+  order       Int     @default(0)
+
+  invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@map("invoice_items")
+}
+
+model Payment {
+  id          String   @id @default(cuid())
+  invoiceId   String
+  clientId    String?
+  amount      Float
+  method      String   @default("UPI") // UPI, CASH, BANK_TRANSFER, CHEQUE, CARD, ONLINE_GATEWAY
+  reference   String?  // UPI ref, cheque number, transaction id
+  paidAt      DateTime @default(now())
+  notes       String?
+  source      String   @default("MANUAL") // MANUAL, CLIENT_PORTAL, GATEWAY
+  gatewayName String?  // Razorpay, PhonePe, etc
+  gatewayRef  String?
+  createdAt   DateTime @default(now())
+
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id])
+
+  @@index([invoiceId])
+  @@index([paidAt])
+  @@map("payments")
+}
+
+// ============================================================
+// COMMUNICATION: CHAT, TICKETS, MESSAGES
+// ============================================================
+
+model ChatGroup {
+  id          String   @id @default(cuid())
+  name        String?  // Optional - null for DMs
+  type        String   @default("DIRECT") // DIRECT, GROUP, DEPARTMENT, CLIENT_TEAM
+  avatar      String?
+  createdById String
+  clientId    String?  // If CLIENT_TEAM
+  departmentId String? // If DEPARTMENT
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members     ChatMember[]
+  messages    Message[]
+
+  @@map("chat_groups")
+}
+
+model ChatMember {
+  id           String    @id @default(cuid())
+  chatGroupId  String
+  userId       String
+  role         String    @default("MEMBER") // ADMIN, MEMBER
+  joinedAt     DateTime  @default(now())
+  leftAt       DateTime?
+  lastReadAt   DateTime?
+  isActive     Boolean   @default(true)
+
+  chatGroup    ChatGroup @relation(fields: [chatGroupId], references: [id], onDelete: Cascade)
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([chatGroupId, userId])
+  @@map("chat_members")
+}
+
+model Message {
+  id             String   @id @default(cuid())
+  chatGroupId    String?  // Null for legacy direct messages
+  senderId       String
+  receiverId     String?  // Legacy direct message
+  content        String   @db.Text
+  attachmentUrl  String?
+  attachmentType String?  // image, pdf, doc
+  attachmentName String?
+  isRead         Boolean  @default(false)
+  isEdited       Boolean  @default(false)
+  editedAt       DateTime?
+  isDeleted      Boolean  @default(false)
+  replyToId      String?
+  createdAt      DateTime @default(now())
+
+  chatGroup      ChatGroup? @relation(fields: [chatGroupId], references: [id], onDelete: Cascade)
+  sender         User       @relation("SentMessages", fields: [senderId], references: [id])
+  receiver       User?      @relation("ReceivedMessages", fields: [receiverId], references: [id])
+
+  @@index([chatGroupId, createdAt])
+  @@index([senderId])
+  @@index([receiverId])
+  @@map("messages")
+}
+
+model SupportTicket {
+  id           String    @id @default(cuid())
+  ticketNumber String    @unique // TCK-000001
+  clientId     String
+  userId       String    // Client-user or ClientPortal creator
+  departmentId String?   // Which dept handles it
+  subject      String
+  description  String    @db.Text
+  category     String?   // Bug, Feature, Support, Billing
+  status       String    @default("OPEN") // OPEN, IN_PROGRESS, RESOLVED, CLOSED, REOPENED
+  priority     String    @default("MEDIUM") // LOW, MEDIUM, HIGH, URGENT
+  assignedToId String?
+  resolution   String?   @db.Text
+  resolvedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  client       Client      @relation(fields: [clientId], references: [id])
+  user         User        @relation("TicketCreator", fields: [userId], references: [id])
+  department   Department? @relation(fields: [departmentId], references: [id])
+  assignedTo   User?       @relation("TicketAssignee", fields: [assignedToId], references: [id])
+  replies      SupportTicketReply[]
+
+  @@index([status])
+  @@index([clientId])
+  @@index([assignedToId])
+  @@map("support_tickets")
+}
+
+model EmployeeTicket {
+  id           String    @id @default(cuid())
+  ticketNumber String    @unique // ETK-000001
+  createdById  String    // Employee raising the ticket
+  departmentId String    // Target dept (dept head will see)
+  assignedToId String?   // Dept head or specific member
+  subject      String
+  description  String    @db.Text
+  category     String?
+  status       String    @default("OPEN") // OPEN, IN_PROGRESS, RESOLVED, CLOSED, REOPENED
+  priority     String    @default("MEDIUM")
+  resolution   String?   @db.Text
+  resolvedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  createdBy    User       @relation("EmpTicketCreator", fields: [createdById], references: [id])
+  assignedTo   User?      @relation("EmpTicketAssignee", fields: [assignedToId], references: [id])
+  department   Department @relation(fields: [departmentId], references: [id])
+  replies      EmployeeTicketReply[]
+
+  @@index([status])
+  @@index([departmentId])
+  @@index([assignedToId])
+  @@map("employee_tickets")
+}
+
+model SupportTicketReply {
+  id          String   @id @default(cuid())
+  ticketId    String
+  userId      String   // User (staff) or client-user
+  body        String   @db.Text
+  isInternal  Boolean  @default(false) // Internal notes not visible to client
+  attachmentUrl String?
+  attachmentType String?
+  createdAt   DateTime @default(now())
+
+  ticket      SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  user        User          @relation("SupportTicketReplyAuthor", fields: [userId], references: [id])
+
+  @@index([ticketId, createdAt])
+  @@map("support_ticket_replies")
+}
+
+model EmployeeTicketReply {
+  id          String   @id @default(cuid())
+  ticketId    String
+  userId      String
+  body        String   @db.Text
+  attachmentUrl String?
+  attachmentType String?
+  createdAt   DateTime @default(now())
+
+  ticket      EmployeeTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  user        User           @relation("EmployeeTicketReplyAuthor", fields: [userId], references: [id])
+
+  @@index([ticketId, createdAt])
+  @@map("employee_ticket_replies")
+}
+
+// ============================================================
+// NOTIFICATIONS + INTEGRATIONS
+// ============================================================
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  message   String   @db.Text
+  type      String   @default("info") // info, success, warning, error, birthday, anniversary, lead, meeting, ticket, payment, report
+  isRead    Boolean  @default(false)
+  link      String?
+  metadata  String?  @db.Text // JSON
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+model WhatsappLog {
+  id            String   @id @default(cuid())
+  toPhone       String
+  templateName  String
+  params        String   @db.Text // JSON array of parameters
+  status        String   @default("PENDING") // PENDING, SENT, FAILED, DELIVERED
+  response      String?  @db.Text
+  errorMessage  String?
+  referenceType String?  // LEAD, CLIENT, PROPOSAL, INVOICE, PAYMENT, TICKET
+  referenceId   String?
+  sentAt        DateTime?
+  createdAt     DateTime @default(now())
+
+  @@index([toPhone])
+  @@index([referenceType, referenceId])
+  @@index([status])
+  @@map("whatsapp_logs")
+}
+
+model EmailLog {
+  id            String   @id @default(cuid())
+  toEmail       String
+  ccEmail       String?
+  subject       String
+  body          String   @db.LongText
+  status        String   @default("PENDING") // PENDING, SENT, FAILED
+  response      String?  @db.Text
+  errorMessage  String?
+  referenceType String?
+  referenceId   String?
+  sentAt        DateTime?
+  createdAt     DateTime @default(now())
+
+  @@index([toEmail])
+  @@index([referenceType, referenceId])
+  @@index([status])
+  @@map("email_logs")
+}
+
+model Setting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String   @db.Text
+  category  String   @default("general") // general, company, email, whatsapp, cloudinary, payment
+  updatedAt DateTime @updatedAt
+
+  @@map("settings")
+}
