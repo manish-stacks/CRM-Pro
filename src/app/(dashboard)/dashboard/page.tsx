@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '@/hooks/useAuth'
 import { StatCard } from '@/components/ui'
 import { CelebrationWidget } from '@/components/dashboard/CelebrationWidget'
-import { Users, Target, FileText, DollarSign, Clock, UserCheck, LogIn, LogOut, Wifi } from 'lucide-react'
+import { Users, Target, FileText, DollarSign, Clock, UserCheck, LogIn, LogOut, Wifi, CalendarCheck } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import api from '@/lib/axios'
@@ -21,6 +21,7 @@ export default function DashboardPage() {
   const [time, setTime] = useState(new Date())
   const [punching, setPunching] = useState(false)
   const [myProjects, setMyProjects] = useState<any[]>([])
+  const [leaveBalance, setLeaveBalance] = useState<any>(null)
 
   // Live clock
   useEffect(() => {
@@ -41,6 +42,9 @@ export default function DashboardPage() {
   }, [])
 
   useEffect(() => { fetchDashboard() }, [fetchDashboard])
+  useEffect(() => {
+    api.get('/leaves/balance').then(r => setLeaveBalance(r.data.data)).catch(() => {})
+  }, [])
 
   // Assigned projects — for heads (MANAGER) and team members (EMPLOYEE)
   useEffect(() => {
@@ -77,6 +81,8 @@ export default function DashboardPage() {
 
   const isPunchedIn = todayAttendance?.punchIn && !todayAttendance?.punchOut
   const isPunchedOut = todayAttendance?.punchIn && todayAttendance?.punchOut
+  // Regular employees don't see business/revenue metrics
+  const showBiz = user?.role !== 'EMPLOYEE'
 
   const greeting = () => {
     const h = new Date().getHours()
@@ -143,6 +149,32 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* My leave balance (auto carry-forward, capped) */}
+      {leaveBalance && (
+        <div className="card p-4 flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-xl bg-indigo-100 flex items-center justify-center">
+              <CalendarCheck size={22} className="text-indigo-600" />
+            </div>
+            <div>
+              <p className="font-semibold text-gray-900">Paid Leave Balance</p>
+              <p className="text-sm text-gray-500">
+                Carried forward + accrued · max {leaveBalance.maxCap} · {leaveBalance.monthlyAccrual}/month
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-5 text-center">
+            <div>
+              <p className="text-2xl font-bold text-indigo-600">{leaveBalance.available}</p>
+              <p className="text-[11px] text-gray-400">Available</p>
+            </div>
+            <div><p className="text-lg font-bold text-gray-700">{leaveBalance.taken}</p><p className="text-[11px] text-gray-400">Taken</p></div>
+            {leaveBalance.lapsed > 0 && <div><p className="text-lg font-bold text-amber-500">{leaveBalance.lapsed}</p><p className="text-[11px] text-gray-400">Lapsed</p></div>}
+            <Link href="/leaves" className="text-xs text-indigo-600 hover:underline whitespace-nowrap">Details →</Link>
+          </div>
+        </div>
+      )}
+
       {/* Stats grid */}
       {loading ? (
         <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
@@ -151,16 +183,17 @@ export default function DashboardPage() {
       ) : (
         <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
           <StatCard label="Employees" value={stats?.totalEmployees || 0} icon={Users} color="text-blue-600" />
-          <StatCard label="Leads" value={stats?.totalLeads || 0} icon={Target} color="text-purple-600" />
+          {showBiz && <StatCard label="Leads" value={stats?.totalLeads || 0} icon={Target} color="text-purple-600" />}
           <StatCard label="Clients" value={stats?.totalClients || 0} icon={UserCheck} color="text-green-600" />
           <StatCard label="Proposals" value={stats?.totalProposals || 0} icon={FileText} color="text-indigo-600" />
           <StatCard label="Pending Leaves" value={stats?.pendingLeaves || 0} icon={Clock} color="text-yellow-600" />
-          <StatCard label="Month Revenue" value={formatCurrency(stats?.monthRevenue || 0)} icon={DollarSign} color="text-emerald-600" />
+          {showBiz && <StatCard label="Month Revenue" value={formatCurrency(stats?.monthRevenue || 0)} icon={DollarSign} color="text-emerald-600" />}
         </div>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Revenue chart */}
+        {showBiz && (
         <div className="card p-5 lg:col-span-2">
           <h3 className="font-semibold text-gray-900 mb-4">Revenue Trend</h3>
           <ResponsiveContainer width="100%" height={220}>
@@ -179,13 +212,15 @@ export default function DashboardPage() {
             </AreaChart>
           </ResponsiveContainer>
         </div>
+        )}
 
         {/* Celebration widget */}
-        <div>
+        <div className={showBiz ? '' : 'lg:col-span-3'}>
           <CelebrationWidget />
         </div>
       </div>
 
+      {showBiz && (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Lead pipeline */}
         <div className="card p-5">
@@ -238,6 +273,7 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+      )}
 
       {/* My Projects — heads & team members */}
       {(user?.role === 'MANAGER' || user?.role === 'EMPLOYEE') && myProjects.length > 0 && (

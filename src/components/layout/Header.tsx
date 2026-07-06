@@ -36,13 +36,20 @@ export default function Header({ onMenuClick }: { onMenuClick?: () => void }) {
             </div>
             <div className="hidden md:block text-left">
               <p className="text-sm font-semibold text-gray-900 leading-tight">{user?.name}</p>
-              <p className="text-xs text-gray-500">{user?.role?.replace(/_/g, ' ')}</p>
+              <p className="text-xs text-gray-500">
+                {user?.role?.replace(/_/g, ' ')}
+                {user?.employee?.employeeId && <span className="ml-1 font-mono text-gray-400">· {user.employee.employeeId}</span>}
+              </p>
             </div>
             <ChevronDown size={14} className="text-gray-400 hidden md:block" />
           </button>
 
           {dropdownOpen && (
             <div className="absolute right-0 top-full mt-1 w-48 bg-white border border-gray-200 rounded-xl shadow-xl z-50 overflow-hidden">
+              <div className="px-4 py-2.5 border-b border-gray-100 bg-gray-50">
+                <p className="text-sm font-semibold text-gray-900 truncate">{user?.name}</p>
+                {user?.employee?.employeeId && <p className="text-xs font-mono text-blue-600">{user.employee.employeeId}</p>}
+              </div>
               <Link href="/profile" onClick={() => setDropdownOpen(false)}>
                 <div className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-sm text-gray-700">
                   <User size={15} /><span>Profile</span>

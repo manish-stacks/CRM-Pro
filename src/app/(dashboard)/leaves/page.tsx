@@ -30,6 +30,8 @@ export default function LeavesPage() {
     status: '', leaveType: '', duration: '', month: '', departmentId: '', search: '',
   })
   const [departments, setDepartments] = useState<any[]>([])
+  const [balance, setBalance] = useState<any>(null)
+  const [reasonModal, setReasonModal] = useState<any>(null)
 
   const [modal, setModal] = useState<'none' | 'apply' | 'reject'>('none')
   const [target, setTarget] = useState<any>(null)
@@ -60,6 +62,9 @@ export default function LeavesPage() {
   }, [page, filters])
 
   useEffect(() => { fetchLeaves() }, [fetchLeaves])
+  useEffect(() => {
+    api.get('/leaves/balance').then(r => setBalance(r.data.data)).catch(() => {})
+  }, [])
   useEffect(() => {
     if (isAtLeast('ADMIN')) {
       api.get('/departments').then(r => setDepartments(r.data.data || [])).catch(() => { })
@@ -133,6 +138,27 @@ export default function LeavesPage() {
         </div>
         <Button onClick={openApply}><Plus size={14} /> Apply Leave</Button>
       </div>
+
+      {/* My leave balance (auto carry-forward, capped) */}
+      {balance && (
+        <div className="rounded-2xl bg-gradient-to-br from-indigo-600 to-blue-700 text-white p-5">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <p className="text-indigo-100 text-xs">Available paid leaves</p>
+              <p className="text-3xl font-bold mt-0.5">{balance.available}</p>
+              <p className="text-indigo-100 text-xs mt-0.5">Max carry-forward: {balance.maxCap} · {balance.monthlyAccrual}/month</p>
+            </div>
+            <div className="flex gap-5 text-center">
+              <div><p className="text-lg font-bold">{balance.accrued}</p><p className="text-[11px] text-indigo-100">Earned</p></div>
+              <div><p className="text-lg font-bold">{balance.taken}</p><p className="text-[11px] text-indigo-100">Taken</p></div>
+              {balance.lapsed > 0 && <div><p className="text-lg font-bold text-amber-200">{balance.lapsed}</p><p className="text-[11px] text-indigo-100">Lapsed</p></div>}
+            </div>
+          </div>
+          {balance.lapsed > 0 && (
+            <p className="text-[11px] text-amber-100 mt-2">⚠️ {balance.lapsed} leave cap ({balance.maxCap}) se upar hone ki wajah se lapse ho gaye.</p>
+          )}
+        </div>
+      )}
 
       <div className="card">
         <div className="px-5 py-3 flex items-center justify-between border-b border-gray-100">
@@ -251,7 +277,11 @@ export default function LeavesPage() {
                   <td className="text-sm font-semibold tabular-nums">
                     {l.duration === 'SHORT_HOURLY' ? `${l.hourlyHours}h` : `${l.days}d`}
                   </td>
-                  <td className="text-xs text-gray-700 max-w-xs truncate" title={l.reason}>{l.reason}</td>
+                  <td className="text-xs text-gray-700 max-w-xs">
+                    <button onClick={() => setReasonModal(l)} className="text-left hover:text-blue-600 truncate block max-w-[220px] underline decoration-dotted">
+                      {l.reason?.length > 40 ? l.reason.slice(0, 40) + '…' : (l.reason || '—')}
+                    </button>
+                  </td>
                   <td>
                     <Badge status={l.status} />
                     {l.status === 'REJECTED' && l.rejectionReason && (
@@ -281,6 +311,30 @@ export default function LeavesPage() {
       </div>
 
       {/* Apply Leave Modal */}
+      {/* Full leave reason viewer */}
+      <Modal open={!!reasonModal} onClose={() => setReasonModal(null)} title="Leave Reason">
+        {reasonModal && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 flex-wrap text-sm">
+              <span className="font-semibold text-gray-900">{reasonModal.employee?.user?.name}</span>
+              <Badge status={reasonModal.leaveType} />
+              <Badge status={reasonModal.status} />
+              <span className="text-gray-500">
+                {formatDate(reasonModal.startDate)}{reasonModal.duration === 'MULTIPLE_DAYS' ? ` → ${formatDate(reasonModal.endDate)}` : ''} · {reasonModal.days} day(s)
+              </span>
+            </div>
+            <div className="bg-slate-50 rounded-xl p-4 text-sm text-gray-800 whitespace-pre-wrap max-h-[50vh] overflow-y-auto">
+              {reasonModal.reason || '—'}
+            </div>
+            {reasonModal.status === 'REJECTED' && reasonModal.rejectionReason && (
+              <div className="bg-red-50 rounded-xl p-3 text-sm text-red-700">
+                <b>Rejection reason:</b> {reasonModal.rejectionReason}
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
+
       <Modal open={modal === 'apply'} onClose={() => setModal('none')} title="Apply for Leave">
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">

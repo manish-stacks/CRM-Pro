@@ -219,6 +219,75 @@ export async function GET(req: NextRequest) {
         break
       }
 
+      case 'attendance-summary': {
+        // Monthly per-employee summary for ACTIVE users.
+        // ?month=YYYY-MM  (defaults to current month)
+        if (!['SUPER_ADMIN', 'ADMIN', 'MANAGER'].includes(session.role)) {
+          return errorResponse('Forbidden', 403)
+        }
+        const monthParam = searchParams.get('month') || new Date().toISOString().slice(0, 7)
+        const [y, m] = monthParam.split('-').map(Number)
+        const monthStart = new Date(y, m - 1, 1)
+        const monthEnd = new Date(y, m, 0, 23, 59, 59)
+
+        const employees = await prisma.employee.findMany({
+          where: { user: { isActive: true } },
+          include: {
+            user: { select: { name: true } },
+            department: { select: { name: true } },
+          },
+          orderBy: { employeeId: 'asc' },
+        })
+        const empIds = employees.map(e => e.id)
+
+        // Attendance rows for the month
+        const atts = await prisma.attendance.findMany({
+          where: { employeeId: { in: empIds }, date: { gte: monthStart, lte: monthEnd } },
+          select: { employeeId: true, status: true, workMode: true, isLate: true },
+        })
+        // Approved leaves overlapping the month
+        const leaves = await prisma.leave.findMany({
+          where: {
+            employeeId: { in: empIds },
+            status: 'APPROVED',
+            startDate: { lte: monthEnd },
+            endDate: { gte: monthStart },
+          },
+          select: { employeeId: true, duration: true, days: true, leaveType: true },
+        })
+
+        const agg: Record<string, any> = {}
+        for (const e of employees) {
+          agg[e.id] = { present: 0, leave: 0, late: 0, wfh: 0, shortLeave: 0, halfDay: 0 }
+        }
+        for (const a of atts) {
+          const g = agg[a.employeeId]; if (!g) continue
+          if (a.status === 'PRESENT') g.present++
+          if (a.status === 'HALF_DAY') g.halfDay++
+          if (a.workMode === 'WFH') g.wfh++
+          if (a.isLate) g.late++
+        }
+        for (const lv of leaves) {
+          const g = agg[lv.employeeId]; if (!g) continue
+          if (lv.duration === 'SHORT_HOURLY') g.shortLeave++
+          else g.leave += lv.days || 0
+        }
+
+        data = employees.map(e => ({
+          EmployeeID: e.employeeId,
+          Name: e.user.name,
+          Department: e.department?.name || '',
+          Present: agg[e.id].present,
+          Leave: agg[e.id].leave,
+          Late: agg[e.id].late,
+          WFH: agg[e.id].wfh,
+          'Short leave': agg[e.id].shortLeave,
+          'Half days': agg[e.id].halfDay,
+        }))
+        filename = `attendance-summary-${monthParam}`
+        break
+      }
+
       default:
         return errorResponse('Invalid export type')
     }

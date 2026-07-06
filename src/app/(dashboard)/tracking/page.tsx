@@ -220,7 +220,7 @@ export default function TrackingPage() {
                   {mapsError ? (
                     <>
                       <MapPin size={32} className="text-gray-400" />
-                      <p className="text-sm text-gray-500">Map load nahi hua</p>
+                      <p className="text-sm text-gray-500">Failed to load map</p>
                       <p className="text-xs text-gray-400">
                         {!GOOGLE_MAPS_KEY
                           ? '.env me NEXT_PUBLIC_GOOGLE_MAPS_API_KEY set karo (Maps JavaScript API enable + key restrict).'

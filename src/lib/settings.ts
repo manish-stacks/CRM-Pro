@@ -66,6 +66,9 @@ export const Settings = {
   officeStartTime:     () => getSetting<string>('office_start_time', '10:00'),   // 24h HH:mm
   officeEndTime:       () => getSetting<string>('office_end_time', '18:30'),     // 6:30 PM
   lateGraceMinutes:    () => getSetting<number>('late_grace_minutes', 10),       // grace till 10:10
+  // Leave accrual + carry-forward
+  leaveMonthlyAccrual: () => getSetting<number>('leave_monthly_accrual', 1),     // paid leaves earned per month
+  leaveMaxCarryForward:() => getSetting<number>('leave_max_carryforward', 6),    // max leaves that can accumulate
   invoiceDueDays:      () => getSetting<number>('invoice_due_days', 15),
   invoicePrefix:       () => getSetting<string>('invoice_prefix', 'INV-'),
   paymentMethods:      () => getSetting<string[]>('payment_methods', ['UPI', 'CASH', 'BANK_TRANSFER', 'CHEQUE', 'CARD']),

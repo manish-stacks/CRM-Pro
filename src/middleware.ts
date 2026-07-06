@@ -13,6 +13,8 @@ const publicPaths = [
   '/client-portal',              // Client portal page + login form
   '/api/client-portal/login',    // Client login endpoint
   '/api/client-portal/logout',   // Client logout endpoint
+  '/api/mobile/auth/login',
+  '/api/mobile/client-login'
 ]
 
 // Client-portal protected paths (require client-token, NOT auth-token)
@@ -25,6 +27,30 @@ export async function middleware(req: NextRequest) {
 
   // Fully public paths pass through
   if (publicPaths.some(path => pathname === path || pathname.startsWith(path + '/'))) {
+    return NextResponse.next()
+  }
+
+  if (pathname.startsWith('/api/mobile')) {
+    const authHeader = req.headers.get('authorization')
+
+    if (!authHeader?.startsWith('Bearer ')) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
+
+    const token = authHeader.substring(7)
+
+    const payload = await verifyToken(token)
+
+    if (!payload) {
+      return NextResponse.json(
+        { error: 'Invalid token' },
+        { status: 401 }
+      )
+    }
+
     return NextResponse.next()
   }
 

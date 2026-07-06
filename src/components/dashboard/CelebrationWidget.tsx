@@ -50,7 +50,7 @@ export function CelebrationWidget() {
   return (
     <>
       {/* Today's celebrations widget on dashboard */}
-      {todayCount > 0 ? (
+      {todayCount > 0 && (
         <div className="card p-5 bg-gradient-to-br from-pink-50 via-white to-purple-50 border-pink-100">
           <div className="flex items-center gap-2 mb-4">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-pink-500 to-purple-500 flex items-center justify-center text-white">
@@ -94,21 +94,6 @@ export function CelebrationWidget() {
                 </button>
               </div>
             ))}
-          </div>
-        </div>
-      ):(
-        <div className="card p-5 bg-gradient-to-br from-pink-50 via-white to-purple-50 border-pink-100 h-full">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-pink-500 to-purple-500 flex items-center justify-center text-white">
-              <PartyPopper size={20} />
-            </div>
-            <div>
-              <h3 className="font-bold text-gray-900">No Celebrations Today</h3>
-              <p className="text-xs text-gray-500">Check back tomorrow!</p>
-            </div>
-          </div>
-          <div className="text-sm text-gray-500">
-            There are no birthdays or work anniversaries today. Enjoy your day!
           </div>
         </div>
       )}

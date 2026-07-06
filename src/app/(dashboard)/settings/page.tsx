@@ -32,6 +32,9 @@ const DEFAULTS: Record<string, any> = {
   office_start_time: '10:00',
   office_end_time: '18:30',
   late_grace_minutes: 10,
+  // Leave accrual + carry-forward
+  leave_monthly_accrual: 1,
+  leave_max_carryforward: 6,
 }
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -94,7 +97,7 @@ export default function SettingsPage() {
         company: ['company_name', 'company_address', 'company_phone', 'company_email', 'company_gst', 'company_logo_url', 'timezone'],
         finance: ['currency', 'currency_symbol', 'gst_default_rate', 'gst_enabled_by_default', 'invoice_due_days', 'invoice_prefix', 'payment_methods'],
         hrm: ['weekly_off_days', 'working_hours_per_day', 'half_day_threshold_hours'],
-        attendance: ['office_start_time', 'office_end_time', 'late_grace_minutes'],
+        attendance: ['office_start_time', 'office_end_time', 'late_grace_minutes', 'leave_monthly_accrual', 'leave_max_carryforward'],
       }
       const settings: Record<string, { value: any; category: string }> = {}
       for (const [cat, keys] of Object.entries(CATS)) {
@@ -278,6 +281,23 @@ export default function SettingsPage() {
                 Time IST (Asia/Kolkata) me evaluate hota hai. <code>lateBy</code> = office start se kitne minute late.
                 Ye punch-in ke waqt calculate hota hai — purane records par lagu nahi hota.
               </p>
+
+              <div className="border-t border-gray-100 pt-4 mt-2">
+                <h3 className="font-semibold text-gray-900 text-sm mb-1">Leave — accrual &amp; carry-forward</h3>
+                <p className="text-xs text-gray-500 mb-3">Har month itne paid leave milte hain; balance max cap tak carry-forward hota hai, upar wala lapse.</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Input label="Leaves earned per month" type="number" step="0.5" min="0"
+                    value={values.leave_monthly_accrual ?? 1}
+                    onChange={e => set('leave_monthly_accrual', Number(e.target.value))} />
+                  <Input label="Max carry-forward (cap)" type="number" min="0"
+                    value={values.leave_max_carryforward ?? 6}
+                    onChange={e => set('leave_max_carryforward', Number(e.target.value))} />
+                </div>
+                <div className="rounded-lg bg-indigo-50 border border-indigo-100 p-3 text-xs text-indigo-800 mt-3">
+                  Abhi: <b>{values.leave_monthly_accrual ?? 1}</b> leave/month · max <b>{values.leave_max_carryforward ?? 6}</b> accumulate.
+                  Yaani {(values.leave_monthly_accrual ?? 1) * 12}/year milenge, par ek saath {values.leave_max_carryforward ?? 6} se zyada jama nahi honge.
+                </div>
+              </div>
             </>
           )}
         </div>

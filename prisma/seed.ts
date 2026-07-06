@@ -8,13 +8,11 @@ const DEPARTMENTS = [
   { name: 'Sales Consultant',   slug: 'sales-consultant',   color: 'blue',    icon: 'Briefcase' },
   { name: 'Web Developer',      slug: 'web-developer',      color: 'indigo',  icon: 'Code2' },
   { name: 'Marketing',          slug: 'marketing',          color: 'pink',    icon: 'Megaphone' },
-  { name: 'Website SEO',        slug: 'website-seo',        color: 'green',   icon: 'Search' },
-  { name: 'GMB SEO',            slug: 'gmb-seo',            color: 'emerald', icon: 'MapPin' },
+  { name: 'SEO',                slug: 'seo',        color: 'green',   icon: 'Search' },
   { name: 'Ads',                slug: 'ads',                color: 'orange',  icon: 'Target' },
   { name: 'GMB Optimization',   slug: 'gmb-optimization',   color: 'teal',    icon: 'TrendingUp' },
   { name: 'SMO',                slug: 'smo',                color: 'purple',  icon: 'Share2' },
   { name: 'Graphics Designer',  slug: 'graphics-designer',  color: 'rose',    icon: 'Palette' },
-  { name: 'Sales Person',       slug: 'sales-person',       color: 'cyan',    icon: 'Users' },
 ]
 
 const SERVICES = [

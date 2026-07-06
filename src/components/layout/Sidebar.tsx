@@ -119,7 +119,7 @@ export default function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose
           <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
             <Briefcase size={16} className="text-white" />
           </div>
-          <span className="font-bold text-gray-900 text-base">CRM Suite</span>
+          <span className="font-bold text-gray-900 text-base">Hover Business Services LLP</span>
         </div>
         {mobile && (
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>

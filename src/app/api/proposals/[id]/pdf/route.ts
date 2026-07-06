@@ -26,7 +26,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     @media print{body{padding:0}}
   </style></head><body>
   <div class="header">
-    <div><h1>🏢 CRM Suite</h1><p style="color:#6b7280;margin:4px 0">Business Proposal</p></div>
+    <div><h1>Hover Business Services LLP</h1><p style="color:#d81d1d;margin:4px 0">Business Proposal</p></div>
     <div style="text-align:right">
       <div style="font-size:22px;font-weight:700;color:#1d4ed8">${p.proposalNumber}</div>
       <div style="color:#6b7280;font-size:13px;margin-top:4px">Date: ${new Date(p.createdAt).toLocaleDateString('en-IN')}</div>
@@ -40,11 +40,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     <div>${recipient.contact}</div><div>${recipient.phone}</div></div>
     <div><div style="font-size:11px;color:#6b7280;text-transform:uppercase;font-weight:600">Prepared By</div>
     <div style="font-weight:700;font-size:16px;margin-top:4px">${p.createdBy.name}</div>
-    <div>CRM Suite</div></div>
+    <div>Hover Business Services LLP</div></div>
   </div>
   <h2 style="font-size:18px;color:#1f2937;margin-bottom:8px">${p.title}</h2>
-  <table><thead><tr><th>#</th><th>Description</th><th>Qty</th><th>Unit Price</th><th>Total</th></tr></thead>
-  <tbody>${p.items.map((item, i) => `<tr><td>${i+1}</td><td>${item.description}</td><td>${item.quantity}</td><td>₹${item.unitPrice.toLocaleString('en-IN')}</td><td>₹${item.total.toLocaleString('en-IN')}</td></tr>`).join('')}</tbody>
+  <table><thead><tr><th>#</th><th>Item</th><th>Description</th><th>Qty</th><th>Unit Price</th><th>Total</th></tr></thead>
+  <tbody>${p.items.map((item, i) => `<tr><td>${i+1}</td><td>${item.serviceName}</td><td>${item.description}</td><td>${item.quantity}</td><td>₹${item.unitPrice.toLocaleString('en-IN')}</td><td>₹${item.total.toLocaleString('en-IN')}</td></tr>`).join('')}</tbody>
   </table>
   <div style="display:flex;justify-content:flex-end">
     <div class="totals">

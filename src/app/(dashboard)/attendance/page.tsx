@@ -7,7 +7,8 @@ import { formatDate, formatDateTime, getInitials, getStatusColor } from '@/lib/u
 import { Badge, EmptyState, Pagination } from '@/components/ui'
 import {
   Clock, LogIn, LogOut, MapPin, Monitor, Smartphone, Tablet as TabletIcon,
-  Loader2, Filter, X, Search, Wifi, Home, Briefcase, Download, AlertTriangle
+  Loader2, Filter, X, Search, Wifi, Home, Briefcase, Download, AlertTriangle,
+  Plus, Edit3, Trash2
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -38,6 +39,10 @@ export default function AttendancePage() {
     status: '', month: '', date: '', departmentId: '', search: '',
   })
   const [departments, setDepartments] = useState<any[]>([])
+  const [employeesList, setEmployeesList] = useState<any[]>([])
+  const [attModal, setAttModal] = useState<null | 'add' | string>(null) // 'add' or record id (edit)
+  const [attForm, setAttForm] = useState<any>({ employeeId: '', date: '', status: 'PRESENT', workMode: 'WFO', inTime: '', outTime: '', notes: '' })
+  const [attSaving, setAttSaving] = useState(false)
 
   // Live clock
   useEffect(() => {
@@ -70,8 +75,52 @@ export default function AttendancePage() {
   useEffect(() => {
     if (canSeeAll) {
       api.get('/departments').then(r => setDepartments(r.data.data || [])).catch(() => {})
+      api.get('/employees?limit=500').then(r => setEmployeesList(r.data.data || [])).catch(() => {})
     }
   }, [canSeeAll])
+
+  const isAdmin = isAtLeast('ADMIN')
+
+  const openAdd = () => {
+    setAttForm({ employeeId: '', date: new Date().toISOString().slice(0, 10), status: 'PRESENT', workMode: 'WFO', inTime: '', outTime: '', notes: '' })
+    setAttModal('add')
+  }
+  const openEdit = (r: any) => {
+    const t = (dt: string | null) => dt ? new Date(dt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : ''
+    setAttForm({
+      employeeId: r.employeeId, date: new Date(r.date).toISOString().slice(0, 10),
+      status: r.status, workMode: r.workMode, inTime: t(r.punchIn), outTime: t(r.punchOut), notes: r.notes || '',
+    })
+    setAttModal(r.id)
+  }
+  const saveAtt = async () => {
+    if (!attForm.employeeId || !attForm.date) { toast.error('Employee + date zaroori'); return }
+    setAttSaving(true)
+    try {
+      const iso = (time: string) => time ? new Date(`${attForm.date}T${time}`).toISOString() : null
+      const payload = {
+        status: attForm.status, workMode: attForm.workMode, notes: attForm.notes,
+        punchIn: iso(attForm.inTime), punchOut: iso(attForm.outTime),
+      }
+      if (attModal === 'add') {
+        await api.post('/attendance', { action: 'admin_save', employeeId: attForm.employeeId, date: attForm.date, ...payload })
+      } else {
+        await api.patch(`/attendance/${attModal}`, payload)
+      }
+      toast.success('Attendance saved')
+      setAttModal(null)
+      fetchRecords()
+    } catch (e: any) { toast.error(e.response?.data?.error || 'Failed') }
+    finally { setAttSaving(false) }
+  }
+  const deleteAtt = async (r: any) => {
+    if (!confirm('Ye attendance record delete karein?')) return
+    try {
+      await api.delete(`/attendance/${r.id}`)
+      toast.success('Deleted')
+      fetchRecords()
+    } catch (e: any) { toast.error(e.response?.data?.error || 'Failed') }
+  }
 
   const isPunchedIn = today?.punchIn && !today?.punchOut
   const isPunchedOut = today?.punchIn && today?.punchOut
@@ -116,6 +165,11 @@ export default function AttendancePage() {
     const p = new URLSearchParams({ type: 'attendance', format: 'csv' })
     Object.entries(filters).forEach(([k, v]) => { if (v) p.set(k, v as string) })
     window.open(`/api/import-export?${p.toString()}`, '_blank')
+  }
+
+  const [summaryMonth, setSummaryMonth] = useState(new Date().toISOString().slice(0, 7))
+  const exportSummary = () => {
+    window.open(`/api/import-export?type=attendance-summary&format=csv&month=${summaryMonth}`, '_blank')
   }
 
   const workedSecs = useMemo(() => {
@@ -234,10 +288,24 @@ export default function AttendancePage() {
             )}
           </div>
           <div className="flex items-center gap-2">
+            {isAdmin && (
+              <button onClick={openAdd} className="btn-primary btn-sm">
+                <Plus size={13} /> Add
+              </button>
+            )}
             {canSeeAll && (
               <button onClick={exportAttendance} className="btn-secondary btn-sm">
                 <Download size={13} /> Export
               </button>
+            )}
+            {canSeeAll && (
+              <div className="flex items-center gap-1 border border-gray-200 rounded-lg pl-2 bg-white">
+                <input type="month" value={summaryMonth} onChange={e => setSummaryMonth(e.target.value)}
+                  className="text-xs outline-none bg-transparent py-1.5 w-[120px]" title="Month for summary" />
+                <button onClick={exportSummary} className="btn-primary btn-sm rounded-l-none" title="Monthly summary (Present/Leave/Late/WFH/Short leave/Half days)">
+                  <Download size={13} /> Summary
+                </button>
+              </div>
             )}
             <button
               onClick={() => setShowFilter(!showFilter)}
@@ -324,14 +392,15 @@ export default function AttendancePage() {
                 <th>Status</th>
                 <th>Late</th>
                 <th>Location</th>
+                {isAdmin && <th>Actions</th>}
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={canSeeAll ? 9 : 8} className="text-center py-8 text-gray-400">Loading...</td></tr>
+                <tr><td colSpan={(canSeeAll ? 9 : 8) + (isAdmin ? 1 : 0)} className="text-center py-8 text-gray-400">Loading...</td></tr>
               ) : records.length === 0 ? (
                 <tr>
-                  <td colSpan={canSeeAll ? 9 : 8}>
+                  <td colSpan={(canSeeAll ? 9 : 8) + (isAdmin ? 1 : 0)}>
                     <EmptyState icon={<Clock size={48} />} title="No records" description="No attendance records match your filters" />
                   </td>
                 </tr>
@@ -386,6 +455,14 @@ export default function AttendancePage() {
                       </div>
                     ) : '—'}
                   </td>
+                  {isAdmin && (
+                    <td>
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => openEdit(r)} className="p-1.5 rounded-lg hover:bg-blue-50 text-gray-400 hover:text-blue-600" title="Edit"><Edit3 size={13} /></button>
+                        <button onClick={() => deleteAtt(r)} className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-600" title="Delete"><Trash2 size={13} /></button>
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -396,6 +473,63 @@ export default function AttendancePage() {
           <Pagination page={page} totalPages={Math.ceil(total / 20)} onChange={setPage} />
         </div>
       </div>
+
+      {/* Admin add/edit attendance modal */}
+      {attModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => setAttModal(null)}>
+          <div className="bg-white rounded-2xl max-w-md w-full p-5 space-y-3" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-lg text-gray-900">{attModal === 'add' ? 'Add Attendance' : 'Edit Attendance'}</h3>
+              <button onClick={() => setAttModal(null)} className="text-gray-400 hover:text-gray-700"><X size={18} /></button>
+            </div>
+            <div>
+              <label className="label">Employee</label>
+              <select className="input" value={attForm.employeeId} disabled={attModal !== 'add'}
+                onChange={e => setAttForm((p: any) => ({ ...p, employeeId: e.target.value }))}>
+                <option value="">Select employee...</option>
+                {employeesList.map((e: any) => (
+                  <option key={e.id} value={e.id}>{e.user?.name || e.employeeId} ({e.employeeId})</option>
+                ))}
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="label">Date</label>
+                <input type="date" className="input" value={attForm.date} disabled={attModal !== 'add'}
+                  onChange={e => setAttForm((p: any) => ({ ...p, date: e.target.value }))} />
+              </div>
+              <div>
+                <label className="label">Status</label>
+                <select className="input" value={attForm.status} onChange={e => setAttForm((p: any) => ({ ...p, status: e.target.value }))}>
+                  {['PRESENT', 'ABSENT', 'HALF_DAY', 'LEAVE', 'HOLIDAY'].map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="label">Punch In</label>
+                <input type="time" className="input" value={attForm.inTime} onChange={e => setAttForm((p: any) => ({ ...p, inTime: e.target.value }))} />
+              </div>
+              <div>
+                <label className="label">Punch Out</label>
+                <input type="time" className="input" value={attForm.outTime} onChange={e => setAttForm((p: any) => ({ ...p, outTime: e.target.value }))} />
+              </div>
+              <div>
+                <label className="label">Work Mode</label>
+                <select className="input" value={attForm.workMode} onChange={e => setAttForm((p: any) => ({ ...p, workMode: e.target.value }))}>
+                  {['WFO', 'WFH', 'FIELD'].map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="label">Notes</label>
+                <input className="input" value={attForm.notes} onChange={e => setAttForm((p: any) => ({ ...p, notes: e.target.value }))} placeholder="Optional" />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <button onClick={() => setAttModal(null)} className="btn-secondary">Cancel</button>
+              <button onClick={saveAtt} disabled={attSaving} className="btn-primary">{attSaving ? 'Saving...' : 'Save'}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

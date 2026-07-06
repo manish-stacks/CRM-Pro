@@ -14,7 +14,7 @@ const USER_ADMIN_FIELDS = new Set([
 
 // Fields admin can update on Employee row
 const EMP_ADMIN_FIELDS = new Set([
-  'employeeId', 'departmentId', 'position', 'salary', 'workMode', 'joiningDate',
+  'employeeId', 'departmentId', 'reportingToId', 'position', 'salary', 'workMode', 'joiningDate',
   'dateOfBirth', 'gender', 'bloodGroup', 'maritalStatus',
   'fatherName', 'motherName',
   'address', 'city', 'state', 'pincode',

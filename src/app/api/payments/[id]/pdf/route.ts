@@ -24,7 +24,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     @media print{body{padding:0}}
   </style></head><body>
   <div class="header">
-    <div><h1>🏢 CRM Suite</h1><p style="color:#6b7280;margin:4px 0">Tax Invoice</p></div>
+    <div><h1>Hover Business Services LLP</h1><p style="color:#d81d1d;margin:4px 0">Tax Invoice</p></div>
     <div style="text-align:right">
       <div class="inv-num">${invoice.invoiceNumber}</div>
       <div style="color:#6b7280;font-size:13px;margin-top:4px">Date: ${new Date(invoice.createdAt).toLocaleDateString('en-IN')}</div>
@@ -39,8 +39,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     ${invoice.client.phone ? `<div>${invoice.client.phone}</div>` : ''}
     ${invoice.client.gstNo ? `<div>GST: ${invoice.client.gstNo}</div>` : ''}</div>
   </div>
-  <table><thead><tr><th>#</th><th>Description</th><th>Qty</th><th>Unit Price</th><th>Total</th></tr></thead>
-  <tbody>${invoice.items.map((item, i) => `<tr><td>${i+1}</td><td>${item.description}</td><td>${item.quantity}</td><td>₹${item.unitPrice.toLocaleString('en-IN')}</td><td>₹${item.total.toLocaleString('en-IN')}</td></tr>`).join('')}</tbody>
+  <table><thead><tr><th>#</th><th>Item</th><th>Description</th><th>Qty</th><th>Unit Price</th><th>Total</th></tr></thead>
+  <tbody>${invoice.items.map((item, i) => `<tr><td>${i+1}</td><td>${item.serviceName}</td><td>${item.description}</td><td>${item.quantity}</td><td>₹${item.unitPrice.toLocaleString('en-IN')}</td><td>₹${item.total.toLocaleString('en-IN')}</td></tr>`).join('')}</tbody>
   </table>
   <div style="display:flex;justify-content:flex-end">
     <div class="totals">

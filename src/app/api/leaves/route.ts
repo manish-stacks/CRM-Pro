@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/auth'
 import { successResponse, successStatusResponse, errorResponse, getPaginationParams } from '@/lib/api'
 import { logFromRequest } from '@/lib/audit'
+import { getTeamScope } from '@/lib/teamScope'
 
 const LEAVE_TYPES = ['PAID', 'UNPAID', 'SICK', 'CASUAL', 'MATERNITY', 'PATERNITY']
 const DURATIONS   = ['SINGLE_DAY', 'MULTIPLE_DAYS', 'SHORT_HOURLY']
@@ -35,26 +36,11 @@ export async function GET(req: NextRequest) {
     where.startDate = { gte: new Date(y, m - 1, 1), lte: new Date(y, m, 0, 23, 59, 59) }
   }
 
-  // Role-based visibility
-  const nonAdmin = ['EMPLOYEE', 'TELECALLER', 'MARKETING_EXECUTIVE']
-
-  if (nonAdmin.includes(session.role)) {
-    const emp = await prisma.employee.findFirst({ where: { userId: session.userId } })
-    if (emp) where.employeeId = emp.id
-    else return successResponse([], 0)
-  } else if (session.role === 'MANAGER') {
-    const managerEmp = await prisma.employee.findFirst({ where: { userId: session.userId } })
-    if (managerEmp) {
-      const managedDepts = await prisma.department.findMany({
-        where: { managerId: managerEmp.id },
-        select: { id: true },
-      })
-      const deptEmps = managedDepts.length
-        ? await prisma.employee.findMany({ where: { departmentId: { in: managedDepts.map(d => d.id) } }, select: { id: true } })
-        : []
-      const allowed = new Set([managerEmp.id, ...deptEmps.map(e => e.id)])
-      where.employeeId = { in: Array.from(allowed) }
-    }
+  // Role-based visibility: non-admins see own + team (dept they head + direct reports)
+  if (!['SUPER_ADMIN', 'ADMIN'].includes(session.role)) {
+    const scope = await getTeamScope(session.userId)
+    if (!scope.visibleIds.length) return successResponse([], 0)
+    where.employeeId = { in: scope.visibleIds }
   }
 
   // Admin-only extra filters

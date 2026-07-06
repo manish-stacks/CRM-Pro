@@ -17,7 +17,7 @@ const ID_PROOF_TYPES = ['AADHAR', 'PAN', 'PASSPORT', 'DRIVING_LICENSE', 'VOTER_I
 
 const emptyForm = {
   name: '', phone: '', altPhone: '',
-  departmentId: '', position: '', salary: '', workMode: 'WFO', joiningDate: '',
+  departmentId: '', reportingToId: '', position: '', salary: '', workMode: 'WFO', joiningDate: '',
   dateOfBirth: '', gender: '', bloodGroup: '', maritalStatus: '',
   fatherName: '', motherName: '',
   address: '', city: '', state: '', pincode: '',
@@ -36,6 +36,7 @@ export default function EmployeeDetailPage() {
   const [tab, setTab] = useState('overview')
 
   const [departments, setDepartments] = useState<any[]>([])
+  const [allEmployees, setAllEmployees] = useState<any[]>([])
   const [editOpen, setEditOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState<any>(emptyForm)
@@ -47,8 +48,14 @@ export default function EmployeeDetailPage() {
 
   useEffect(() => { fetchEmp() }, [id])
 
+  const [balance, setBalance] = useState<any>(null)
+  useEffect(() => {
+    if (id) api.get(`/leaves/balance?employeeId=${id}`).then(r => setBalance(r.data.data)).catch(() => {})
+  }, [id])
+
   useEffect(() => {
     api.get('/departments').then(r => setDepartments(r.data.data || [])).catch(() => {})
+    api.get('/employees?limit=500').then(r => setAllEmployees(r.data.data || [])).catch(() => {})
   }, [])
 
   const toInputDate = (d: any) => d ? new Date(d).toISOString().split('T')[0] : ''
@@ -57,7 +64,7 @@ export default function EmployeeDetailPage() {
     if (!emp) return
     setForm({
       name: emp.user.name || '', phone: emp.user.phone || '', altPhone: emp.user.altPhone || '',
-      departmentId: emp.department?.id || '', position: emp.position || '', salary: emp.salary || '',
+      departmentId: emp.department?.id || '', reportingToId: emp.reportingToId || '', position: emp.position || '', salary: emp.salary || '',
       workMode: emp.workMode || 'WFO', joiningDate: toInputDate(emp.joiningDate),
       dateOfBirth: toInputDate(emp.dateOfBirth), gender: emp.gender || '', bloodGroup: emp.bloodGroup || '',
       maritalStatus: emp.maritalStatus || '', fatherName: emp.fatherName || '', motherName: emp.motherName || '',
@@ -135,24 +142,42 @@ export default function EmployeeDetailPage() {
 
       {/* Overview */}
       {tab === 'overview' && (
-        <div className="grid md:grid-cols-2 gap-6">
-          <div className="card p-5">
-            <div className="flex items-center gap-2 mb-4"><Briefcase size={16} className="text-blue-600"/><h3 className="font-semibold text-gray-900">Work Details</h3></div>
-            <InfoRow label="Role" value={emp.user.role.replace(/_/g,' ')} />
-            <InfoRow label="Position" value={emp.position} />
-            <InfoRow label="Department" value={emp.department?.name} />
-            <InfoRow label="Work Mode" value={emp.workMode} />
-            <InfoRow label="Joining Date" value={emp.joiningDate ? formatDate(emp.joiningDate) : undefined} />
-            <InfoRow label="Salary" value={emp.salary ? formatCurrency(emp.salary) : undefined} />
-          </div>
-          <div className="card p-5">
-            <div className="flex items-center gap-2 mb-4"><User size={16} className="text-green-600"/><h3 className="font-semibold text-gray-900">Contact</h3></div>
-            <InfoRow label="Email" value={emp.user.email} />
-            <InfoRow label="Phone" value={emp.user.phone} />
-            <InfoRow label="Address" value={emp.address} />
-            <InfoRow label="City" value={emp.city} />
-            <InfoRow label="State" value={emp.state} />
-            <InfoRow label="Pincode" value={emp.pincode} />
+        <div className="space-y-6">
+          {balance && (
+            <div className="rounded-2xl bg-gradient-to-br from-indigo-600 to-blue-700 text-white p-5">
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <div>
+                  <p className="text-indigo-100 text-xs">Paid leave balance (auto carry-forward)</p>
+                  <p className="text-3xl font-bold mt-0.5">{balance.available}</p>
+                  <p className="text-indigo-100 text-xs mt-0.5">Max carry-forward {balance.maxCap} · {balance.monthlyAccrual}/month</p>
+                </div>
+                <div className="flex gap-5 text-center">
+                  <div><p className="text-lg font-bold">{balance.accrued}</p><p className="text-[11px] text-indigo-100">Earned</p></div>
+                  <div><p className="text-lg font-bold">{balance.taken}</p><p className="text-[11px] text-indigo-100">Taken</p></div>
+                  {balance.lapsed > 0 && <div><p className="text-lg font-bold text-amber-200">{balance.lapsed}</p><p className="text-[11px] text-indigo-100">Lapsed</p></div>}
+                </div>
+              </div>
+            </div>
+          )}
+          <div className="grid md:grid-cols-2 gap-6">
+            <div className="card p-5">
+              <div className="flex items-center gap-2 mb-4"><Briefcase size={16} className="text-blue-600"/><h3 className="font-semibold text-gray-900">Work Details</h3></div>
+              <InfoRow label="Role" value={emp.user.role.replace(/_/g,' ')} />
+              <InfoRow label="Position" value={emp.position} />
+              <InfoRow label="Department" value={emp.department?.name} />
+              <InfoRow label="Work Mode" value={emp.workMode} />
+              <InfoRow label="Joining Date" value={emp.joiningDate ? formatDate(emp.joiningDate) : undefined} />
+              <InfoRow label="Salary" value={emp.salary ? formatCurrency(emp.salary) : undefined} />
+            </div>
+            <div className="card p-5">
+              <div className="flex items-center gap-2 mb-4"><User size={16} className="text-green-600"/><h3 className="font-semibold text-gray-900">Contact</h3></div>
+              <InfoRow label="Email" value={emp.user.email} />
+              <InfoRow label="Phone" value={emp.user.phone} />
+              <InfoRow label="Address" value={emp.address} />
+              <InfoRow label="City" value={emp.city} />
+              <InfoRow label="State" value={emp.state} />
+              <InfoRow label="Pincode" value={emp.pincode} />
+            </div>
           </div>
         </div>
       )}
@@ -231,6 +256,7 @@ export default function EmployeeDetailPage() {
               <Input label="Phone" value={form.phone} onChange={e => setForm((p: any) => ({...p, phone: e.target.value}))} />
               <Input label="Alt Phone" value={form.altPhone} onChange={e => setForm((p: any) => ({...p, altPhone: e.target.value}))} />
               <Select label="Department" value={form.departmentId} onChange={e => setForm((p: any) => ({...p, departmentId: e.target.value}))} options={departments.map((d: any) => ({ value: d.id, label: d.name }))} />
+              <Select label="Reports To (Team Lead)" value={form.reportingToId} onChange={e => setForm((p: any) => ({...p, reportingToId: e.target.value}))} options={[{ value: '', label: '— None —' }, ...allEmployees.filter((e: any) => e.id !== emp.id).map((e: any) => ({ value: e.id, label: `${e.user?.name} · ${e.employeeId}${e.department?.name ? ` (${e.department.name})` : ''}` }))]} />
               <Input label="Position" value={form.position} onChange={e => setForm((p: any) => ({...p, position: e.target.value}))} />
               <Input label="Salary" type="number" value={form.salary} onChange={e => setForm((p: any) => ({...p, salary: e.target.value}))} />
               <Select label="Work Mode" value={form.workMode} onChange={e => setForm((p: any) => ({...p, workMode: e.target.value}))} options={WORK_MODES.map(w => ({ value: w, label: w }))} />

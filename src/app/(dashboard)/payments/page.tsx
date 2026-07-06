@@ -285,7 +285,7 @@ export default function PaymentsPage() {
             <Select label="Method" value={pmtForm.method} onChange={e => setPmtForm(p => ({ ...p, method: e.target.value }))} options={['CASH', 'UPI', 'BANK_TRANSFER', 'CHEQUE', 'CARD'].map(m => ({ value: m, label: m.replace('_', ' ') }))} />
             <Input label="Reference" value={pmtForm.reference} onChange={e => setPmtForm(p => ({ ...p, reference: e.target.value }))} placeholder="UTR/txn ref" />
             <Input label="Date" type="date" value={pmtForm.paidAt} onChange={e => setPmtForm(p => ({ ...p, paidAt: e.target.value }))} />
-            <Input label="Balance due date (part payment ho to)" type="date" value={(pmtForm as any).nextDueDate || ''} onChange={e => setPmtForm(p => ({ ...p, nextDueDate: e.target.value }))} />
+            <Input label="Balance due date (if any)" type="date" value={(pmtForm as any).nextDueDate || ''} onChange={e => setPmtForm(p => ({ ...p, nextDueDate: e.target.value }))} />
             <div className="flex gap-2">
               {[7, 10, 15, 30].map(d => (
                 <button key={d} type="button" onClick={() => setPmtForm(p => ({ ...p, nextDueDate: new Date(Date.now() + d * 864e5).toISOString().split('T')[0] }))}

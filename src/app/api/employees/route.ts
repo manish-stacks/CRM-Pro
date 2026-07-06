@@ -4,11 +4,12 @@
 // Employee ID auto-generated (HBS00001 format).
 import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireAuth, getRequestSession } from '@/lib/auth'
+import { requireAuth, getRequestSession, hasMinRole } from '@/lib/auth'
 import { successResponse, errorResponse, unauthorizedResponse, getPaginationParams } from '@/lib/api'
 import { hash } from 'bcryptjs'
 import { generateEmployeeId } from '@/lib/idgen'
 import { logFromRequest } from '@/lib/audit'
+import { getTeamScope } from '@/lib/teamScope'
 
 export async function GET(req: NextRequest) {
   const session = await getRequestSession(req)
@@ -22,25 +23,11 @@ export async function GET(req: NextRequest) {
   const status = searchParams.get('status')       // 'true' | 'false'
 
   const where: any = {}
-  const nonAdmin = ['EMPLOYEE', 'TELECALLER', 'MARKETING_EXECUTIVE']
 
-  if (nonAdmin.includes(session.role)) {
-    where.userId = session.userId
-  } else if (session.role === 'MANAGER') {
-    // Manager sees own team (own dept employees)
-    const managerEmp = await prisma.employee.findFirst({ where: { userId: session.userId } })
-    if (managerEmp) {
-      const managedDepts = await prisma.department.findMany({
-        where: { managerId: managerEmp.id },
-        select: { id: true },
-      })
-      const deptIds = managedDepts.map(d => d.id)
-      if (deptIds.length > 0) {
-        where.departmentId = { in: deptIds }
-      } else {
-        where.userId = session.userId
-      }
-    }
+  // Non-admins: see themselves + anyone in a dept they head + their direct reports.
+  if (!hasMinRole(session.role, 'ADMIN')) {
+    const scope = await getTeamScope(session.userId)
+    where.id = { in: scope.visibleIds.length ? scope.visibleIds : ['__none__'] }
   }
 
   if (search) where.OR = [

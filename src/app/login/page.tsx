@@ -37,7 +37,7 @@ export default function LoginPage() {
             <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-blue-200">
               <Briefcase size={26} className="text-white" />
             </div>
-            <h1 className="text-2xl font-bold text-gray-900">CRM Suite</h1>
+            <h1 className="text-2xl font-bold text-gray-900">Hover Business Services LLP</h1>
             <p className="text-gray-500 text-sm mt-1">Sign in to your account</p>
           </div>
 

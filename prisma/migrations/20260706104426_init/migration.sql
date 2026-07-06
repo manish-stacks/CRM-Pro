@@ -13,6 +13,7 @@ CREATE TABLE `users` (
     `disabledAt` DATETIME(3) NULL,
     `disabledReason` VARCHAR(191) NULL,
     `lastLoginAt` DATETIME(3) NULL,
+    `expoPushToken` VARCHAR(191) NULL,
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updatedAt` DATETIME(3) NOT NULL,
 
@@ -98,6 +99,7 @@ CREATE TABLE `employees` (
     `userId` VARCHAR(191) NOT NULL,
     `employeeId` VARCHAR(191) NOT NULL,
     `departmentId` VARCHAR(191) NULL,
+    `reportingToId` VARCHAR(191) NULL,
     `position` VARCHAR(191) NULL,
     `salary` DOUBLE NOT NULL DEFAULT 0,
     `workMode` VARCHAR(191) NOT NULL DEFAULT 'WFO',
@@ -146,6 +148,8 @@ CREATE TABLE `attendance` (
     `status` VARCHAR(191) NOT NULL DEFAULT 'PRESENT',
     `hoursWorked` DOUBLE NULL,
     `notes` VARCHAR(191) NULL,
+    `isLate` BOOLEAN NOT NULL DEFAULT false,
+    `lateBy` INTEGER NULL,
     `punchInLat` DOUBLE NULL,
     `punchInLng` DOUBLE NULL,
     `punchInAddress` VARCHAR(191) NULL,
@@ -453,6 +457,7 @@ CREATE TABLE `clients` (
     `gstNo` VARCHAR(191) NULL,
     `onboardingDate` DATE NULL,
     `status` VARCHAR(191) NOT NULL DEFAULT 'ACTIVE',
+    `expoPushToken` VARCHAR(191) NULL,
     `image` VARCHAR(191) NULL,
     `portalPassword` VARCHAR(191) NULL,
     `portalPasswordSet` BOOLEAN NOT NULL DEFAULT false,
@@ -840,6 +845,9 @@ ALTER TABLE `employees` ADD CONSTRAINT `employees_userId_fkey` FOREIGN KEY (`use
 
 -- AddForeignKey
 ALTER TABLE `employees` ADD CONSTRAINT `employees_departmentId_fkey` FOREIGN KEY (`departmentId`) REFERENCES `departments`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `employees` ADD CONSTRAINT `employees_reportingToId_fkey` FOREIGN KEY (`reportingToId`) REFERENCES `employees`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE `attendance` ADD CONSTRAINT `attendance_employeeId_fkey` FOREIGN KEY (`employeeId`) REFERENCES `employees`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;

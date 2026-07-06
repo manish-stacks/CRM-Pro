@@ -5,8 +5,9 @@ import { useAuth } from '@/hooks/useAuth'
 import api from '@/lib/axios'
 import { Button, Input, Modal, EmptyState, Pagination, Badge, Select } from '@/components/ui'
 import { formatDate, getInitials } from '@/lib/utils'
+import { generateIdCard } from '@/lib/idCard'
 import {
-  Users, Plus, Search, Filter, X, Eye, UserCheck, UserX, MoreVertical, Loader2, Download
+  Users, Plus, Search, Filter, X, Eye, UserCheck, UserX, MoreVertical, Loader2, Download, IdCard
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -25,6 +26,7 @@ export default function EmployeesPage() {
 
   const [showFilter, setShowFilter] = useState(false)
   const [filters, setFilters] = useState({ search: '', departmentId: '', role: '', status: '' })
+  const [company, setCompany] = useState<any>({ name: 'Hover Business Services' })
 
   const [modal, setModal] = useState<'none' | 'add' | 'toggle'>('none')
   const [target, setTarget] = useState<any>(null)
@@ -51,6 +53,12 @@ export default function EmployeesPage() {
   }, [page, filters])
 
   useEffect(() => { fetchEmployees() }, [fetchEmployees])
+  useEffect(() => {
+    api.get('/settings').then(r => {
+      const g = r.data.data?.grouped?.company || {}
+      setCompany({ name: g.company_name || 'Hover Business Services', phone: g.company_phone, email: g.company_email })
+    }).catch(() => {})
+  }, [])
   useEffect(() => {
     api.get('/departments').then(r => setDepartments(r.data.data || [])).catch(() => {})
   }, [])
@@ -106,6 +114,25 @@ export default function EmployeesPage() {
   const exportEmployees = () => {
     const statusParam = filters.status === 'true' ? 'active' : filters.status === 'false' ? 'inactive' : 'all'
     window.open(`/api/import-export?type=employees&format=csv&status=${statusParam}`, '_blank')
+  }
+
+  const makeIdCard = async (e: any) => {
+    try {
+      const r = await api.get(`/employees/${e.id}`)
+      const emp = r.data.data
+      generateIdCard({
+        employeeId: emp.employeeId,
+        name: emp.user?.name || e.user?.name,
+        department: emp.department?.name,
+        position: emp.position,
+        bloodGroup: emp.bloodGroup,
+        phone: emp.user?.phone,
+        joiningDate: emp.joiningDate,
+        avatarInitials: getInitials(emp.user?.name || e.user?.name || 'NA'),
+      }, company)
+    } catch {
+      toast.error('Id card not generated')
+    }
   }
 
   return (
@@ -192,7 +219,7 @@ export default function EmployeesPage() {
               {loading ? (
                 <tr><td colSpan={7} className="text-center py-8 text-gray-400">Loading...</td></tr>
               ) : employees.length === 0 ? (
-                <tr><td colSpan={7}><EmptyState icon={Users} title="No employees" description="No employees match your filters" /></td></tr>
+                <tr><td colSpan={7}><EmptyState icon={<Users size={40}/>} title="No employees" description="No employees match your filters" /></td></tr>
               ) : employees.map(e => (
                 <tr key={e.id} className={!e.user.isActive ? 'opacity-60' : ''}>
                   <td>
@@ -223,6 +250,7 @@ export default function EmployeesPage() {
                   <td className="text-right">
                     <div className="flex items-center justify-end gap-1">
                       <Link href={`/employees/${e.id}`} className="btn-ghost btn-sm !p-1.5" title="View"><Eye size={13} /></Link>
+                      <button onClick={() => makeIdCard(e)} className="btn-ghost btn-sm !p-1.5" title="Generate ID Card"><IdCard size={13} className="text-blue-600" /></button>
                       {canManage && (
                         <button onClick={() => openToggle(e)} className="btn-ghost btn-sm !p-1.5" title={e.user.isActive ? 'Disable' : 'Enable'}>
                           {e.user.isActive ? <UserX size={13} className="text-red-600" /> : <UserCheck size={13} className="text-green-600" />}

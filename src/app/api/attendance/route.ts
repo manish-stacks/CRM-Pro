@@ -3,12 +3,13 @@
 // GET filters: date, month, department, username, status.
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireAuth } from '@/lib/auth'
+import { requireAuth, hasMinRole } from '@/lib/auth'
 import { successResponse, errorResponse, getPaginationParams } from '@/lib/api'
 import { deviceFromRequest } from '@/lib/device'
 import { logFromRequest } from '@/lib/audit'
 import { todayDateOnly, dateOnly, computeLate } from '@/lib/attendanceDate'
 import { Settings } from '@/lib/settings'
+import { getTeamScope } from '@/lib/teamScope'
 
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req)
@@ -43,30 +44,11 @@ export async function GET(req: NextRequest) {
   if (status) where.status = status
 
   // Role-based visibility
-  const nonAdmin = ['EMPLOYEE', 'TELECALLER', 'MARKETING_EXECUTIVE']
-
-  if (nonAdmin.includes(session.role)) {
-    // Regular employee sees only own
-    const emp = await prisma.employee.findFirst({ where: { userId: session.userId } })
-    if (emp) where.employeeId = emp.id
-    else return successResponse([], 0)
-  } else if (session.role === 'MANAGER') {
-    // Manager sees own team members' attendance
-    const managerEmp = await prisma.employee.findFirst({ where: { userId: session.userId } })
-    if (managerEmp) {
-      // Departments this manager heads
-      const managedDepts = await prisma.department.findMany({
-        where: { managerId: managerEmp.id },
-        select: { id: true },
-      })
-      const managedDeptIds = managedDepts.map(d => d.id)
-      const deptEmps = managedDeptIds.length > 0
-        ? await prisma.employee.findMany({ where: { departmentId: { in: managedDeptIds } }, select: { id: true } })
-        : []
-      // Include the manager's own attendance
-      const allowedEmpIds = new Set([managerEmp.id, ...deptEmps.map(e => e.id)])
-      where.employeeId = { in: Array.from(allowedEmpIds) }
-    }
+  // Non-admins: see own + team (dept they head + direct reports). Covers EMPLOYEE-role heads.
+  if (!['SUPER_ADMIN', 'ADMIN'].includes(session.role)) {
+    const scope = await getTeamScope(session.userId)
+    if (!scope.visibleIds.length) return successResponse([], 0)
+    where.employeeId = { in: scope.visibleIds }
   }
 
   // Admin filters (also apply for managers within their allowed set)
@@ -123,13 +105,41 @@ export async function POST(req: NextRequest) {
 
   try {
     const {
-      action,       // 'punch_in' | 'punch_out'
+      action,       // 'punch_in' | 'punch_out' | 'admin_save'
       workMode,     // 'WFO' | 'WFH' | 'FIELD'
       notes,
       latitude,
       longitude,
       address,
+      employeeId,   // admin_save: whose attendance
+      date,         // admin_save: which day
+      punchIn,      // admin_save: ISO or null
+      punchOut,     // admin_save: ISO or null
+      status,       // admin_save: PRESENT/ABSENT/HALF_DAY/LEAVE/HOLIDAY
     } = await req.json()
+
+    // ---- Admin manually adds/edits attendance for any employee ----
+    if (action === 'admin_save') {
+      if (!hasMinRole(session.role, 'ADMIN')) return errorResponse('Only admin can add attendance', 403)
+      if (!employeeId || !date) return errorResponse('employeeId and date required')
+      const dOnly = dateOnly(date)
+      const pIn = punchIn ? new Date(punchIn) : null
+      const pOut = punchOut ? new Date(punchOut) : null
+      const hours = pIn && pOut ? Math.max(0, Math.round(((pOut.getTime() - pIn.getTime()) / 3600000) * 100) / 100) : null
+      let isLate = false, lateBy: number | null = null
+      if (pIn) {
+        const [officeStart, grace] = await Promise.all([Settings.officeStartTime(), Settings.lateGraceMinutes()])
+        const late = computeLate(pIn, officeStart || '10:00', grace ?? 10)
+        isLate = late.isLate; lateBy = late.lateBy
+      }
+      const rec = await prisma.attendance.upsert({
+        where: { employeeId_date: { employeeId, date: dOnly } },
+        update: { punchIn: pIn, punchOut: pOut, workMode: workMode || 'WFO', status: status || 'PRESENT', notes: notes || null, hoursWorked: hours, isLate, lateBy },
+        create: { employeeId, date: dOnly, punchIn: pIn, punchOut: pOut, workMode: workMode || 'WFO', status: status || 'PRESENT', notes: notes || null, hoursWorked: hours, isLate, lateBy },
+      })
+      await logFromRequest(req, { userId: session.userId, action: 'ADMIN_SAVE', entityType: 'Attendance', entityId: rec.id, metadata: { employeeId, date } })
+      return successResponse(rec)
+    }
 
     const employee = await prisma.employee.findFirst({ where: { userId: session.userId } })
     if (!employee) return errorResponse('Employee profile not found')

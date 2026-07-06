@@ -1,6 +1,7 @@
 // src/lib/notify.ts
 // Create in-app notifications for one or more users
 import { prisma } from './prisma'
+import { sendExpoPush } from './push'
 
 type NotifyInput = {
   userIds: string | string[]
@@ -29,6 +30,18 @@ export async function notify(input: NotifyInput) {
         metadata: input.metadata ? JSON.stringify(input.metadata) : null,
       })),
     })
+
+    // Mobile push (best-effort) to any of these users with a registered device
+    const withTokens = await prisma.user.findMany({
+      where: { id: { in: users }, expoPushToken: { not: null } },
+      select: { expoPushToken: true },
+    })
+    if (withTokens.length) {
+      sendExpoPush(
+        withTokens.map(u => u.expoPushToken),
+        { title: input.title, body: input.message, data: { link: input.link || '' } },
+      ).catch(() => {})
+    }
   } catch (e) {
     console.error('Notify failed:', e)
   }
