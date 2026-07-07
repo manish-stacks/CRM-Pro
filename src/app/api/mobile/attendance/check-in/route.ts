@@ -5,7 +5,8 @@ import { prisma } from '@/lib/prisma'
 import { requireMobileEmployee, ok, fail } from '@/lib/mobileAuth'
 import { deviceFromRequest } from '@/lib/device'
 import { logFromRequest } from '@/lib/audit'
-import { todayDateOnly } from '@/lib/attendanceDate'
+import { todayDateOnly, computeLate } from '@/lib/attendanceDate'
+import { Settings } from '@/lib/settings'
 
 export async function POST(req: NextRequest) {
   const res = await requireMobileEmployee(req)
@@ -30,37 +31,53 @@ export async function POST(req: NextRequest) {
     return fail('You already completed attendance for today')
   }
 
+  const punchInAt = new Date()
+
+  // Late-mark: office start + grace from Settings (defaults 10:00 / 10 min)
+  // Same logic the web punch-in uses — mobile was skipping this entirely.
+  const [officeStart, grace] = await Promise.all([
+    Settings.officeStartTime(),
+    Settings.lateGraceMinutes(),
+  ])
+  const { isLate, lateBy } = computeLate(punchInAt, officeStart || '10:00', grace ?? 10)
+
   const record = await prisma.attendance.upsert({
     where: { employeeId_date: { employeeId: employee.id, date: today } },
     update: {
-      punchIn: new Date(),
+      punchIn: punchInAt,
       workMode: 'FIELD',
       status: 'PRESENT',
+      isLate,
+      lateBy,
       punchInLat: latitude ?? null,
       punchInLng: longitude ?? null,
       punchInAddress: address ?? null,
       punchInIp: dev.ip,
       punchInDevice: dev.device,
+      punchInBrowser: dev.browser,
       punchInOs: dev.os,
     },
     create: {
       employeeId: employee.id,
       date: today,
-      punchIn: new Date(),
+      punchIn: punchInAt,
       workMode: 'FIELD',
       status: 'PRESENT',
+      isLate,
+      lateBy,
       punchInLat: latitude ?? null,
       punchInLng: longitude ?? null,
       punchInAddress: address ?? null,
       punchInIp: dev.ip,
       punchInDevice: dev.device,
+      punchInBrowser: dev.browser,
       punchInOs: dev.os,
     },
   })
 
   await logFromRequest(req, {
     userId: session.userId, action: 'PUNCH_IN', entityType: 'Attendance', entityId: record.id,
-    metadata: { via: 'mobile', lat: latitude, lng: longitude },
+    metadata: { via: 'mobile', lat: latitude, lng: longitude, isLate, lateBy },
   })
 
   return ok({

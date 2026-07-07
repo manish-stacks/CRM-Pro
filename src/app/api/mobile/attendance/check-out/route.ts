@@ -39,6 +39,7 @@ export async function POST(req: NextRequest) {
       punchOutAddress: address ?? null,
       punchOutIp: dev.ip,
       punchOutDevice: dev.device,
+      punchOutBrowser: dev.browser,
       punchOutOs: dev.os,
     },
   })
