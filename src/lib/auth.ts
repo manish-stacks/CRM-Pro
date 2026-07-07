@@ -52,7 +52,13 @@ export async function getRequestSession(req: NextRequest): Promise<JWTPayload | 
     }
   }
   if (!token) return null
-  return verifyToken(token)
+  const payload = await verifyToken(token)
+  // A client-portal token ({ clientId, type:'client' }) is signature-valid but is
+  // NOT a staff session. Reject it here so staff-guarded routes (notifications,
+  // push-token, etc.) don't treat it as a user with an undefined userId — which
+  // previously made `where: { userId: undefined }` match every row.
+  if (payload && (payload as any).type === 'client') return null
+  return payload
 }
 
 export function hasRole(userRole: string, allowedRoles: string[]): boolean {

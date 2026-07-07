@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { SERVICES } from '../constants/data';
 import { StatusChip } from './HomeScreen';
 import ScreenWrapper from '../components/ScreenWrapper';
 import { AxiosInstance } from '../lib/Axios.instance';
+import { shapeService } from '../lib/shape';
 
 const FILTERS = ['All', 'Active', 'Expiring', 'Critical', 'Expired'];
 
@@ -15,6 +16,7 @@ export default function ServicesScreen({ navigation }) {
   const [filter, setFilter] = useState('All');
   const [search, setSearch] = useState('');
   const [services, setServices] = useState([]);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     fetchServices();
@@ -23,10 +25,17 @@ export default function ServicesScreen({ navigation }) {
   const fetchServices = async () => {
     try {
       const res = await AxiosInstance.get('/client-portal/services');
-      setServices(res.data.services);
+      setServices((res.data?.data || []).map(shapeService));
     } catch (e) {
       console.log(e);
+    } finally {
+      setRefreshing(false);
     }
+  };
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchServices();
   };
   const filtered = services.filter(sv => {
     const matchFilter =
@@ -40,13 +49,17 @@ export default function ServicesScreen({ navigation }) {
 
   // console.log("service data: ", services)
   return (
-    <ScreenWrapper>
+    <ScreenWrapper isScrollable={false}>
       <View style={s.container}>
         <View style={s.header}>
           <Text style={s.title}>My Services</Text>
           <Text style={s.sub}>{services.length} active services</Text>
         </View>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 20, paddingBottom: 20 }}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ padding: 20, paddingBottom: 20 }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />}
+        >
           {/* Search */}
           <View style={s.searchBar}>
             <Ionicons name="search-outline" size={18} color={colors.text3} />

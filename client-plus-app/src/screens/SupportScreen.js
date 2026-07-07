@@ -1,13 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import { AxiosInstance } from '../lib/Axios.instance';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, LayoutAnimation, Alert } from 'react-native';
+import { ClientAPI } from '../services/client.api';
+import { shapeTicket } from '../lib/shape';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, LayoutAnimation, Alert, RefreshControl } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
-import { TICKETS } from '../constants/data';
-import { StatusChip } from './HomeScreen';
 import { Modal, TextInput } from 'react-native';
 import ScreenWrapper from '../components/ScreenWrapper';
+import TicketCard from '../components/TicketCard';
 import { useAuth } from '../context/AuthContext';
 
 const FAQ = [
@@ -17,13 +19,10 @@ const FAQ = [
   { q: 'Can I upgrade my current plan?', a: 'Yes! Visit the Proposals section or raise a support ticket. Our team will send you a custom upgrade proposal within 1 business day.' },
 ];
 
-const ticketStatusMap = {
-  inprogress: 'expiring',
-  resolved: 'active',
-  open: 'critical',
-};
+const LATEST_COUNT = 3;
+const POLL_INTERVAL_MS = 12000; // 12s — ticket status/reply "live update" while screen is open
 
-export default function SupportScreen() {
+export default function SupportScreen({ navigation }) {
   const { colors } = useTheme();
   const s = styles(colors);
   const [openFaq, setOpenFaq] = useState(null);
@@ -32,6 +31,7 @@ export default function SupportScreen() {
   const [description, setDescription] = useState('');
   const [tickets, setTickets] = useState([]);
   const [user, setUser] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
   const { userData } = useAuth();
 
   useEffect(() => {
@@ -39,18 +39,40 @@ export default function SupportScreen() {
     loadUser();
   }, []);
 
+  // Poll for updates only while this screen is focused (stops when the user
+  // navigates away, so it doesn't drain battery/data in the background).
+  useFocusEffect(
+    useCallback(() => {
+      const id = setInterval(() => fetchTickets({ silent: true }), POLL_INTERVAL_MS);
+      return () => clearInterval(id);
+    }, [])
+  );
+
   const loadUser = async () => {
     const data = await userData();
     setUser(data);
   };
 
-  const fetchTickets = async () => {
+  const fetchTickets = async ({ silent = false } = {}) => {
     try {
       const res = await AxiosInstance.get('/client-portal/tickets');
-      setTickets(res?.data?.tickets || []);
+      // API already returns newest-first (orderBy createdAt desc)
+      setTickets((res?.data?.data || []).map(shapeTicket));
     } catch (e) {
-      console.log('Ticket Error:', e);
+      if (!silent) console.log('Ticket Error:', e);
+    } finally {
+      if (!silent) setRefreshing(false);
     }
+  };
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchTickets();
+  };
+
+  const handleReply = async (ticketId, body) => {
+    await ClientAPI.replyTicket(ticketId, body);
+    await fetchTickets();
   };
 
   const toggleFaq = (i) => {
@@ -66,9 +88,8 @@ export default function SupportScreen() {
 
     try {
       await AxiosInstance.post('/client-portal/tickets', {
-        userId: user.id,
-        title,
-        description
+        subject: title,
+        description,
       });
 
       setModalVisible(false);
@@ -84,11 +105,17 @@ export default function SupportScreen() {
     }
   };
 
+  const latestTickets = tickets.slice(0, LATEST_COUNT);
+
   return (
-    <ScreenWrapper>
+    <ScreenWrapper isScrollable={false}>
       <View style={s.container}>
         <View style={s.header}><Text style={s.title}>Support</Text><Text style={s.sub}>We're here to help</Text></View>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 20, paddingBottom: 20 }}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ padding: 20, paddingBottom: 20 }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />}
+        >
           {/* New Ticket button */}
           <TouchableOpacity onPress={() => setModalVisible(true)}>
             <LinearGradient colors={[colors.gradStart, colors.gradEnd]} style={s.newTicketBtn} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
@@ -96,21 +123,22 @@ export default function SupportScreen() {
             </LinearGradient>
           </TouchableOpacity>
 
-          <Text style={[s.sectionTitle, { marginTop: 4 }]}>My Tickets</Text>
-          {
-            tickets.length > 0 ? tickets.map(t => (
-              <View key={t.id} style={s.ticketCard}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <Text style={{ fontWeight: '700', fontSize: 14, color: colors.text, flex: 1, marginRight: 8 }}>{t.title}</Text>
-                  <StatusChip status={ticketStatusMap[t.status]} />
-                </View>
-                <Text style={{ fontSize: 12, color: colors.text2 }}>#{t.id} • Opened {t.date} • {t.replies} replies</Text>
-              </View>
-            )) : (
-              <Text style={{ color: colors.text2, fontStyle: 'italic', marginBottom: 8 }}>No tickets raised yet.</Text>
-            )
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4, marginBottom: 12 }}>
+            <Text style={s.sectionTitle}>My Tickets</Text>
+            {tickets.length > LATEST_COUNT && (
+              <TouchableOpacity onPress={() => navigation.navigate('AllTickets')} style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                <Text style={{ fontSize: 12, color: colors.primary, fontWeight: '700' }}>View all ({tickets.length})</Text>
+                <Ionicons name="chevron-forward" size={14} color={colors.primary} />
+              </TouchableOpacity>
+            )}
+          </View>
 
-          }
+          {latestTickets.length > 0 ? (
+            latestTickets.map(t => <TicketCard key={t.id} ticket={t} onReply={handleReply} />)
+          ) : (
+            <Text style={{ color: colors.text2, fontStyle: 'italic', marginBottom: 8 }}>No tickets raised yet.</Text>
+          )}
+
           <Text style={[s.sectionTitle, { marginTop: 8 }]}>FAQ</Text>
           {FAQ.map((f, i) => (
             <TouchableOpacity key={i} style={s.faqItem} onPress={() => toggleFaq(i)}>

@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View, Text, Switch, TouchableOpacity,
   StyleSheet, Alert
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../context/ThemeContext';
 import ScreenWrapper from '../../components/ScreenWrapper';
@@ -15,15 +16,25 @@ export default function NotificationsSettingsScreen({ navigation }) {
   const [pushNotif, setPushNotif] = useState(false);
   const [smsNotif, setSmsNotif] = useState(false);
 
-  const handleSave = () => {
+  const STORAGE_KEY = 'notifPrefs';
+
+  // Load saved preferences (persist on-device across sessions)
+  useEffect(() => {
+    AsyncStorage.getItem(STORAGE_KEY).then(v => {
+      if (v) {
+        const p = JSON.parse(v);
+        setEmailNotif(p.emailNotif ?? true);
+        setPushNotif(p.pushNotif ?? false);
+        setSmsNotif(p.smsNotif ?? false);
+      }
+    }).catch(() => {});
+  }, []);
+
+  const handleSave = async () => {
+    try {
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ emailNotif, pushNotif, smsNotif }));
+    } catch {}
     Alert.alert('Success', 'Notification settings saved');
-
-    console.log({
-      emailNotif,
-      pushNotif,
-      smsNotif
-    });
-
     navigation.goBack();
   };
 

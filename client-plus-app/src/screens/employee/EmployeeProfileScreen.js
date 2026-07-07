@@ -71,10 +71,10 @@ export default function EmployeeProfileScreen({ navigation }) {
             <>
               <Text style={s.name}>{profile?.name || 'Employee'}</Text>
               <Text style={s.email}>{profile?.email || 'employee@company.com'}</Text>
-              {profile?.designation || profile?.role ? (
+              {profile?.position || profile?.role ? (
                 <View style={s.roleBadge}>
                   <Ionicons name="briefcase-outline" size={12} color="rgba(255,255,255,0.9)" />
-                  <Text style={s.roleText}>{profile.designation || profile.role}</Text>
+                  <Text style={s.roleText}>{profile.position || (profile.role || '').replace(/_/g, ' ')}</Text>
                 </View>
               ) : null}
             </>

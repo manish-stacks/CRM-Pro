@@ -204,6 +204,45 @@ export default function DashboardScreen({ navigation }) {
 
         <View style={s.cardBody}>
 
+          {(data?.today_meetings > 0) && (
+            <View style={[s.meetingBanner, { backgroundColor: 'rgba(168,85,247,0.1)', borderColor: '#A855F7' }]}>
+              <Ionicons name="videocam-outline" size={20} color="#A855F7" />
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 13, fontWeight: '800', color: '#A855F7' }}>
+                  {data.today_meetings} meeting{data.today_meetings === 1 ? '' : 's'} scheduled today
+                </Text>
+                <Text style={{ fontSize: 11, color: colors.text2, marginTop: 1 }}>Tap Meetings to view & close deals</Text>
+              </View>
+              <TouchableOpacity onPress={() => navigation.navigate('Meetings')}>
+                <Ionicons name="chevron-forward" size={20} color="#A855F7" />
+              </TouchableOpacity>
+            </View>
+          )}
+
+          <Text style={s.sectionTitle}>Meetings & Deals</Text>
+          <View style={s.statsGrid}>
+            <StatCard
+              icon="videocam-outline" label="Open Meetings"
+              value={data?.open_meetings}
+              color="#A855F7" bg="rgba(168,85,247,0.12)"
+            />
+            <StatCard
+              icon="calendar-outline" label="Today's Meetings"
+              value={data?.today_meetings}
+              color="#3B82F6" bg="rgba(59,130,246,0.12)"
+            />
+            <StatCard
+              icon="checkmark-done-circle-outline" label="Converted"
+              value={data?.converted}
+              color="#22C55E" bg="rgba(34,197,94,0.12)"
+            />
+            <StatCard
+              icon="trending-up-outline" label="Conversion Rate"
+              value={data?.conversion_rate != null ? `${data.conversion_rate}%` : '—'}
+              color="#F59E0B" bg="rgba(245,158,11,0.12)"
+            />
+          </View>
+
           <Text style={s.sectionTitle}>Overview</Text>
           <View style={s.statsGrid}>
             <StatCard
@@ -232,8 +271,9 @@ export default function DashboardScreen({ navigation }) {
           <Text style={s.sectionTitle}>Quick Actions</Text>
           <View style={s.actionsRow}>
             {[
-              { icon: 'person-add-outline', label: 'Add Client', screen: 'AddClient', color: '#3B82F6', bg: 'rgba(59,130,246,0.1)' },
+              { icon: 'videocam-outline', label: 'Meetings', screen: 'Meetings', color: '#A855F7', bg: 'rgba(168,85,247,0.1)' },
               { icon: 'people-outline', label: 'Clients', screen: 'Clients', color: '#22C55E', bg: 'rgba(34,197,94,0.1)' },
+              { icon: 'person-add-outline', label: 'Add Client', screen: 'AddClient', color: '#3B82F6', bg: 'rgba(59,130,246,0.1)' },
               { icon: 'map-outline', label: 'Visits', screen: 'Visits', color: '#F59E0B', bg: 'rgba(245,158,11,0.1)' },
             ].map((a, i) => (
               <TouchableOpacity key={i} style={[s.actionCard, { backgroundColor: colors.card, borderColor: colors.border }]}
@@ -320,11 +360,13 @@ const styles = (c) => StyleSheet.create({
   },
   actionsRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 12,
     marginBottom: 24
   },
   actionCard: {
-    flex: 1,
+    flexBasis: '46%',
+    flexGrow: 1,
     borderRadius: 16,
     padding: 14,
     alignItems: 'center',
@@ -421,6 +463,15 @@ const styles = (c) => StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: '600',
+  },
+  meetingBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderWidth: 1.5,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 20,
   },
   trackingBanner: {
     flexDirection: 'row',

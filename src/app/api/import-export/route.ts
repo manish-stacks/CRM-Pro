@@ -195,7 +195,47 @@ export async function GET(req: NextRequest) {
       }
 
       case 'leads': {
+        // Mirror /api/leads' filters + role-based visibility so
+        // "filter on screen → export" gives exactly what's shown.
+        const status = searchParams.get('status')
+        const source = searchParams.get('source')
+        const assignedToId = searchParams.get('assignedToId')
+        const search = searchParams.get('search')
+        const dateFrom = searchParams.get('dateFrom')
+        const dateTo = searchParams.get('dateTo')
+
+        const where: any = {}
+        if (status) where.status = status
+        if (source) where.source = source
+        if (search) {
+          where.OR = [
+            { leadNumber: { contains: search } },
+            { clientName: { contains: search } },
+            { companyName: { contains: search } },
+            { clientPhone: { contains: search } },
+            { clientEmail: { contains: search } },
+          ]
+        }
+        if (dateFrom || dateTo) {
+          where.createdAt = {}
+          if (dateFrom) where.createdAt.gte = new Date(dateFrom)
+          if (dateTo) where.createdAt.lte = new Date(dateTo + 'T23:59:59')
+        }
+
+        // Role-based visibility (same rules as the leads list)
+        if (session.role === 'TELECALLER') {
+          where.assignedToId = session.userId
+        } else if (session.role === 'MARKETING_EXECUTIVE') {
+          where.meetingAssignedToId = session.userId
+        } else if (session.role === 'EMPLOYEE') {
+          return toCsv([], 'leads-export')
+        }
+        if (assignedToId && ['SUPER_ADMIN', 'ADMIN', 'MANAGER'].includes(session.role)) {
+          where.assignedToId = assignedToId
+        }
+
         const leads = await prisma.lead.findMany({
+          where,
           include: {
             createdBy: { select: { name: true } },
             assignedTo: { select: { name: true } },
@@ -215,7 +255,9 @@ export async function GET(req: NextRequest) {
           AssignedTo: l.assignedTo?.name || '',
           CreatedAt: l.createdAt.toISOString().split('T')[0],
         }))
-        filename = 'leads-export'
+        filename = dateFrom || dateTo
+          ? `leads-export-${dateFrom || 'start'}_to_${dateTo || 'end'}`
+          : 'leads-export'
         break
       }
 

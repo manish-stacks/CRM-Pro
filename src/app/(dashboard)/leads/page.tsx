@@ -9,8 +9,10 @@ import {
 import { formatDate, getInitials } from '@/lib/utils'
 import {
   Users, Plus, Search, Filter, X, Eye, Phone, Mail, Globe,
-  ExternalLink, MapPin, MessageSquare, Loader2, CalendarClock
+  ExternalLink, MapPin, MessageSquare, Loader2, CalendarClock,
+  Download, Upload, FileSpreadsheet, CheckCircle2, AlertTriangle
 } from 'lucide-react'
+import * as XLSX from 'xlsx'
 import toast from 'react-hot-toast'
 
 const STATUSES = [
@@ -39,8 +41,13 @@ export default function LeadsPage() {
   })
   const [telecallers, setTelecallers] = useState<any[]>([])
 
-  const [modal, setModal] = useState<'none' | 'add'>('none')
+  const [modal, setModal] = useState<'none' | 'add' | 'import'>('none')
   const [saving, setSaving] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const [importRows, setImportRows] = useState<any[]>([])
+  const [importFileName, setImportFileName] = useState('')
+  const [importing, setImporting] = useState(false)
+  const [importResult, setImportResult] = useState<{ imported: number; errors: any[] } | null>(null)
 
   const [form, setForm] = useState({
     companyName: '', clientName: '', clientPhone: '', clientEmail: '',
@@ -96,6 +103,72 @@ export default function LeadsPage() {
     } finally { setSaving(false) }
   }
 
+  // ---- Export ----
+  const handleExport = async () => {
+    setExporting(true)
+    try {
+      const p: Record<string, string> = { type: 'leads', format: 'csv' }
+      Object.entries(filters).forEach(([k, v]) => { if (v) p[k] = v })
+      window.open(`/api/import-export?${new URLSearchParams(p)}`, '_blank')
+    } finally {
+      setTimeout(() => setExporting(false), 800)
+    }
+  }
+
+  // ---- Import ----
+  const openImport = () => {
+    setImportRows([])
+    setImportFileName('')
+    setImportResult(null)
+    setModal('import')
+  }
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setImportFileName(file.name)
+    setImportResult(null)
+    try {
+      const buf = await file.arrayBuffer()
+      const wb = XLSX.read(buf, { type: 'array' })
+      const sheet = wb.Sheets[wb.SheetNames[0]]
+      const rows: any[] = XLSX.utils.sheet_to_json(sheet, { defval: '' })
+      // Normalize common header variants (from our own export or a plain sheet)
+      // to what the import API expects, without requiring an exact header match.
+      const normalized = rows.map(r => ({
+        clientName: r.clientName || r.Name || r.name || r.ClientName || '',
+        clientPhone: r.clientPhone || r.Phone || r.phone || r.ClientPhone || '',
+        clientEmail: r.clientEmail || r.Email || r.email || '',
+        companyName: r.companyName || r.Company || r.company || '',
+        source: r.source || r.Source || 'OTHER',
+        service: r.service || r.Service || '',
+      }))
+      setImportRows(normalized)
+    } catch (err) {
+      toast.error('Could not read file — please upload a .csv or .xlsx')
+      setImportRows([])
+    }
+  }
+
+  const handleImport = async () => {
+    const valid = importRows.filter(r => r.clientName && r.clientPhone)
+    if (valid.length === 0) {
+      toast.error('No valid rows — Name and Phone are required')
+      return
+    }
+    setImporting(true)
+    try {
+      const r = await api.post('/import-export', { leads: importRows })
+      setImportResult({ imported: r.data.data.imported, errors: r.data.data.errors || [] })
+      toast.success(`${r.data.data.imported} lead(s) imported`)
+      fetchLeads()
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Import failed')
+    } finally {
+      setImporting(false)
+    }
+  }
+
   const activeFilterCount = Object.values(filters).filter(v => v).length
 
   const statusPill = (status: string) => {
@@ -119,7 +192,15 @@ export default function LeadsPage() {
             {canSeeAll ? 'All leads across the team' : user?.role === 'MARKETING_EXECUTIVE' ? 'Meetings assigned to you' : 'Your assigned leads'}
           </p>
         </div>
-        <Button onClick={openAdd}><Plus size={14} /> Add Lead</Button>
+        <div className="flex items-center gap-2">
+          <Button variant="secondary" onClick={handleExport} loading={exporting} title="Exports leads matching the current search/filters (including date range)">
+            <Download size={14} /> Export{activeFilterCount > 0 ? ` (${activeFilterCount} filtered)` : ''}
+          </Button>
+          <Button variant="secondary" onClick={openImport}>
+            <Upload size={14} /> Import
+          </Button>
+          <Button onClick={openAdd}><Plus size={14} /> Add Lead</Button>
+        </div>
       </div>
 
       <div className="card">
@@ -278,6 +359,64 @@ export default function LeadsPage() {
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="secondary" onClick={() => setModal('none')}>Cancel</Button>
             <Button onClick={create} loading={saving}>Create Lead</Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Import Leads Modal */}
+      <Modal open={modal === 'import'} onClose={() => setModal('none')} title="Import Leads">
+        <div className="space-y-4">
+          <p className="text-sm text-gray-500">
+            Upload a <span className="font-medium">.csv</span> or <span className="font-medium">.xlsx</span> file.
+            Columns like Name/Phone/Email/Company/Source/Service are picked up automatically —
+            it works with the file from <span className="font-medium">Export</span> too.
+          </p>
+
+          <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-gray-300 rounded-xl py-8 cursor-pointer hover:border-blue-400 hover:bg-blue-50/30 transition-colors">
+            <FileSpreadsheet size={28} className="text-gray-400" />
+            <span className="text-sm text-gray-600">
+              {importFileName ? importFileName : 'Click to choose a file'}
+            </span>
+            <input type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={handleFileSelect} />
+          </label>
+
+          {importRows.length > 0 && !importResult && (
+            <div className="bg-gray-50 rounded-xl p-3 text-sm">
+              <p className="font-medium text-gray-800 mb-1">{importRows.length} row(s) found</p>
+              <p className="text-xs text-gray-500">
+                {importRows.filter(r => r.clientName && r.clientPhone).length} valid ·{' '}
+                {importRows.filter(r => !r.clientName || !r.clientPhone).length} missing name/phone (will be skipped)
+              </p>
+            </div>
+          )}
+
+          {importResult && (
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-sm">
+              <p className="flex items-center gap-1.5 font-medium text-emerald-700">
+                <CheckCircle2 size={15} /> {importResult.imported} lead(s) imported
+              </p>
+              {importResult.errors.length > 0 && (
+                <div className="mt-2 text-xs text-red-600">
+                  <p className="flex items-center gap-1 font-medium"><AlertTriangle size={12} /> {importResult.errors.length} row(s) failed</p>
+                  <ul className="list-disc pl-4 mt-1 space-y-0.5">
+                    {importResult.errors.slice(0, 5).map((er: any, i: number) => (
+                      <li key={i}>Row {er.row}: {er.error}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="secondary" onClick={() => setModal('none')}>
+              {importResult ? 'Close' : 'Cancel'}
+            </Button>
+            {!importResult && (
+              <Button onClick={handleImport} loading={importing} disabled={importRows.length === 0}>
+                Import {importRows.length > 0 ? `${importRows.filter(r => r.clientName && r.clientPhone).length} Lead(s)` : ''}
+              </Button>
+            )}
           </div>
         </div>
       </Modal>

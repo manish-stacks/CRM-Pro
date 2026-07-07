@@ -593,30 +593,87 @@ export default function ClientDetailPage() {
 function PaymentsSection({ clientId }: { clientId: string }) {
   const [payments, setPayments] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  useEffect(() => {
-    api.get(`/payments?clientId=${clientId}&limit=50`).then(r => setPayments(r.data.data || [])).catch(() => { }).finally(() => setLoading(false))
-  }, [clientId])
-  if (loading) return <p className="text-sm text-gray-400 text-center py-4"><Loader2 className="animate-spin inline" /></p>
-  if (!payments.length) return <EmptyState icon={<CreditCard size={20} />} title="No payments" description="Payments recorded will appear here" />
+  const [dueInvoices, setDueInvoices] = useState<any[]>([])
+  const [modal, setModal] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [form, setForm] = useState<any>({ invoiceId: '', amount: '', method: 'UPI', reference: '', paidAt: new Date().toISOString().slice(0, 10), nextDueDate: '', notes: '' })
+
+  const load = () => {
+    api.get(`/payments?clientId=${clientId}&limit=50`).then(r => setPayments(r.data.data || [])).catch(() => {}).finally(() => setLoading(false))
+    api.get(`/payments?type=invoices&clientId=${clientId}&limit=100`)
+      .then(r => setDueInvoices((r.data.data || []).filter((i: any) => (i.dueAmount || 0) > 0))).catch(() => {})
+  }
+  useEffect(() => { load() }, [clientId])
+
+  const openCollect = () => {
+    setForm({ invoiceId: dueInvoices[0]?.id || '', amount: dueInvoices[0]?.dueAmount ? String(dueInvoices[0].dueAmount) : '', method: 'UPI', reference: '', paidAt: new Date().toISOString().slice(0, 10), nextDueDate: '', notes: '' })
+    setModal(true)
+  }
+  const submit = async () => {
+    if (!form.invoiceId) { toast.error('Invoice select karo'); return }
+    if (!Number(form.amount)) { toast.error('Amount daalo'); return }
+    setSaving(true)
+    try {
+      await api.post('/payments', { type: 'payment', ...form, amount: Number(form.amount) })
+      toast.success('Payment collect ho gaya')
+      setModal(false); load()
+    } catch (e: any) { toast.error(e.response?.data?.error || 'Failed') }
+    finally { setSaving(false) }
+  }
+
   return (
-    <div className="space-y-2">
-      {payments.map(p => (
-        <div key={p.id} className="border border-gray-200 rounded-lg p-3 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-700">
-            <DollarSign size={16} />
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold text-gray-900">Payments</h3>
+        <button onClick={openCollect} disabled={!dueInvoices.length} className="btn-primary btn-sm disabled:opacity-50" title={dueInvoices.length ? '' : 'Koi due invoice nahi'}>
+          <Plus size={13} /> Collect Payment
+        </button>
+      </div>
+
+      {!dueInvoices.length && <p className="text-xs text-gray-400">Koi pending (due) invoice nahi — collect ke liye pehle invoice banao.</p>}
+
+      {loading ? (
+        <p className="text-sm text-gray-400 text-center py-4"><Loader2 className="animate-spin inline" /></p>
+      ) : !payments.length ? (
+        <EmptyState icon={<CreditCard size={20} />} title="No payments" description="Collected payments yahan dikhenge" />
+      ) : (
+        <div className="space-y-2">
+          {payments.map(p => (
+            <div key={p.id} className="border border-gray-200 rounded-lg p-3 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-700"><DollarSign size={16} /></div>
+              <div className="flex-1">
+                <p className="font-medium text-sm">
+                  {formatCurrency(p.amount)} · <span className="text-gray-500">{p.method}</span>
+                  {p.source === 'CLIENT_PORTAL' && <span className="badge bg-blue-100 text-blue-700 text-[10px] ml-2">Client Portal</span>}
+                </p>
+                <p className="text-xs text-gray-500">
+                  Invoice {p.invoice?.invoiceNumber} · {formatDate(p.paidAt)}{p.reference && <> · Ref: {p.reference}</>}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <Modal open={modal} onClose={() => setModal(false)} title="Collect Payment">
+        <div className="space-y-3">
+          <Select label="Invoice *" value={form.invoiceId}
+            onChange={(e: any) => { const inv = dueInvoices.find(i => i.id === e.target.value); setForm((p: any) => ({ ...p, invoiceId: e.target.value, amount: inv?.dueAmount ? String(inv.dueAmount) : p.amount })) }}
+            options={[{ value: '', label: 'Select invoice...' }, ...dueInvoices.map(i => ({ value: i.id, label: `${i.invoiceNumber} (Due: ${formatCurrency(i.dueAmount)})` }))]} />
+          <div className="grid grid-cols-2 gap-3">
+            <Input label="Amount *" type="number" value={form.amount} onChange={(e: any) => setForm((p: any) => ({ ...p, amount: e.target.value }))} />
+            <Select label="Method" value={form.method} onChange={(e: any) => setForm((p: any) => ({ ...p, method: e.target.value }))}
+              options={['UPI', 'CASH', 'BANK_TRANSFER', 'CHEQUE', 'CARD'].map(m => ({ value: m, label: m.replace('_', ' ') }))} />
+            <Input label="Reference" value={form.reference} onChange={(e: any) => setForm((p: any) => ({ ...p, reference: e.target.value }))} placeholder="UPI/txn ref" />
+            <Input label="Date" type="date" value={form.paidAt} onChange={(e: any) => setForm((p: any) => ({ ...p, paidAt: e.target.value }))} />
+            <Input label="Balance due date (part payment)" type="date" value={form.nextDueDate} onChange={(e: any) => setForm((p: any) => ({ ...p, nextDueDate: e.target.value }))} />
           </div>
-          <div className="flex-1">
-            <p className="font-medium text-sm">
-              {formatCurrency(p.amount)} · <span className="text-gray-500">{p.method}</span>
-              {p.source === 'CLIENT_PORTAL' && <span className="badge bg-blue-100 text-blue-700 text-[10px] ml-2">Client Portal</span>}
-            </p>
-            <p className="text-xs text-gray-500">
-              Invoice {p.invoice?.invoiceNumber} · {formatDate(p.paidAt)}
-              {p.reference && <> · Ref: {p.reference}</>}
-            </p>
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setModal(false)}>Cancel</Button>
+            <Button onClick={submit} loading={saving}>Collect</Button>
           </div>
         </div>
-      ))}
+      </Modal>
     </div>
   )
 }

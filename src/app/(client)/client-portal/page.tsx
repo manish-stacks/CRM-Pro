@@ -3,7 +3,8 @@ import { useState, useEffect } from 'react'
 import {
   Loader2, LogIn, Package, FileText, CreditCard, User, MessageSquare, LogOut,
   Phone, Mail, Calendar, Clock, CheckCircle2, Download, Plus, Building2, ArrowRight,
-  ShieldCheck, Wallet, AlertTriangle, Send, X, Lock, TrendingUp, Sparkles
+  ShieldCheck, Wallet, AlertTriangle, Send, X, Lock, TrendingUp, Sparkles,
+  ChevronDown, ChevronUp, ChevronLeft, ChevronRight
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { downloadInvoicePdf } from '@/lib/invoicePdf'
@@ -21,6 +22,9 @@ export default function ClientPortalPage() {
   const [ticketForm, setTicketForm] = useState({ subject: '', description: '', priority: 'MEDIUM', category: '' })
   const [ticketSaving, setTicketSaving] = useState(false)
   const [ticketReply, setTicketReply] = useState<Record<string, string>>({})
+  const [openThreads, setOpenThreads] = useState<Record<string, boolean>>({})
+  const [ticketPage, setTicketPage] = useState(1)
+  const TICKETS_PAGE_SIZE = 5
   const [client, setClient] = useState<any>(null)
   const [services, setServices] = useState<any[]>([])
   const [invoices, setInvoices] = useState<any[]>([])
@@ -55,6 +59,29 @@ export default function ClientPortalPage() {
     if (rRes.ok) setReports((await rRes.json()).data || [])
     if (tRes.ok) setTickets((await tRes.json()).data || [])
   }
+
+  // Lightweight ticket-only refetch — used for polling so an open reply draft
+  // (ticketReply state) and the rest of the dashboard aren't touched.
+  const pollTickets = async () => {
+    try {
+      const tRes = await fetch('/api/client-portal/tickets')
+      if (tRes.ok) setTickets((await tRes.json()).data || [])
+    } catch {
+      // silent — this runs in the background every few seconds
+    }
+  }
+
+  // "Live" ticket updates: poll every 12s only while the Support tab is open.
+  useEffect(() => {
+    if (!loggedIn || tab !== 'tickets') return
+    const id = setInterval(pollTickets, 12000)
+    return () => clearInterval(id)
+  }, [loggedIn, tab])
+
+  useEffect(() => {
+    const totalPages = Math.max(1, Math.ceil(tickets.length / TICKETS_PAGE_SIZE))
+    if (ticketPage > totalPages) setTicketPage(totalPages)
+  }, [tickets.length])
 
   const login = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -486,7 +513,12 @@ export default function ClientPortalPage() {
               </div>
             ) : (
               <div className="space-y-3">
-                {tickets.map((t: any) => (
+                {tickets
+                  .slice((ticketPage - 1) * TICKETS_PAGE_SIZE, ticketPage * TICKETS_PAGE_SIZE)
+                  .map((t: any) => {
+                  const replyCount = t.replies?.length || 0
+                  const threadOpen = !!openThreads[t.id]
+                  return (
                   <div key={t.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                     <div className="p-4 border-b border-gray-50">
                       <div className="flex items-center gap-2 flex-wrap mb-1">
@@ -498,7 +530,17 @@ export default function ClientPortalPage() {
                       <p className="text-sm text-gray-600 mt-1 whitespace-pre-wrap">{t.description}</p>
                       <p className="text-xs text-gray-400 mt-2">Assigned: {t.assignedTo?.name || 'Unassigned'} · {new Date(t.createdAt).toLocaleDateString('en-IN')}</p>
                     </div>
-                    {t.replies?.length > 0 && (
+                    {replyCount > 0 && (
+                      <button
+                        onClick={() => setOpenThreads(p => ({ ...p, [t.id]: !p[t.id] }))}
+                        className="w-full flex items-center gap-1.5 px-4 py-2.5 text-xs font-semibold text-indigo-600 hover:bg-indigo-50/50 border-b border-gray-50"
+                      >
+                        <MessageSquare size={13} />
+                        <span className="flex-1 text-left">{replyCount} {replyCount === 1 ? 'reply' : 'replies'}</span>
+                        {threadOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+                      </button>
+                    )}
+                    {threadOpen && replyCount > 0 && (
                       <div className="bg-slate-50 p-4 space-y-2">
                         {t.replies.map((r: any) => (
                           <div key={r.id} className="bg-white rounded-xl p-3 text-sm border border-gray-100">
@@ -519,12 +561,35 @@ export default function ClientPortalPage() {
                             method: 'POST', headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ body: ticketReply[t.id] }),
                           })
-                          if (r.ok) { setTicketReply(p => ({ ...p, [t.id]: '' })); loadData(); toast.success('Reply sent') }
+                          if (r.ok) { setTicketReply(p => ({ ...p, [t.id]: '' })); setOpenThreads(p => ({ ...p, [t.id]: true })); loadData(); toast.success('Reply sent') }
                         }} className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 rounded-xl text-sm flex items-center"><Send size={14} /></button>
                       </div>
                     )}
                   </div>
-                ))}
+                  )
+                })}
+
+                {tickets.length > TICKETS_PAGE_SIZE && (
+                  <div className="flex items-center justify-center gap-4 pt-2">
+                    <button
+                      disabled={ticketPage === 1}
+                      onClick={() => setTicketPage(p => Math.max(1, p - 1))}
+                      className="w-9 h-9 rounded-xl border border-gray-200 flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
+                    >
+                      <ChevronLeft size={16} />
+                    </button>
+                    <span className="text-sm text-gray-600 font-medium">
+                      Page {ticketPage} of {Math.max(1, Math.ceil(tickets.length / TICKETS_PAGE_SIZE))}
+                    </span>
+                    <button
+                      disabled={ticketPage >= Math.ceil(tickets.length / TICKETS_PAGE_SIZE)}
+                      onClick={() => setTicketPage(p => Math.min(Math.ceil(tickets.length / TICKETS_PAGE_SIZE), p + 1))}
+                      className="w-9 h-9 rounded-xl border border-gray-200 flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
+                    >
+                      <ChevronRight size={16} />
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>

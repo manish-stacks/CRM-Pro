@@ -1,20 +1,44 @@
 import React from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Alert, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Alert, StyleSheet, RefreshControl } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
-import { SERVICES } from '../constants/data';
 import { ProgressBar } from './HomeScreen';
 import ScreenWrapper from '../components/ScreenWrapper';
+import { useEffect, useState } from 'react';
+import { AxiosInstance } from '../lib/Axios.instance';
+import { shapeService } from '../lib/shape';
 
 export default function RenewalsScreen({ navigation }) {
   const { colors } = useTheme();
   const s = styles(colors);
-  const critical = SERVICES.find(sv => sv.status === 'critical');
-  const expiring = SERVICES.filter(sv => sv.status === 'expiring');
+  const [services, setServices] = useState([]);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchServices = () => {
+    return AxiosInstance.get('/client-portal/services')
+      .then(res => setServices((res.data?.data || []).map(shapeService)))
+      .catch(() => {})
+      .finally(() => setRefreshing(false));
+  };
+
+  useEffect(() => {
+    fetchServices();
+  }, []);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchServices();
+  };
+
+  const critical = services.find(sv => sv.status === 'critical');
+  const expiring = services.filter(sv => sv.status === 'expiring');
+  const daysLeft = critical?.expiryDate
+    ? Math.max(0, Math.ceil((new Date(critical.expiryDate).getTime() - Date.now()) / 86400000))
+    : null;
 
   return (
-    <ScreenWrapper>
+    <ScreenWrapper isScrollable={false}>
       <View style={s.container}>
         <View style={s.headerBar}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={s.backBtn}>
@@ -22,32 +46,23 @@ export default function RenewalsScreen({ navigation }) {
           </TouchableOpacity>
           <Text style={s.title}>Renewals</Text>
         </View>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 20, paddingBottom: 30 }}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ padding: 20, paddingBottom: 30 }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />}
+        >
           {/* Critical Renewal Hero */}
           {critical && (
             <LinearGradient colors={[colors.gradStart, colors.gradEnd]} style={s.hero} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
-              <Text style={{ fontSize: 60, fontWeight: '800', color: 'white', lineHeight: 64 }}>5</Text>
+              <Text style={{ fontSize: 60, fontWeight: '800', color: 'white', lineHeight: 64 }}>{daysLeft ?? '—'}</Text>
               <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.75)', marginTop: 4, marginBottom: 16 }}>days remaining</Text>
               <Text style={{ fontSize: 18, fontWeight: '700', color: 'white' }}>{critical.name}</Text>
               <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.75)', marginTop: 4, marginBottom: 16 }}>Expires on {critical.renewalDate}</Text>
               <TouchableOpacity style={s.renewBtn} onPress={() => Alert.alert('Renewal initiated! 🎉')}>
-                <Text style={{ color: colors.primary, fontWeight: '800', fontSize: 16 }}>Renew Now → {critical.monthlyValue}/yr</Text>
+                <Text style={{ color: colors.primary, fontWeight: '800', fontSize: 16 }}>Renew Now → {critical.amount}</Text>
               </TouchableOpacity>
             </LinearGradient>
           )}
-
-          {/* Plan Details */}
-          <Text style={s.sectionTitle}>Plan Details</Text>
-          <View style={s.planCard}>
-            <Text style={{ fontSize: 32, fontWeight: '800', color: colors.text }}>₹6,000 <Text style={{ fontSize: 16, color: colors.text2, fontWeight: '500' }}>/year</Text></Text>
-            <Text style={{ fontSize: 13, color: colors.text2, marginTop: 2, marginBottom: 16 }}>SSL Certificate + Shared Cloud Hosting</Text>
-            {['SSL Certificate (Wildcard)', '10 GB SSD Storage', '99.9% Uptime Guarantee', 'Daily Backups', '24/7 Support'].map((f, i) => (
-              <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                <Ionicons name="checkmark" size={18} color={colors.green} />
-                <Text style={{ fontSize: 14, color: colors.text }}>{f}</Text>
-              </View>
-            ))}
-          </View>
 
           {/* Other expiring */}
           {expiring.length > 0 && (

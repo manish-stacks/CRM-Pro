@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AxiosInstance } from '../lib/Axios.instance';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { NOTIFICATIONS } from '../constants/data';
@@ -32,6 +32,7 @@ export default function NotificationsScreen({ navigation }) {
   const { colors } = useTheme();
   const s = styles(colors);
   const [notifications, setNotifications] = useState([]);
+  const [refreshing, setRefreshing] = useState(false);
   useEffect(() => {
     fetchNotifications();
   }, []);
@@ -42,10 +43,17 @@ export default function NotificationsScreen({ navigation }) {
       setNotifications(res?.data?.data?.items || []);
     } catch (e) {
       console.log('Notification Error:', e);
+    } finally {
+      setRefreshing(false);
     }
   };
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchNotifications();
+  };
   return (
-    <ScreenWrapper>
+    <ScreenWrapper isScrollable={false}>
       <View style={s.container}>
         <View style={s.headerBar}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={s.backBtn}>
@@ -71,6 +79,7 @@ export default function NotificationsScreen({ navigation }) {
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ padding: 20 }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />}
         >
           {notifications.length === 0 ? (
             <Text style={{ fontSize: 14, color: colors.text }}>

@@ -22,8 +22,14 @@ export default function App() {
       // Deep-link mapping is best-effort; the app opens and shows the relevant tab.
       if (link && navRef.current) {
         try {
-          if (link.includes('ticket')) navRef.current.navigate('Notifications');
-          else if (link.includes('invoice') || link.includes('payment')) navRef.current.navigate('Payments');
+          // Meeting assigned to a marketing exec → open the Meetings tab and refresh.
+          if (link.includes('lead') || link.includes('meeting')) {
+            navRef.current.navigate('Meetings', { refresh: Date.now() });
+          } else if (link.includes('ticket')) {
+            navRef.current.navigate('Notifications');
+          } else if (link.includes('invoice') || link.includes('payment')) {
+            navRef.current.navigate('Payments');
+          }
         } catch {}
       }
     });

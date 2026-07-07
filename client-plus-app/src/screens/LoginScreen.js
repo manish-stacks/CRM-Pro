@@ -97,11 +97,9 @@ export default function LoginScreen({ navigation }) {
             </TouchableOpacity>
           </View>
 
-          {activeRole === 'client' && (
-            <TouchableOpacity style={s.forgot} onPress={() => navigation.navigate('ForgotPassword')}>
-              <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 13 }}>Forgot Password?</Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity style={s.forgot} onPress={() => navigation.navigate('ForgotPassword', { role: activeRole })}>
+            <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 13 }}>Forgot Password?</Text>
+          </TouchableOpacity>
 
           {/* Button */}
           <TouchableOpacity onPress={handleLogin} disabled={loading} style={{ marginTop: 24 }}>

@@ -52,7 +52,7 @@ export const Notifications = {
   meetingScheduled: (marketingExecId: string, clientName: string, date: string, leadId: string) =>
     notify({
       userIds: marketingExecId,
-      title: '🎯 New Meeting Scheduled',
+      title: 'New Meeting Scheduled',
       message: `Meeting with ${clientName} on ${date}`,
       type: 'meeting',
       link: `/leads/${leadId}`,
@@ -61,7 +61,7 @@ export const Notifications = {
   leadReassigned: (userId: string, leadNumber: string, leadId: string, reason?: string) =>
     notify({
       userIds: userId,
-      title: '🔄 Lead Assigned to You',
+      title: 'Lead Assigned to You',
       message: `${leadNumber}${reason ? ` — ${reason}` : ''}`,
       type: 'lead',
       link: `/leads/${leadId}`,
@@ -70,7 +70,7 @@ export const Notifications = {
   ticketAssigned: (userId: string, ticketNumber: string, subject: string, ticketId: string) =>
     notify({
       userIds: userId,
-      title: `🎫 Ticket ${ticketNumber} assigned to you`,
+      title: `Ticket ${ticketNumber} assigned to you`,
       message: subject,
       type: 'ticket',
       link: `/tickets/${ticketId}`,
@@ -79,7 +79,7 @@ export const Notifications = {
   paymentReceived: (userIds: string[], invoiceNumber: string, amount: number, invoiceId: string) =>
     notify({
       userIds,
-      title: `💰 Payment received on ${invoiceNumber}`,
+      title: `Payment received on ${invoiceNumber}`,
       message: `₹${amount.toLocaleString('en-IN')}`,
       type: 'payment',
       link: `/invoices/${invoiceId}`,
@@ -88,7 +88,7 @@ export const Notifications = {
   reportUploaded: (userIds: string | string[], clientName: string, title: string, clientId: string) =>
     notify({
       userIds,
-      title: `📊 Report shared: ${clientName}`,
+      title: `Report shared: ${clientName}`,
       message: title,
       type: 'report',
       link: `/clients/${clientId}`,
@@ -98,7 +98,7 @@ export const Notifications = {
   projectAssignedManager: (userId: string, serviceName: string, clientName: string, clientId: string) =>
     notify({
       userIds: userId,
-      title: '🗂️ You are now Head of a project',
+      title: 'You are now Head of a project',
       message: `${serviceName} — ${clientName}`,
       type: 'info',
       link: `/clients/${clientId}`,
@@ -107,7 +107,7 @@ export const Notifications = {
   projectAssignedMember: (userIds: string | string[], serviceName: string, clientName: string, clientId: string) =>
     notify({
       userIds,
-      title: '👥 Added to a project team',
+      title: 'Added to a project team',
       message: `${serviceName} — ${clientName}`,
       type: 'info',
       link: `/clients/${clientId}`,
@@ -117,7 +117,7 @@ export const Notifications = {
   employeeTicketRaised: (userIds: string | string[], ticketNumber: string, subject: string, ticketId: string) =>
     notify({
       userIds,
-      title: `🎫 New internal ticket ${ticketNumber}`,
+      title: `New internal ticket ${ticketNumber}`,
       message: subject,
       type: 'ticket',
       link: `/my-tickets/${ticketId}`,
@@ -126,7 +126,7 @@ export const Notifications = {
   employeeTicketReply: (userIds: string | string[], ticketNumber: string, ticketId: string) =>
     notify({
       userIds,
-      title: `💬 Reply on ${ticketNumber}`,
+      title: `Reply on ${ticketNumber}`,
       message: 'New reply on your internal ticket',
       type: 'ticket',
       link: `/my-tickets/${ticketId}`,
@@ -136,7 +136,7 @@ export const Notifications = {
   supportTicketReply: (userIds: string | string[], ticketNumber: string, ticketId: string) =>
     notify({
       userIds,
-      title: `💬 Reply on ${ticketNumber}`,
+      title: `Reply on ${ticketNumber}`,
       message: 'New reply on a support ticket',
       type: 'ticket',
       link: `/tickets/${ticketId}`,
@@ -146,7 +146,7 @@ export const Notifications = {
   leadAssigned: (userId: string, leadNumber: string, leadId: string) =>
     notify({
       userIds: userId,
-      title: '📞 New Lead Assigned',
+      title: 'New Lead Assigned',
       message: leadNumber,
       type: 'lead',
       link: `/leads/${leadId}`,
@@ -155,7 +155,7 @@ export const Notifications = {
   leaveApproved: (userId: string, dateRange: string) =>
     notify({
       userIds: userId,
-      title: '✅ Leave Approved',
+      title: 'Leave Approved',
       message: dateRange,
       type: 'success',
       link: `/leaves`,
@@ -164,7 +164,7 @@ export const Notifications = {
   leaveRejected: (userId: string, dateRange: string, reason?: string) =>
     notify({
       userIds: userId,
-      title: '❌ Leave Rejected',
+      title: 'Leave Rejected',
       message: `${dateRange}${reason ? ` — ${reason}` : ''}`,
       type: 'error',
       link: `/leaves`,
@@ -173,7 +173,7 @@ export const Notifications = {
   birthday: (userIds: string[], employeeName: string) =>
     notify({
       userIds,
-      title: '🎂 Birthday Today!',
+      title: 'Birthday Today!',
       message: `Wish ${employeeName} a happy birthday`,
       type: 'birthday',
     }),

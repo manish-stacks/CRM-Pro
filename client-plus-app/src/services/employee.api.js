@@ -8,6 +8,9 @@ export const EmployeeAPI = {
   // Dashboard + profile
   getDashboard: () => AxiosInstance.get('/mobile/dashboard'),
   getProfile: () => AxiosInstance.get('/mobile/profile'),
+  updateProfile: (data) => AxiosInstance.patch('/mobile/profile', data),
+  changePassword: (data) => AxiosInstance.post('/mobile/profile/change-password', data),
+  uploadImage: (dataUrl, folder = 'avatars') => AxiosInstance.post('/upload', { dataUrl, folder }),
 
   // Attendance / tracking session
   getAttendanceStatus: () => AxiosInstance.get('/mobile/attendance/status'),
@@ -22,6 +25,18 @@ export const EmployeeAPI = {
   // Packages + service assignment
   getPackages: () => AxiosInstance.get('/mobile/packages'),
   assignService: (data) => AxiosInstance.post('/mobile/assign-service', data),
+
+  // Proposals & Invoices (client deal paperwork)
+  getProposals: (clientId) => AxiosInstance.get(`/mobile/proposals${clientId ? `?clientId=${clientId}` : ''}`),
+  createProposal: (data) => AxiosInstance.post('/mobile/proposals', data),
+  getInvoices: (clientId) => AxiosInstance.get(`/mobile/invoices${clientId ? `?clientId=${clientId}` : ''}`),
+  createInvoice: (data) => AxiosInstance.post('/mobile/invoices', data),
+
+  // Meetings assigned to this marketing executive
+  getMeetings: () => AxiosInstance.get('/mobile/meetings'),
+  getMeetingById: (id) => AxiosInstance.get(`/mobile/meetings/${id}`),
+  logMeetingActivity: (id, data) => AxiosInstance.post(`/mobile/meetings/${id}/activity`, data),
+  closeMeeting: (id, data) => AxiosInstance.post(`/mobile/meetings/${id}/close`, data),
 
   // Visits
   getVisits: () => AxiosInstance.get('/mobile/visits'),

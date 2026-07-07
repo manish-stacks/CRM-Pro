@@ -1,11 +1,11 @@
-
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Image } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Image, RefreshControl } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import ScreenWrapper from '../components/ScreenWrapper';
 import { useEffect, useState } from 'react';
 import { AxiosInstance } from '../lib/Axios.instance';
+import { shapeService, fmtMoney } from '../lib/shape';
 
 
 function getGreeting() {
@@ -51,14 +51,51 @@ export default function HomeScreen({ navigation }) {
   const { colors } = useTheme();
   const s = styles(colors);
   const [dashboard, setDashboard] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   const fetchDashboard = async () => {
-    try { 
-      const res = await AxiosInstance.get('/client-portal/profile');
-      setDashboard(res.data);
+    try {
+      // No dedicated client dashboard endpoint — compose it from the existing
+      // (web-shared) endpoints so nothing on the backend has to change.
+      const [profileRes, servicesRes, invoicesRes] = await Promise.all([
+        AxiosInstance.get('/client-portal/profile'),
+        AxiosInstance.get('/client-portal/services'),
+        AxiosInstance.get('/client-portal/invoices'),
+      ]);
+
+      const client = profileRes.data?.data || {};
+      const services = (servicesRes.data?.data || []).map(shapeService);
+      const invoices = invoicesRes.data?.data || [];
+
+      const expiringList = services.filter(s => s.status === 'expiring' || s.status === 'critical');
+      const totalPaid = invoices.reduce((sum, i) => sum + (i.paidAmount || 0), 0);
+
+      setDashboard({
+        stats: {
+          active: services.filter(s => s.status !== 'expired').length,
+          expiring: expiringList.length,
+          totalPaid: fmtMoney(totalPaid),
+        },
+        expiringServices: expiringList.slice(0, 5),
+        recentServices: services.slice(0, 5),
+        user: {
+          client_name: client.clientName || 'Client',
+          company_name: client.companyName || '',
+          image: client.image || null,
+        },
+        totalNotifications: 0,
+      });
     } catch (error) {
       console.log('Dashboard Error:', error);
+      setDashboard({ stats: {}, expiringServices: [], recentServices: [], user: {}, totalNotifications: 0 });
+    } finally {
+      setRefreshing(false);
     }
+  };
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchDashboard();
   };
 
   useEffect(() => {
@@ -92,7 +129,7 @@ export default function HomeScreen({ navigation }) {
 
   // console.log("Dashboard data on HomeScreen:", dashboard);
   return (
-    <ScreenWrapper>
+    <ScreenWrapper isScrollable={false}>
       <View style={s.container}>
         {/* Header */}
         <View style={s.header}>
@@ -120,7 +157,11 @@ export default function HomeScreen({ navigation }) {
           </View>
         </View>
 
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={s.scroll}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />}
+        >
           {/* Greeting Card */}
           <LinearGradient colors={[colors.gradStart, colors.gradEnd]} style={s.greetCard} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>

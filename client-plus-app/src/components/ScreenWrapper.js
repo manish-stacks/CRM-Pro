@@ -9,6 +9,7 @@ export default function ScreenWrapper({
     style,
     edges = ['top'],
     isScrollable = true,
+    refreshControl,
 }) {
     const { colors } = useTheme();
 
@@ -21,6 +22,7 @@ export default function ScreenWrapper({
                         // { paddingBottom: 10 },
                         contentStyle,
                     ]}
+                    refreshControl={refreshControl}
                 >
                     {children}
                 </ScrollView>

@@ -51,8 +51,7 @@ export default function ProfileScreen({ navigation }) {
   const fetchProfile = async () => {
     try {
       const res = await AxiosInstance.get('/client-portal/profile');
-      console.log("user", res.data)
-      setUser(res.data);
+      setUser(res.data?.data || null);
     } catch (e) {
       console.log('Profile Error:', e);
     }
@@ -76,13 +75,13 @@ export default function ProfileScreen({ navigation }) {
                 <Image source={{ uri: user?.image }} style={s.avatarImg} />
               ) : (
                 <Text style={s.avatarText}>
-                  {user?.name ? user.name.split(' ').map(n => n[0]).join('') : 'RS'}
+                  {user?.clientName ? user.clientName.split(' ').map(n => n[0]).join('') : 'RS'}
                 </Text>
               )}
             </View>
             {/* <View style={s.editBadge}><Ionicons name="pencil" size={12} color={colors.primary} /></View> */}
           </View>
-          <Text style={{ fontSize: 22, fontWeight: '800', color: 'white' }}>{user?.name || 'Guest'}</Text>
+          <Text style={{ fontSize: 22, fontWeight: '800', color: 'white' }}>{user?.clientName || 'Guest'}</Text>
           <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.75)', marginTop: 4 }}>{user?.email || 'Your email'}</Text>
         </LinearGradient>
 

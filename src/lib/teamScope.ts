@@ -31,12 +31,18 @@ export async function getTeamScope(userId: string): Promise<TeamScope> {
     deptEmps.forEach(e => ids.add(e.id))
   }
 
-  // Direct reports (team-lead relationship)
-  const reports = await prisma.employee.findMany({
-    where: { reportingToId: me.id },
-    select: { id: true },
-  })
-  reports.forEach(e => ids.add(e.id))
+  // Direct reports (team-lead relationship).
+  // Wrapped in try/catch so a not-yet-migrated `reportingToId` column can't crash
+  // attendance/leaves/employees pages — run the migration to enable team-lead scoping.
+  try {
+    const reports = await prisma.employee.findMany({
+      where: { reportingToId: me.id },
+      select: { id: true },
+    })
+    reports.forEach(e => ids.add(e.id))
+  } catch (e) {
+    console.error('getTeamScope: reportingToId query failed (run team_lead migration):', (e as any)?.message)
+  }
 
   return { empId: me.id, visibleIds: Array.from(ids), canSeeTeam: ids.size > 1 }
 }

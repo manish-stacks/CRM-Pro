@@ -28,11 +28,11 @@ export default function EditProfileScreen({ navigation }) {
     const fetchProfile = async () => {
         try {
             const res = await AxiosInstance.get('/client-portal/profile');
-            // console.log('Profile Data:', res.data);
-            setName(res.data.name);
-            setEmail(res.data.email);
-            setPhone(res.data.phone);
-            setImage(res.data.image);
+            const c = res.data?.data || {};
+            setName(c.clientName || '');
+            setEmail(c.email || '');
+            setPhone(c.phone || '');
+            setImage(c.image || null);
 
         } catch (e) {
             console.log('Profile Error:', e);
@@ -97,25 +97,16 @@ export default function EditProfileScreen({ navigation }) {
         try {
             setLoading(true);
 
-            const formData = new FormData();
+            // The client-portal profile PUT expects JSON with EDITABLE keys
+            // (clientName, email, phone, image-as-URL). It does not accept a
+            // multipart file upload, so we send JSON. A newly picked local image
+            // (file:// uri) can't be hosted from here, so we only persist an
+            // existing http image URL. (Client-side image upload needs a
+            // dedicated endpoint — noted as a follow-up.)
+            const payload = { clientName: name, email, phone };
+            if (image && image.startsWith('http')) payload.image = image;
 
-            formData.append('name', name);
-            formData.append('email', email);
-            formData.append('phone', phone);
-
-            if (image && !image.startsWith('http')) {
-                formData.append('image', {
-                    uri: image,
-                    name: 'profile.jpg',
-                    type: 'image/jpeg',
-                });
-            }
-
-            await AxiosInstance.put('/client-portal/profile', formData, {
-                headers: {
-                    'Content-Type': 'multipart/form-data',
-                },
-            });
+            await AxiosInstance.put('/client-portal/profile', payload);
 
             Alert.alert('Success', 'Profile updated successfully');
             navigation.goBack();
@@ -150,7 +141,7 @@ export default function EditProfileScreen({ navigation }) {
                         {image ? (
                             <Image source={{ uri: image }} style={s.avatarImg} />
                         ) : (
-                            <Text style={s.avatarText}>RS</Text>
+                            <Text style={s.avatarText}>{name[0] || 'A'}</Text>
                         )}
                     </View>
 

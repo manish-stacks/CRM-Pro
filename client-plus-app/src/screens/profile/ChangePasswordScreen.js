@@ -37,9 +37,8 @@ export default function ChangePasswordScreen({ navigation }) {
       setLoading(true);
 
       const res = await AxiosInstance.post('/client-portal/change-password', {
-        old_password: oldPass,
+        current_password: oldPass,
         new_password: newPass,
-        new_password_confirmation: confirmPass
       });
 
       Alert.alert('Success', res.data.message || 'Password updated');

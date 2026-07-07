@@ -32,6 +32,12 @@ model User {
   disabledReason   String?
   lastLoginAt      DateTime?
   expoPushToken    String?   // mobile push (Expo/FCM)
+
+  // Password-reset OTP (staff forgot-password flow)
+  resetOtp         String?   // Hashed OTP
+  resetOtpExpiry   DateTime?
+  resetOtpAttempts Int       @default(0)
+
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -600,6 +606,11 @@ model Client {
   portalPassword       String?         // Hashed - allows client portal login
   portalPasswordSet    Boolean         @default(false)
   lastPortalLoginAt    DateTime?
+
+  // Password-reset OTP (forgot-password flow)
+  resetOtp             String?         // Hashed OTP
+  resetOtpExpiry       DateTime?
+  resetOtpAttempts     Int             @default(0)
 
   // Assignments
   telecallerId         String?         // TELECALLER responsible

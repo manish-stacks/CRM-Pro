@@ -1,32 +1,82 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { LineChart } from 'react-native-chart-kit';
 import { useTheme } from '../context/ThemeContext';
 import ScreenWrapper from '../components/ScreenWrapper';
 import { AxiosInstance } from '../lib/Axios.instance';
+import { useAuth } from '../context/AuthContext';
 import * as Linking from 'expo-linking';
+import { ClientAPI } from '../services/client.api';
 
 export default function ServiceDetailScreen({ navigation, route }) {
   const { colors } = useTheme();
   const s = styles(colors);
-  const [sv, setSv] = useState(null);
-  const serviceId = route.params.service?.id;
-  useEffect(() => {
-    fetchDetail();
-  }, []);
+  const { userData } = useAuth();
+  const [sv, setSv] = useState(route.params?.service || null);
+  const [manager, setManager] = useState(null);
+  const [reports, setReports] = useState([]);
+  const [reportsLoading, setReportsLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const fetchDetail = async () => {
+  const loadManager = async () => {
     try {
-      const res = await AxiosInstance.get(`/client-portal/services?id=${serviceId}`);
-      setSv(res.data);
+      const u = await userData?.();
+      const rp = u?.reporting_person;
+      if (rp?.name) {
+        setManager({
+          initials: rp.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase(),
+          name: rp.name,
+          role: 'Account Manager',
+          phone: rp.phone || '',
+          email: rp.email || '',
+        });
+      }
+    } catch {}
+  };
+
+  // Reports live on a separate endpoint (/client-portal/reports), scoped to the
+  // client, not embedded in the service record. Fetch them here and filter to
+  // this service — this is what web's "Reports" tab shows per service.
+  const loadReports = async () => {
+    try {
+      const svId = route.params?.service?.id;
+      const res = await ClientAPI.getReports();
+      const all = res?.data?.data || [];
+      const forThisService = all.filter(r => r.clientServiceId === svId);
+      setReports(forThisService.map(r => ({
+        id: r.id,
+        title: r.title,
+        month: r.reportPeriod || new Date(r.reportDate).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' }),
+        generated: new Date(r.reportDate).toLocaleDateString('en-IN'),
+        file: r.fileUrl || null,
+        description: r.description || null,
+        content: r.content || null,
+      })));
     } catch (e) {
-      console.log('Service Detail Error:', e);
+      console.log('Reports fetch error:', e);
+    } finally {
+      setReportsLoading(false);
+      setRefreshing(false);
     }
   };
 
-  const pct = sv?.progress;
+  useEffect(() => {
+    // The shaped service is passed in via navigation params; use it directly.
+    // (There's no single-service endpoint — the list route ignores ?id.)
+    if (route.params?.service) setSv(route.params.service);
+    loadManager();
+    loadReports();
+  }, []);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadManager();
+    loadReports();
+  };
+
+  const pct = sv?.progress ?? 0;
 
   if (!sv) {
     return <Text style={{ textAlign: 'center', marginTop: 50 }}>Loading...</Text>;
@@ -46,7 +96,7 @@ export default function ServiceDetailScreen({ navigation, route }) {
     }
   };
   return (
-    <ScreenWrapper>
+    <ScreenWrapper refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />}>
       <View style={s.container}>
           {/* Hero */}
           <LinearGradient colors={[colors.gradStart, colors.gradEnd]} style={s.hero} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
@@ -76,8 +126,8 @@ export default function ServiceDetailScreen({ navigation, route }) {
               {[
                 { label: 'Start Date', value: sv.startDate },
                 { label: 'Renewal Date', value: sv.renewalDate },
-                { label: 'Plan', value: sv.plan },
-                { label: 'Monthly Value', value: sv.monthlyValue },
+                { label: 'Plan', value: sv.type },
+                { label: 'Amount', value: sv.amount },
               ].map((item, i) => (
                 <View key={i} style={s.infoBox}>
                   <Text style={s.infoLabel}>{item.label.toUpperCase()}</Text>
@@ -87,30 +137,38 @@ export default function ServiceDetailScreen({ navigation, route }) {
             </View>
 
             {/* Account Manager */}
-            <Text style={s.sectionTitle}>👤 Your Account Manager</Text>
-            <View style={s.managerCard}>
-              <LinearGradient colors={[colors.gradStart, colors.gradEnd]} style={s.managerAvatar} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
-                <Text style={{ color: 'white', fontWeight: '800', fontSize: 18 }}>{sv.manager.initials}</Text>
-              </LinearGradient>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontWeight: '700', fontSize: 15, color: colors.text }}>{sv.manager.name}</Text>
-                <Text style={{ fontSize: 12, color: colors.text2, marginTop: 2 }}>{sv.manager.role}</Text>
-              </View>
-              <View style={{ flexDirection: 'row', gap: 8 }}>
-                <TouchableOpacity
-                  style={[s.contactBtn, { backgroundColor: 'rgba(34,197,94,0.1)' }]}
-                  onPress={() => Linking.openURL(`tel:${sv.manager.phone}`)}
-                >
-                  <Ionicons name="call-outline" size={18} color="#22C55E" />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[s.contactBtn, { backgroundColor: 'rgba(59,130,246,0.1)' }]}
-                  onPress={() => Linking.openURL(`mailto:${sv.manager.email}`)}
-                >
-                  <Ionicons name="mail-outline" size={18} color="#3B82F6" />
-                </TouchableOpacity>
-              </View>
-            </View>
+            {manager && (
+              <>
+                <Text style={s.sectionTitle}>👤 Your Account Manager</Text>
+                <View style={s.managerCard}>
+                  <LinearGradient colors={[colors.gradStart, colors.gradEnd]} style={s.managerAvatar} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+                    <Text style={{ color: 'white', fontWeight: '800', fontSize: 18 }}>{manager.initials}</Text>
+                  </LinearGradient>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontWeight: '700', fontSize: 15, color: colors.text }}>{manager.name}</Text>
+                    <Text style={{ fontSize: 12, color: colors.text2, marginTop: 2 }}>{manager.role}</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    {manager.phone ? (
+                      <TouchableOpacity
+                        style={[s.contactBtn, { backgroundColor: 'rgba(34,197,94,0.1)' }]}
+                        onPress={() => Linking.openURL(`tel:${manager.phone}`)}
+                      >
+                        <Ionicons name="call-outline" size={18} color="#22C55E" />
+                      </TouchableOpacity>
+                    ) : null}
+                    {manager.email ? (
+                      <TouchableOpacity
+                        style={[s.contactBtn, { backgroundColor: 'rgba(59,130,246,0.1)' }]}
+                        onPress={() => Linking.openURL(`mailto:${manager.email}`)}
+                      >
+                        <Ionicons name="mail-outline" size={18} color="#3B82F6" />
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
+                </View>
+              </>
+            )}
 
             {/* Chart — only if data exists */}
             {/* {sv.chartData && sv.chartData.length > 0 && (
@@ -140,35 +198,37 @@ export default function ServiceDetailScreen({ navigation, route }) {
             )} */}
 
             {/* Monthly Reports */}
-            {sv.reports && sv.reports.length > 0 && (
-              <>
-                <Text style={s.sectionTitle}>📑 Monthly Reports</Text>
-                <View style={s.chartCard}>
-                  {sv.reports.map((r, i) => {
-                    const isPDF = r.file.includes('.pdf');
-                    return (
-                      <View key={i} style={[s.reportItem, i === sv.reports.length - 1 && { borderBottomWidth: 0 }]}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, gap: 12 }}>
-                          <View style={s.reportIcon}><Ionicons name="document-text-outline" size={18} color={colors.primary} /></View>
-                          <View>
-                            <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>{r.month} Report</Text>
-                            <Text style={{ fontSize: 11, color: colors.text2, marginTop: 2 }}>Generated {r.generated}</Text>
-                          </View>
+            <Text style={s.sectionTitle}>📑 Reports</Text>
+            {reportsLoading ? (
+              <View style={s.chartCard}><Text style={{ fontSize: 13, color: colors.text2 }}>Loading reports...</Text></View>
+            ) : reports.length === 0 ? (
+              <View style={s.chartCard}><Text style={{ fontSize: 13, color: colors.text2 }}>No reports shared for this service yet.</Text></View>
+            ) : (
+              <View style={s.chartCard}>
+                {reports.map((r, i) => {
+                  const isPDF = r.file ? r.file.toLowerCase().includes('.pdf') : false;
+                  return (
+                    <View key={r.id} style={[s.reportItem, i === reports.length - 1 && { borderBottomWidth: 0 }]}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, gap: 12 }}>
+                        <View style={s.reportIcon}><Ionicons name="document-text-outline" size={18} color={colors.primary} /></View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>{r.title || `${r.month} Report`}</Text>
+                          <Text style={{ fontSize: 11, color: colors.text2, marginTop: 2 }}>Generated {r.generated}</Text>
+                          {r.description ? <Text style={{ fontSize: 12, color: colors.text2, marginTop: 2 }}>{r.description}</Text> : null}
+                          {r.content ? <Text style={{ fontSize: 12, color: colors.text, marginTop: 4 }}>{r.content}</Text> : null}
                         </View>
-                        <TouchableOpacity
-                          style={s.dlBtn}
-                          onPress={() => handleOpenFile(r.file)}
-                        >
+                      </View>
+                      {r.file ? (
+                        <TouchableOpacity style={s.dlBtn} onPress={() => handleOpenFile(r.file)}>
                           <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 12 }}>
-                            {isPDF ? 'PDF' : 'Image'}
+                            {isPDF ? 'PDF' : 'View'}
                           </Text>
                         </TouchableOpacity>
-                        {/* <TouchableOpacity style={s.dlBtn} onPress={() => Linking.openURL(r.file)}><Text style={{ color: colors.primary, fontWeight: '700', fontSize: 12 }}>PDF</Text></TouchableOpacity> */}
-                      </View>
-                    );
-                  })}
-                </View>
-              </>
+                      ) : null}
+                    </View>
+                  );
+                })}
+              </View>
             )}
           </View>
       </View>

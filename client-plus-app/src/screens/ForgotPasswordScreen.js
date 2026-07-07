@@ -6,12 +6,17 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../context/ThemeContext';
+import { AxiosInstance } from '../lib/Axios.instance';
 import { StatusBar } from 'expo-status-bar';
 import logo from '../../assets/hbs-logo.png';
 import ScreenWrapper from '../components/ScreenWrapper';
 
-export default function ForgotPasswordScreen({ navigation }) {
+export default function ForgotPasswordScreen({ navigation, route }) {
   const { colors, isDark } = useTheme();
+
+  // Client vs employee reset hit different endpoints (Client vs User record).
+  const role = route?.params?.role || 'client';
+  const base = role === 'employee' ? '/mobile/auth/forgot-password' : '/client-portal/forgot-password';
 
   const [email, setEmail] = useState('');
   const [otp, setOtp] = useState('');
@@ -35,45 +40,69 @@ export default function ForgotPasswordScreen({ navigation }) {
   }, [step, timer]);
 
   //  Send OTP
-  const handleSendOtp = () => {
+  const handleSendOtp = async () => {
     if (!email) {
-      Alert.alert('Error', 'Enter email or phone');
+      Alert.alert('Error', 'Enter your email');
       return;
     }
-
     setLoading(true);
-
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      const res = await AxiosInstance.post(`${base}/send-otp`, {
+        email: email.trim().toLowerCase(),
+      });
       setStep(2);
       setTimer(30);
-      Alert.alert('Success', 'OTP sent on your email/phone');
-    }, 1000);
+      Alert.alert('OTP Sent', res.data?.message || 'If an account exists, a reset code has been sent.');
+    } catch (e) {
+      Alert.alert('Error', e.message || 'Could not send OTP. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Resend OTP
-  const handleResendOtp = () => {
+  const handleResendOtp = async () => {
     if (timer > 0) return;
-
-    setTimer(30);
-    Alert.alert('OTP resent on your email/phone');
+    try {
+      await AxiosInstance.post(`${base}/send-otp`, {
+        email: email.trim().toLowerCase(),
+      });
+      setTimer(30);
+      Alert.alert('OTP Resent', 'A new code has been sent to your email/phone.');
+    } catch (e) {
+      Alert.alert('Error', e.message || 'Could not resend OTP.');
+    }
   };
 
   // Reset Password
-  const handleReset = () => {
+  const handleReset = async () => {
     if (!otp || !password || !confirmPassword) {
       Alert.alert('Error', 'Fill all fields');
       return;
     }
-
     if (password !== confirmPassword) {
       Alert.alert('Error', 'Passwords do not match');
       return;
     }
-
-    Alert.alert('Success', 'Password reset successful');
-
-    navigation.navigate('Login');
+    if (password.length < 6) {
+      Alert.alert('Error', 'Password must be at least 6 characters');
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await AxiosInstance.post(`${base}/reset`, {
+        email: email.trim().toLowerCase(),
+        otp: otp.trim(),
+        newPassword: password,
+      });
+      Alert.alert('Success', res.data?.message || 'Password reset successful', [
+        { text: 'OK', onPress: () => navigation.navigate('Login') },
+      ]);
+    } catch (e) {
+      Alert.alert('Error', e.message || 'Reset failed. Check your code and try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const s = styles(colors);
@@ -150,9 +179,9 @@ export default function ForgotPasswordScreen({ navigation }) {
                 secureTextEntry
               />
 
-              <TouchableOpacity onPress={handleReset}>
+              <TouchableOpacity onPress={handleReset} disabled={loading}>
                 <LinearGradient colors={[colors.gradStart, colors.gradEnd]} style={s.btn}>
-                  <Text style={s.btnText}>Reset Password →</Text>
+                  <Text style={s.btnText}>{loading ? 'Resetting...' : 'Reset Password →'}</Text>
                 </LinearGradient>
               </TouchableOpacity>
             </>

@@ -34,18 +34,13 @@ function ClientCard({ client, onPress, colors }) {
               </View>
             ) : null}
           </View>
-          {services.length > 0 && (
+          {client.services_count > 0 && (
             <View style={cStyles.serviceRow}>
-              {services.slice(0, 2).map((s, i) => (
-                <View key={i} style={[cStyles.serviceBadge, { backgroundColor: colors.primary + '15' }]}>
-                  <Text style={[cStyles.serviceTxt, { color: colors.primary }]}>{s.name || s.service_name}</Text>
-                </View>
-              ))}
-              {services.length > 2 && (
-                <View style={[cStyles.serviceBadge, { backgroundColor: colors.bg3 }]}>
-                  <Text style={[cStyles.serviceTxt, { color: colors.text2 }]}>+{services.length - 2}</Text>
-                </View>
-              )}
+              <View style={[cStyles.serviceBadge, { backgroundColor: colors.primary + '15' }]}>
+                <Text style={[cStyles.serviceTxt, { color: colors.primary }]}>
+                  {client.services_count} service{client.services_count > 1 ? 's' : ''}
+                </Text>
+              </View>
             </View>
           )}
         </View>

@@ -13,7 +13,9 @@ const publicPaths = [
   '/client-portal',              // Client portal page + login form
   '/api/client-portal/login',    // Client login endpoint
   '/api/client-portal/logout',   // Client logout endpoint
+  '/api/client-portal/forgot-password', // send-otp + reset (no auth — user is locked out)
   '/api/mobile/auth/login',
+  '/api/mobile/auth/forgot-password',   // staff send-otp + reset (no auth)
   '/api/mobile/client-login'
 ]
 
@@ -54,10 +56,18 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next()
   }
 
-  // Client-portal API paths require client-token (NOT employee auth-token)
+  // Client-portal API paths require a client session.
+  // Web sends it as a `client-token` cookie; the mobile app sends it as a
+  // `Authorization: Bearer <token>` header. Previously only the cookie was
+  // accepted here, so every client-portal call from the app was rejected with
+  // 401 before it ever reached the route handler — that's why the client side
+  // of the app "did nothing" after login. Accept either; the real verification
+  // (cookie OR Bearer, both handled) still happens in getClientSession.
   if (clientPortalPaths.some(path => pathname.startsWith(path))) {
     const clientToken = req.cookies.get('client-token')?.value
-    if (!clientToken) {
+    const authHeader = req.headers.get('authorization') || req.headers.get('Authorization')
+    const hasBearer = authHeader?.startsWith('Bearer ')
+    if (!clientToken && !hasBearer) {
       return NextResponse.json({ error: 'Client authentication required' }, { status: 401 })
     }
     return NextResponse.next()  // Actual verification happens in the route handler via getClientSession
