@@ -8,7 +8,7 @@ import { Badge, EmptyState, Pagination } from '@/components/ui'
 import {
   Clock, LogIn, LogOut, MapPin, Monitor, Smartphone, Tablet as TabletIcon,
   Loader2, Filter, X, Search, Wifi, Home, Briefcase, Download, AlertTriangle,
-  Plus, Edit3, Trash2
+  Plus, Edit3, Trash2, RefreshCw
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -43,6 +43,7 @@ export default function AttendancePage() {
   const [attModal, setAttModal] = useState<null | 'add' | string>(null) // 'add' or record id (edit)
   const [attForm, setAttForm] = useState<any>({ employeeId: '', date: '', status: 'PRESENT', workMode: 'WFO', inTime: '', outTime: '', notes: '' })
   const [attSaving, setAttSaving] = useState(false)
+  const [fixingStatuses, setFixingStatuses] = useState(false)
 
   // Live clock
   useEffect(() => {
@@ -120,6 +121,21 @@ export default function AttendancePage() {
       toast.success('Deleted')
       fetchRecords()
     } catch (e: any) { toast.error(e.response?.data?.error || 'Failed') }
+  }
+
+  // One-time fix for old records (mostly from the app) whose status was
+  // never recomputed against the half-day-hours threshold — see
+  // /api/attendance/recompute-status for why this is needed.
+  const fixOldStatuses = async () => {
+    if (!confirm('Purane PRESENT/HALF_DAY records ko current Half-Day Threshold ke hisaab se recompute karein?')) return
+    setFixingStatuses(true)
+    try {
+      const r = await api.post('/attendance/recompute-status')
+      const { scanned, updated } = r.data.data
+      toast.success(`${updated} record(s) fixed (${scanned} checked)`)
+      fetchRecords()
+    } catch (e: any) { toast.error(e.response?.data?.error || 'Failed') }
+    finally { setFixingStatuses(false) }
   }
 
   const isPunchedIn = today?.punchIn && !today?.punchOut
@@ -291,6 +307,11 @@ export default function AttendancePage() {
             {isAdmin && (
               <button onClick={openAdd} className="btn-primary btn-sm">
                 <Plus size={13} /> Add
+              </button>
+            )}
+            {isAdmin && (
+              <button onClick={fixOldStatuses} disabled={fixingStatuses} className="btn-secondary btn-sm" title="Recompute PRESENT/HALF_DAY status for old records against the current Half-Day Threshold setting">
+                <RefreshCw size={13} className={fixingStatuses ? 'animate-spin' : ''} /> {fixingStatuses ? 'Fixing…' : 'Fix Statuses'}
               </button>
             )}
             {canSeeAll && (

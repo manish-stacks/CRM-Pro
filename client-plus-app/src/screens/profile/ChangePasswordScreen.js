@@ -7,7 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../context/ThemeContext';
 import ScreenWrapper from '../../components/ScreenWrapper';
 import { Ionicons } from '@expo/vector-icons';
-import { AxiosInstance } from '../../lib/Axios.instance';
+import { ClientAPI } from '../../services/client.api';
 
 export default function ChangePasswordScreen({ navigation }) {
   const { colors } = useTheme();
@@ -36,7 +36,7 @@ export default function ChangePasswordScreen({ navigation }) {
     try {
       setLoading(true);
 
-      const res = await AxiosInstance.post('/client-portal/change-password', {
+      const res = await ClientAPI.changePassword({
         current_password: oldPass,
         new_password: newPass,
       });

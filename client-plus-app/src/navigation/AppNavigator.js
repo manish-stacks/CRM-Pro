@@ -33,7 +33,10 @@ import ClientsScreen from '../screens/employee/ClientsScreen';
 import AddClientScreen from '../screens/employee/AddClientScreen';
 import ClientDetailScreen from '../screens/employee/ClientDetailScreen';
 import VisitsScreen from '../screens/employee/VisitsScreen';
+import LeavesScreen from '../screens/employee/LeavesScreen';
 import EmployeeProfileScreen from '../screens/employee/EmployeeProfileScreen';
+import EmployeeEditProfileScreen from '../screens/employee/EmployeeEditProfileScreen';
+import EmployeeChangePasswordScreen from '../screens/employee/EmployeeChangePasswordScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -134,6 +137,9 @@ export default function AppNavigator({ navRef }) {
             <Stack.Screen name="MeetingDetail" component={MeetingDetailScreen} />
             <Stack.Screen name="ClientDetail" component={ClientDetailScreen} />
             <Stack.Screen name="AddClient" component={AddClientScreen} options={{ tabBarLabel: 'Add Client' }} />
+            <Stack.Screen name="Leaves" component={LeavesScreen} options={{ tabBarLabel: 'Leaves' }} />
+            <Stack.Screen name="EmployeeEditProfile" component={EmployeeEditProfileScreen} />
+            <Stack.Screen name="EmployeeChangePassword" component={EmployeeChangePasswordScreen} />
           </>
         ) : (
           <>

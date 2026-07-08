@@ -29,11 +29,19 @@ export async function POST(req: NextRequest) {
   const punchOut = new Date()
   const hoursWorked = (punchOut.getTime() - existing.punchIn.getTime()) / 3600000
 
+  // Half-day threshold from Settings (fallback 4h) — same rule the web
+  // punch-out uses. Mobile check-out was skipping this, so app punch-outs
+  // always stayed "PRESENT" no matter how few hours were worked.
+  const thresholdRow = await prisma.setting.findUnique({ where: { key: 'half_day_threshold_hours' } })
+  const halfDayThreshold = parseFloat(thresholdRow?.value || '4')
+  const status = hoursWorked < halfDayThreshold ? 'HALF_DAY' : 'PRESENT'
+
   const record = await prisma.attendance.update({
     where: { id: existing.id },
     data: {
       punchOut,
       hoursWorked: Math.round(hoursWorked * 100) / 100,
+      status,
       punchOutLat: latitude ?? null,
       punchOutLng: longitude ?? null,
       punchOutAddress: address ?? null,
@@ -46,13 +54,14 @@ export async function POST(req: NextRequest) {
 
   await logFromRequest(req, {
     userId: session.userId, action: 'PUNCH_OUT', entityType: 'Attendance', entityId: record.id,
-    metadata: { via: 'mobile', hoursWorked: record.hoursWorked },
+    metadata: { via: 'mobile', hoursWorked: record.hoursWorked, status },
   })
 
   return ok({
     attendanceId: record.id,
     punchOut: record.punchOut,
     hoursWorked: record.hoursWorked,
+    status: record.status,
     trackingEnabled: false,
   }, { message: 'Checked out — tracking stopped' })
 }

@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useMemo, Suspense } from 'react'
+import { useState, useEffect, useMemo, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import api from '@/lib/axios'
@@ -11,6 +11,7 @@ import toast from 'react-hot-toast'
 interface Item {
   id: string
   serviceId?: string
+  serviceKey?: string // '' or missing = custom typed name; 'client:<id>' / 'catalog:<id>' = picked from dropdown
   serviceName: string
   description: string
   quantity: number
@@ -26,6 +27,8 @@ function BuilderPageInner() {
   const [clients, setClients] = useState<any[]>([])
   const [leads, setLeads] = useState<any[]>([])
   const [catalog, setCatalog] = useState<any[]>([])
+  const [clientServices, setClientServices] = useState<any[]>([])
+  const [loadingClientServices, setLoadingClientServices] = useState(false)
   const [saving, setSaving] = useState(false)
 
   const [form, setForm] = useState({
@@ -44,6 +47,9 @@ function BuilderPageInner() {
   const [items, setItems] = useState<Item[]>([{
     id: crypto.randomUUID(), serviceName: '', description: '', quantity: 1, unitPrice: 0,
   }])
+  // Once the user manually touches items (edits/adds/removes), stop auto-filling
+  // them so we never silently overwrite their work when the client changes again.
+  const itemsEditedByUserRef = useRef(false)
 
   useEffect(() => {
     api.get('/clients?limit=200').then(r => setClients(r.data.data || [])).catch(() => { })
@@ -52,6 +58,38 @@ function BuilderPageInner() {
       api.get(`/leads?limit=200`).then(r => setLeads(r.data.data || [])).catch(() => { })
     }
   }, [preLeadId])
+
+  // Fetch the selected client's already-assigned services so they can be
+  // picked directly in line items (auto-fills name/price from what's on the client).
+  useEffect(() => {
+    if (!form.clientId) { setClientServices([]); return }
+    setLoadingClientServices(true)
+    api.get(`/clients/${form.clientId}/services`)
+      .then(r => setClientServices(r.data.data || []))
+      .catch(() => setClientServices([]))
+      .finally(() => setLoadingClientServices(false))
+  }, [form.clientId])
+
+  // Auto-fill the whole Line Items section from the client's active services
+  // as soon as they're loaded — only if the user hasn't started editing items
+  // themselves, so we never stomp on manual work.
+  useEffect(() => {
+    if (!form.clientId || loadingClientServices) return
+    if (itemsEditedByUserRef.current) return
+
+    const active = clientServices.filter((cs: any) => cs.status === 'ACTIVE')
+    if (active.length > 0) {
+      setItems(active.map((cs: any) => ({
+        id: crypto.randomUUID(),
+        serviceId: cs.serviceCatalogId || undefined,
+        serviceKey: `client:${cs.id}`,
+        serviceName: cs.serviceName,
+        description: cs.description || cs.serviceName,
+        quantity: 1,
+        unitPrice: Number(cs.amount) || 0,
+      })))
+    }
+  }, [clientServices, loadingClientServices, form.clientId])
 
   const totals = useMemo(() => {
     const subtotal = items.reduce((s, i) => s + (i.quantity * i.unitPrice), 0)
@@ -62,25 +100,53 @@ function BuilderPageInner() {
     return { subtotal, discountAmount, afterDiscount, gstAmount, totalAmount }
   }, [items, form.discount, form.discountType, form.gstApplicable, form.gstRate])
 
-  const addItem = () => setItems(prev => [
-    ...prev, { id: crypto.randomUUID(), serviceName: '', description: '', quantity: 1, unitPrice: 0 },
-  ])
+  const addItem = () => {
+    itemsEditedByUserRef.current = true
+    setItems(prev => [
+      ...prev, { id: crypto.randomUUID(), serviceName: '', description: '', quantity: 1, unitPrice: 0 },
+    ])
+  }
 
-  const removeItem = (id: string) => setItems(prev => prev.length > 1 ? prev.filter(i => i.id !== id) : prev)
+  const removeItem = (id: string) => {
+    itemsEditedByUserRef.current = true
+    setItems(prev => prev.length > 1 ? prev.filter(i => i.id !== id) : prev)
+  }
 
-  const updateItem = (id: string, patch: Partial<Item>) => setItems(prev =>
-    prev.map(i => i.id === id ? { ...i, ...patch } : i)
-  )
+  const updateItem = (id: string, patch: Partial<Item>) => {
+    itemsEditedByUserRef.current = true
+    setItems(prev => prev.map(i => i.id === id ? { ...i, ...patch } : i))
+  }
 
-  const pickCatalog = (id: string, catId: string) => {
-    const c = catalog.find((x: any) => x.id === catId)
-    if (c) {
-      updateItem(id, {
-        serviceId: catId,
-        serviceName: c.name,
-        description: c.description || '',
-        unitPrice: c.basePrice,
-      })
+  // value is "" (custom), "client:<clientServiceId>" or "catalog:<serviceCatalogId>"
+  const pickService = (id: string, value: string) => {
+    if (!value) {
+      // switched to "Custom item" — keep whatever name is there, just let them type it
+      updateItem(id, { serviceKey: '' })
+      return
+    }
+    const [type, refId] = value.split(':')
+    if (type === 'client') {
+      const cs = clientServices.find((x: any) => x.id === refId)
+      if (cs) {
+        updateItem(id, {
+          serviceKey: value,
+          serviceId: cs.serviceCatalogId || undefined,
+          serviceName: cs.serviceName,
+          description: cs.description || cs.serviceName,
+          unitPrice: Number(cs.amount) || 0,
+        })
+      }
+    } else if (type === 'catalog') {
+      const c = catalog.find((x: any) => x.id === refId)
+      if (c) {
+        updateItem(id, {
+          serviceKey: value,
+          serviceId: c.id,
+          serviceName: c.name,
+          description: c.description || '',
+          unitPrice: c.basePrice,
+        })
+      }
     }
   }
 
@@ -151,7 +217,14 @@ function BuilderPageInner() {
             <div className="space-y-3">
               <Input label="Title *" value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))} placeholder="Website + SEO Package Q1 2026" />
               <div className="grid grid-cols-2 gap-3">
-                <Select label="Client" value={form.clientId} onChange={e => setForm(p => ({ ...p, clientId: e.target.value, leadId: '' }))} options={clients.map(c => ({ value: c.id, label: `${c.clientName} (${c.companyName})` }))} />
+                <Select label="Client" value={form.clientId} onChange={e => setForm(p => ({ ...p, clientId: e.target.value, leadId: '' }))}
+                  options={[
+                    { value: "", label: "Select client..." },
+                    ...clients.map((c: any) => ({
+                      value: c.id,
+                      label: `${c.clientName} — ${c.companyName}`,
+                    })),
+                  ]} />
 
                 <Input label="Valid Until" type="date" value={form.validUntil} onChange={e => setForm(p => ({ ...p, validUntil: e.target.value }))} />
               </div>
@@ -168,43 +241,114 @@ function BuilderPageInner() {
               <button onClick={addItem} className="btn-secondary btn-sm"><Plus size={13} /> Add Item</button>
             </div>
             <div className="space-y-3">
-              {items.map((item, idx) => (
-                <div key={item.id} className="border border-gray-200 rounded-lg p-3 space-y-2 bg-gray-50">
+              {items.map((item) => (
+                <div
+                  key={item.id}
+                  className="relative border border-gray-200 rounded-lg p-3 space-y-2 bg-gray-50"
+                >
+                  {/* Delete Button */}
+                  <button
+                    onClick={() => removeItem(item.id)}
+                    disabled={items.length === 1}
+                    className="absolute -top-2 -right-2 h-8 w-8 flex items-center justify-center rounded-full bg-white border border-red-100 shadow-sm text-red-500 hover:bg-red-50 hover:shadow transition disabled:opacity-30"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+
                   <div className="grid grid-cols-12 gap-2 items-start">
                     <div className="col-span-12 md:col-span-5">
-                      <select value={item.serviceId || ''} onChange={e => pickCatalog(item.id, e.target.value)} className="input">
+                      <select
+                        value={item.serviceKey || ''}
+                        onChange={e => pickService(item.id, e.target.value)}
+                        className="input"
+                      >
                         <option value="">— Custom item —</option>
-                        {catalog.map((c: any) => (
-                          <option key={c.id} value={c.id}>{c.name} — ₹{c.basePrice}</option>
-                        ))}
+
+                        {form.clientId && (
+                          <optgroup
+                            label={
+                              loadingClientServices
+                                ? 'Loading client services…'
+                                : "Client's services"
+                            }
+                          >
+                            {clientServices.map((cs: any) => (
+                              <option key={cs.id} value={`client:${cs.id}`}>
+                                {cs.serviceName} — ₹
+                                {Number(cs.amount).toLocaleString('en-IN')} ({cs.status})
+                              </option>
+                            ))}
+
+                            {!loadingClientServices && clientServices.length === 0 && (
+                              <option disabled value="">
+                                No services on this client yet
+                              </option>
+                            )}
+                          </optgroup>
+                        )}
+
+                        <optgroup label="Service catalog">
+                          {catalog.map((c: any) => (
+                            <option key={c.id} value={`catalog:${c.id}`}>
+                              {c.name} — ₹{c.basePrice}
+                            </option>
+                          ))}
+                        </optgroup>
                       </select>
-                      <input type="text" className="input mt-2 text-sm" placeholder="Service name (e.g. Website Design)"
-                        value={item.serviceName}
-                        onChange={e => updateItem(item.id, { serviceName: e.target.value })} />
+
+                      {!item.serviceKey && (
+                        <input
+                          type="text"
+                          className="input mt-2 text-sm"
+                          placeholder="Service name (e.g. Website Design)"
+                          value={item.serviceName}
+                          onChange={e =>
+                            updateItem(item.id, { serviceName: e.target.value })
+                          }
+                        />
+                      )}
                     </div>
+
                     <div className="col-span-12 md:col-span-4">
-                      <textarea className="input" rows={2} placeholder="Description of what's included..."
+                      <textarea
+                        className="input"
+                        rows={2}
+                        placeholder="Description of what's included..."
                         value={item.description}
-                        onChange={e => updateItem(item.id, { description: e.target.value })} />
+                        onChange={e =>
+                          updateItem(item.id, { description: e.target.value })
+                        }
+                      />
                     </div>
+
                     <div className="col-span-4 md:col-span-1">
-                      <input type="number" className="input text-sm" placeholder="Qty"
+                      <input
+                        type="number"
+                        className="input text-sm"
+                        placeholder="Qty"
                         value={item.quantity}
-                        onChange={e => updateItem(item.id, { quantity: Number(e.target.value) })} min={1} />
+                        onChange={e =>
+                          updateItem(item.id, { quantity: Number(e.target.value) })
+                        }
+                        min={1}
+                      />
                     </div>
+
                     <div className="col-span-6 md:col-span-2">
-                      <input type="number" className="input text-sm" placeholder="Price (₹)"
+                      <input
+                        type="number"
+                        className="input text-sm"
+                        placeholder="Price (₹)"
                         value={item.unitPrice}
-                        onChange={e => updateItem(item.id, { unitPrice: Number(e.target.value) })} min={0} />
+                        onChange={e =>
+                          updateItem(item.id, { unitPrice: Number(e.target.value) })
+                        }
+                        min={0}
+                      />
+
                       <p className="text-xs text-gray-500 text-right mt-1 tabular-nums">
                         = ₹{(item.quantity * item.unitPrice).toLocaleString('en-IN')}
                       </p>
-                    </div>
-                    <div className="col-span-2 md:col-span-0 flex justify-end">
-                      <button onClick={() => removeItem(item.id)} disabled={items.length === 1}
-                        className="text-red-500 hover:bg-red-50 rounded p-1.5 disabled:opacity-30">
-                        <Trash2 size={14} />
-                      </button>
                     </div>
                   </div>
                 </div>

@@ -752,6 +752,7 @@ model Invoice {
   notes         String?       @db.Text
   terms         String?       @db.Text
   paymentLink   String?       // Online payment URL (optional)
+  shareToken    String?       @unique // Public "view invoice" link token (like Proposal.shareToken)
   whatsappSentAt DateTime?
   emailSentAt   DateTime?
   createdAt     DateTime      @default(now())
@@ -794,6 +795,7 @@ model Payment {
   source      String   @default("MANUAL") // MANUAL, CLIENT_PORTAL, GATEWAY
   gatewayName String?  // Razorpay, PhonePe, etc
   gatewayRef  String?
+  receiptToken String? @unique // Public "view receipt" link token (like Invoice.shareToken)
   createdAt   DateTime @default(now())
 
   invoice     Invoice  @relation(fields: [invoiceId], references: [id])

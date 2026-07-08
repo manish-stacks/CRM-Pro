@@ -16,7 +16,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           id: true, serviceName: true, status: true,
           amount: true, startDate: true, expiryDate: true,
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { startDate: 'desc' },
       },
       visits: {
         orderBy: { createdAt: 'desc' },

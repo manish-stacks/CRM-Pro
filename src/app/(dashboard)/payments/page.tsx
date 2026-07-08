@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '@/hooks/useAuth'
 import { Button, Badge, Modal, Input, Select, EmptyState, Pagination, SearchInput } from '@/components/ui'
 import { formatDate, formatCurrency, getInitials } from '@/lib/utils'
-import { Plus, Download, CreditCard, FileText, CheckCircle, Clock, Filter, X, Edit, Trash2 } from 'lucide-react'
+import { Plus, Download, CreditCard, FileText, CheckCircle, Clock, Filter, X, Edit, Trash2, ExternalLink, Receipt } from 'lucide-react'
 import api from '@/lib/axios'
 import toast from 'react-hot-toast'
 import { useRouter } from 'next/navigation'
@@ -97,6 +97,27 @@ export default function PaymentsPage() {
   }
 
   const downloadInvoice = (id: string) => window.open(`/api/payments/${id}/pdf`, '_blank')
+
+  // Public, no-login "view invoice" / "view receipt" links (same links the
+  // mobile app opens directly). Generated on first request, then reused.
+  const shareInvoiceLink = async (id: string) => {
+    try {
+      const res = await api.get(`/invoices/${id}/share-link`)
+      const url = res.data?.data?.url
+      if (url) window.open(url, '_blank')
+    } catch {
+      toast.error('Could not get invoice link')
+    }
+  }
+  const shareReceiptLink = async (paymentId: string) => {
+    try {
+      const res = await api.get(`/payments/receipt-link/${paymentId}`)
+      const url = res.data?.data?.url
+      if (url) window.open(url, '_blank')
+    } catch {
+      toast.error('Could not get receipt link')
+    }
+  }
   const exportData = () => window.open(`/api/import-export?type=payments&format=csv`, '_blank')
 
   const pendingInvoices = items.filter((i: any) => tab === 'invoices' && i.dueAmount > 0)
@@ -195,6 +216,7 @@ export default function PaymentsPage() {
                         <div className="flex gap-1">
                           {isAtLeast('MANAGER') && inv.dueAmount > 0 && <Button variant="success" size="sm" className="p-1.5" onClick={() => { setPmtForm({ invoiceId: inv.id, amount: String(inv.dueAmount), method: 'UPI', reference: '', paidAt: new Date().toISOString().split('T')[0], nextDueDate: '' }); setShowPmtModal(true) }}><CreditCard size={13} /></Button>}
                           <Button variant="ghost" size="sm" className="p-1.5" onClick={() => downloadInvoice(inv.id)}><Download size={13} /></Button>
+                          <Button variant="ghost" size="sm" className="p-1.5" onClick={() => shareInvoiceLink(inv.id)} title="Open public invoice link"><ExternalLink size={13} /></Button>
                           {isAtLeast('MANAGER') && (
                             <select className="text-xs border border-gray-200 rounded px-1" value={inv.status} onChange={e => updateInvoiceStatus(inv.id, e.target.value)}>
                               {['PENDING', 'PARTIAL', 'PAID', 'OVERDUE'].map(s => <option key={s} value={s}>{s}</option>)}
@@ -212,10 +234,10 @@ export default function PaymentsPage() {
       {tab === 'payments' && (
         <div className="table-wrapper">
           <table>
-            <thead><tr><th>Invoice</th><th>Client</th><th>Amount</th><th>Method</th><th>Ref</th><th>Paid On</th></tr></thead>
+            <thead><tr><th>Invoice</th><th>Client</th><th>Amount</th><th>Method</th><th>Ref</th><th>Paid On</th><th>Receipt</th></tr></thead>
             <tbody>
-              {loading ? Array.from({ length: 5 }).map((_, i) => <tr key={i}>{Array.from({ length: 6 }).map((_, j) => <td key={j}><div className="skeleton h-4 rounded" /></td>)}</tr>)
-                : items.length === 0 ? <tr><td colSpan={6}><EmptyState title="No payments" /></td></tr>
+              {loading ? Array.from({ length: 5 }).map((_, i) => <tr key={i}>{Array.from({ length: 7 }).map((_, j) => <td key={j}><div className="skeleton h-4 rounded" /></td>)}</tr>)
+                : items.length === 0 ? <tr><td colSpan={7}><EmptyState title="No payments" /></td></tr>
                   : items.map((p: any) => (
                     <tr key={p.id}>
                       <td className="font-mono text-xs text-blue-600">{p.invoice?.invoiceNumber || '—'}</td>
@@ -224,6 +246,7 @@ export default function PaymentsPage() {
                       <td><Badge status={p.method} /></td>
                       <td className="text-xs font-mono text-gray-500">{p.reference || '—'}</td>
                       <td className="text-xs text-gray-500">{formatDate(p.paidAt)}</td>
+                      <td><Button variant="ghost" size="sm" className="p-1.5" onClick={() => shareReceiptLink(p.id)} title="Open public receipt link"><Receipt size={13} /></Button></td>
                     </tr>
                   ))}
             </tbody>

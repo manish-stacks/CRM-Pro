@@ -12,6 +12,8 @@ export const ClientAPI = {
 
   getProfile: () => AxiosInstance.get('/client-portal/profile'),
   updateProfile: (data) => AxiosInstance.put('/client-portal/profile', data),
+  uploadImage: (dataUrl) => AxiosInstance.post('/client-portal/upload', { dataUrl }),
+  changePassword: (data) => AxiosInstance.post('/client-portal/change-password', data),
 
   getReports: () => AxiosInstance.get('/client-portal/reports'),
 

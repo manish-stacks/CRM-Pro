@@ -47,6 +47,19 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       data.isLate = false
       data.lateBy = null
     }
+
+    // The edit form always sends the currently-displayed status back, so we
+    // can't tell "admin deliberately kept PRESENT" apart from "admin never
+    // touched the dropdown". If it's still an auto-computed status (PRESENT/
+    // HALF_DAY) and the new hours cross the half-day threshold differently,
+    // re-derive it — mirrors the punch-out logic so edited records don't get
+    // stuck with a stale status. Manual statuses (LEAVE/ABSENT/HOLIDAY) are
+    // never touched here.
+    const incomingStatus = 'status' in body ? body.status : existing.status
+    if (['PRESENT', 'HALF_DAY'].includes(incomingStatus) && data.hoursWorked != null) {
+      const halfDayThreshold = await Settings.halfDayThresholdHours()
+      data.status = data.hoursWorked < (halfDayThreshold ?? 4) ? 'HALF_DAY' : 'PRESENT'
+    }
   }
   // Allow manual late override
   if ('isLate' in body) data.isLate = !!body.isLate

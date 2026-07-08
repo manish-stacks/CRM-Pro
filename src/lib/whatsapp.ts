@@ -11,6 +11,7 @@ import { prisma } from './prisma'
 // Parameter ORDER matters — matches template body {{1}}, {{2}}, ...
 export const WHATSAPP_TEMPLATES = {
   hbs_client_welcome:            ['clientName', 'companyName', 'loginEmail', 'loginPassword', 'portalUrl'] as const,
+  hbs_employee_welcome:          ['employeeName', 'companyName', 'loginEmail', 'loginPassword', 'loginUrl'] as const,
   hbs_lead_meeting_scheduled:    ['clientName', 'meetingDate', 'meetingTime', 'marketingPersonName', 'marketingPhone'] as const,
   hbs_proposal_sent:             ['clientName', 'proposalNumber', 'amount', 'viewUrl'] as const,
   hbs_invoice_generated:         ['clientName', 'invoiceNumber', 'amount', 'dueDate', 'payUrl'] as const,

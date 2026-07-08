@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import {
     View, Text, TextInput, TouchableOpacity,
     StyleSheet, KeyboardAvoidingView, Platform,
-    Alert, Image
+    Alert, Image, ActivityIndicator
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
@@ -11,7 +11,7 @@ import { useTheme } from '../../context/ThemeContext';
 import ScreenWrapper from '../../components/ScreenWrapper';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
-import { AxiosInstance } from '../../lib/Axios.instance';
+import { ClientAPI } from '../../services/client.api';
 
 export default function EditProfileScreen({ navigation }) {
     const { colors, isDark } = useTheme();
@@ -20,6 +20,7 @@ export default function EditProfileScreen({ navigation }) {
     const [phone, setPhone] = useState('');
     const [image, setImage] = useState(null);
     const [loading, setLoading] = useState(false);
+    const [uploading, setUploading] = useState(false);
 
     useEffect(() => {
         fetchProfile();
@@ -27,7 +28,7 @@ export default function EditProfileScreen({ navigation }) {
 
     const fetchProfile = async () => {
         try {
-            const res = await AxiosInstance.get('/client-portal/profile');
+            const res = await ClientAPI.getProfile();
             const c = res.data?.data || {};
             setName(c.clientName || '');
             setEmail(c.email || '');
@@ -36,6 +37,27 @@ export default function EditProfileScreen({ navigation }) {
 
         } catch (e) {
             console.log('Profile Error:', e);
+        }
+    };
+
+    //  Upload a locally picked image (file:// / content:// uri) to Cloudinary
+    //  via the client-portal upload endpoint, and swap it in for the http URL.
+    const uploadPickedImage = async (asset) => {
+        try {
+            setUploading(true);
+            const base64 = asset.base64;
+            if (!base64) throw new Error('No image data');
+            const mime = asset.mimeType || 'image/jpeg';
+            const dataUrl = `data:${mime};base64,${base64}`;
+            const res = await ClientAPI.uploadImage(dataUrl);
+            const url = res.data?.data?.url;
+            if (url) setImage(url);
+            else throw new Error('Upload did not return a URL');
+        } catch (e) {
+            console.log('Image upload error:', e);
+            Alert.alert('Error', 'Could not upload photo. Please try again.');
+        } finally {
+            setUploading(false);
         }
     };
 
@@ -50,10 +72,11 @@ export default function EditProfileScreen({ navigation }) {
         const result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ImagePicker.MediaTypeOptions.Images,
             quality: 0.7,
+            base64: true,
         });
 
         if (!result.canceled) {
-            setImage(result.assets[0].uri);
+            await uploadPickedImage(result.assets[0]);
         }
     };
 
@@ -67,15 +90,17 @@ export default function EditProfileScreen({ navigation }) {
 
         const result = await ImagePicker.launchCameraAsync({
             quality: 0.7,
+            base64: true,
         });
 
         if (!result.canceled) {
-            setImage(result.assets[0].uri);
+            await uploadPickedImage(result.assets[0]);
         }
     };
 
     //  Choose option
     const chooseImage = () => {
+        if (uploading) return;
         Alert.alert(
             'Upload Photo',
             'Choose an option',
@@ -97,16 +122,12 @@ export default function EditProfileScreen({ navigation }) {
         try {
             setLoading(true);
 
-            // The client-portal profile PUT expects JSON with EDITABLE keys
-            // (clientName, email, phone, image-as-URL). It does not accept a
-            // multipart file upload, so we send JSON. A newly picked local image
-            // (file:// uri) can't be hosted from here, so we only persist an
-            // existing http image URL. (Client-side image upload needs a
-            // dedicated endpoint — noted as a follow-up.)
+            // image is now always either null or a real Cloudinary https URL
+            // (uploaded above), so it's always safe to persist.
             const payload = { clientName: name, email, phone };
-            if (image && image.startsWith('http')) payload.image = image;
+            if (image) payload.image = image;
 
-            await AxiosInstance.put('/client-portal/profile', payload);
+            await ClientAPI.updateProfile(payload);
 
             Alert.alert('Success', 'Profile updated successfully');
             navigation.goBack();
@@ -135,10 +156,12 @@ export default function EditProfileScreen({ navigation }) {
 
             {/* Avatar */}
             <LinearGradient colors={[colors.gradStart, colors.gradEnd]} style={s.hero}>
-                <TouchableOpacity onPress={chooseImage} style={{ alignItems: 'center' }}>
+                <TouchableOpacity onPress={chooseImage} style={{ alignItems: 'center' }} disabled={uploading}>
 
                     <View style={s.avatar}>
-                        {image ? (
+                        {uploading ? (
+                            <ActivityIndicator color="#fff" />
+                        ) : image ? (
                             <Image source={{ uri: image }} style={s.avatarImg} />
                         ) : (
                             <Text style={s.avatarText}>{name[0] || 'A'}</Text>

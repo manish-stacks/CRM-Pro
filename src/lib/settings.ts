@@ -50,11 +50,11 @@ export function invalidateAllSettings() {
 // Convenience getters with sensible defaults
 export const Settings = {
   companyName:         () => getSetting<string>('company_name', 'Hover Business Services'),
-  companyAddress:      () => getSetting<string>('company_address', ''),
-  companyPhone:        () => getSetting<string>('company_phone', ''),
-  companyEmail:        () => getSetting<string>('company_email', ''),
-  companyGst:          () => getSetting<string>('company_gst', ''),
-  companyLogo:         () => getSetting<string>('company_logo_url', ''),
+  companyAddress:      () => getSetting<string>('company_address', '916, 9th Floor, Pearls Omaxe Tower, Netaji Subhash Place, Pitampura, New Delhi - 110034'),
+  companyPhone:        () => getSetting<string>('company_phone', '+919899691389'),
+  companyEmail:        () => getSetting<string>('company_email', 'info@hovermedia.in'),
+  companyGst:          () => getSetting<string>('company_gst', '07APGPG3277A1Z9'),
+  companyLogo:         () => getSetting<string>('company_logo_url', 'https://hoverbusinessservices.com/images/hbs-logo.png'),
   currency:            () => getSetting<string>('currency', 'INR'),
   currencySymbol:      () => getSetting<string>('currency_symbol', '₹'),
   gstDefaultRate:      () => getSetting<number>('gst_default_rate', 18),

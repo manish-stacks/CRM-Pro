@@ -12,6 +12,9 @@ export const EmployeeAPI = {
   changePassword: (data) => AxiosInstance.post('/mobile/profile/change-password', data),
   uploadImage: (dataUrl, folder = 'avatars') => AxiosInstance.post('/upload', { dataUrl, folder }),
 
+  // Today's + upcoming birthdays/work-anniversaries
+  getCelebrations: () => AxiosInstance.get('/mobile/celebrations'),
+  
   // Attendance / tracking session
   getAttendanceStatus: () => AxiosInstance.get('/mobile/attendance/status'),
   checkIn: (loc) => AxiosInstance.post('/mobile/attendance/check-in', loc || {}),
@@ -32,6 +35,10 @@ export const EmployeeAPI = {
   getInvoices: (clientId) => AxiosInstance.get(`/mobile/invoices${clientId ? `?clientId=${clientId}` : ''}`),
   createInvoice: (data) => AxiosInstance.post('/mobile/invoices', data),
 
+  // Payments Received
+  getPayments: (clientId) => AxiosInstance.get(`/mobile/payments${clientId ? `?clientId=${clientId}` : ''}`),
+  collectPayment: (data) => AxiosInstance.post('/mobile/payments', data),
+
   // Meetings assigned to this marketing executive
   getMeetings: () => AxiosInstance.get('/mobile/meetings'),
   getMeetingById: (id) => AxiosInstance.get(`/mobile/meetings/${id}`),
@@ -46,4 +53,14 @@ export const EmployeeAPI = {
 
   // Location ping (used internally by LocationTracker too)
   sendLocation: (pings) => AxiosInstance.post('/mobile/location', { pings }),
+
+  // Leaves
+  getLeaves: () => AxiosInstance.get('/mobile/leaves'),
+  applyLeave: (data) => AxiosInstance.post('/mobile/leaves', data),
+  getLeaveBalance: () => AxiosInstance.get('/mobile/leaves/balance'),
+
+  // Public share links (proposal / invoice / payment receipt) — for direct browser redirect
+  getProposalShareLink: (proposalId) => AxiosInstance.get(`/proposals/${proposalId}/share-link`),
+  getInvoiceShareLink: (invoiceId) => AxiosInstance.get(`/invoices/${invoiceId}/share-link`),
+  getPaymentReceiptLink: (paymentId) => AxiosInstance.get(`/payments/receipt-link/${paymentId}`),
 };

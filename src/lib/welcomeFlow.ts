@@ -93,3 +93,65 @@ export async function activateClientPortal(clientId: string, options: {
 
   return { password, emailSent, whatsappSent }
 }
+
+/**
+ * Send a welcome message (email + WhatsApp) to a newly added EMPLOYEE, with
+ * their login email + the plaintext password the admin just set (this must
+ * be called right after creation, before the caller discards the plaintext
+ * password — the DB only ever stores the bcrypt hash).
+ */
+export async function sendEmployeeWelcome(userId: string, plainPassword: string): Promise<{ emailSent: boolean; whatsappSent: boolean }> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, name: true, email: true, phone: true, role: true },
+  })
+  if (!user) throw new Error('User not found')
+
+  const loginUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/login`
+  const companyName = process.env.COMPANY_NAME || 'HBS'
+
+  // ============ Email ============
+  let emailSent = false
+  if (user.email) {
+    const body = `
+      <p>Hi <b>${user.name}</b>,</p>
+      <p>Welcome to <b>${companyName}</b>! Your employee account has been created. Use the credentials below to log in on the web dashboard or the mobile app:</p>
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin:16px 0;">
+        <p style="margin:0 0 6px;"><b>Login URL:</b> <a href="${loginUrl}">${loginUrl}</a></p>
+        <p style="margin:0 0 6px;"><b>Email:</b> ${user.email}</p>
+        <p style="margin:0;"><b>Password:</b> <code style="background:white;padding:3px 8px;border:1px solid #cbd5e1;border-radius:4px;font-size:14px;">${plainPassword}</code></p>
+      </div>
+      <p style="font-size:12px;color:#64748b;">⚠️ For your security, please change this password after your first login.</p>
+      <p>If you need help, contact HR or your manager.</p>
+    `
+    const r = await sendMail({
+      to: user.email,
+      subject: `Welcome to ${companyName} — Your Login Details`,
+      html: wrapEmailHtml('Welcome aboard!', body, 'Log In Now', loginUrl),
+      referenceType: 'USER',
+      referenceId: userId,
+    })
+    emailSent = r.success
+  }
+
+  // ============ WhatsApp ============
+  let whatsappSent = false
+  if (user.phone) {
+    const r = await sendWhatsapp({
+      toPhone: user.phone,
+      template: 'hbs_employee_welcome',
+      params: {
+        employeeName: user.name,
+        companyName,
+        loginEmail: user.email,
+        loginPassword: plainPassword,
+        loginUrl,
+      },
+      referenceType: 'USER',
+      referenceId: userId,
+    })
+    whatsappSent = r.success
+  }
+
+  return { emailSent, whatsappSent }
+}

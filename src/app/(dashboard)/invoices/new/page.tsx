@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useMemo, Suspense } from 'react'
+import { useState, useEffect, useMemo, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import api from '@/lib/axios'
@@ -8,7 +8,7 @@ import { formatCurrency } from '@/lib/utils'
 import { ArrowLeft, Plus, Trash2, Save, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
-interface Item { id: string; serviceName: string; description: string; quantity: number; unitPrice: number }
+interface Item { id: string; serviceKey?: string; serviceName: string; description: string; quantity: number; unitPrice: number }
 
 function InvoiceBuilderInner() {
   const router = useRouter()
@@ -17,6 +17,8 @@ function InvoiceBuilderInner() {
 
   const [clients, setClients] = useState<any[]>([])
   const [catalog, setCatalog] = useState<any[]>([])
+  const [clientServices, setClientServices] = useState<any[]>([])
+  const [loadingClientServices, setLoadingClientServices] = useState(false)
   const [saving, setSaving] = useState(false)
 
   const [form, setForm] = useState({
@@ -33,6 +35,9 @@ function InvoiceBuilderInner() {
   const [items, setItems] = useState<Item[]>([{
     id: crypto.randomUUID(), serviceName: '', description: '', quantity: 1, unitPrice: 0,
   }])
+  // Once the user manually touches items (edits/adds/removes), stop auto-filling
+  // them so we never silently overwrite their work when the client changes again.
+  const itemsEditedByUserRef = useRef(false)
 
   useEffect(() => {
     api.get('/clients?limit=200').then(r => {
@@ -47,6 +52,37 @@ function InvoiceBuilderInner() {
     api.get('/services').then(r => setCatalog(r.data.data || [])).catch(() => { })
   }, [preClientId])
 
+  // Fetch the selected client's already-assigned services so they can be
+  // picked directly in line items (auto-fills name/price from what's on the client).
+  useEffect(() => {
+    if (!form.clientId) { setClientServices([]); return }
+    setLoadingClientServices(true)
+    api.get(`/clients/${form.clientId}/services`)
+      .then(r => setClientServices(r.data.data || []))
+      .catch(() => setClientServices([]))
+      .finally(() => setLoadingClientServices(false))
+  }, [form.clientId])
+
+  // Auto-fill the whole Line Items section from the client's active services
+  // as soon as they're loaded — only if the user hasn't started editing items
+  // themselves, so we never stomp on manual work.
+  useEffect(() => {
+    if (!form.clientId || loadingClientServices) return
+    if (itemsEditedByUserRef.current) return
+
+    const active = clientServices.filter((cs: any) => cs.status === 'ACTIVE')
+    if (active.length > 0) {
+      setItems(active.map((cs: any) => ({
+        id: crypto.randomUUID(),
+        serviceKey: `client:${cs.id}`,
+        serviceName: cs.serviceName,
+        description: cs.description || cs.serviceName,
+        quantity: 1,
+        unitPrice: Number(cs.amount) || 0,
+      })))
+    }
+  }, [clientServices, loadingClientServices, form.clientId])
+
   const totals = useMemo(() => {
     const subtotal = items.reduce((s, i) => s + (i.quantity * i.unitPrice), 0)
     const discountAmount = form.discountType === 'PERCENT' ? subtotal * (form.discount / 100) : form.discount
@@ -56,12 +92,41 @@ function InvoiceBuilderInner() {
     return { subtotal, discountAmount, gstAmount, totalAmount }
   }, [items, form.discount, form.discountType, form.gstApplicable, form.gstRate])
 
-  const addItem = () => setItems(prev => [...prev, { id: crypto.randomUUID(), serviceName: '', description: '', quantity: 1, unitPrice: 0 }])
-  const removeItem = (id: string) => setItems(prev => prev.length > 1 ? prev.filter(i => i.id !== id) : prev)
-  const updateItem = (id: string, patch: Partial<Item>) => setItems(prev => prev.map(i => i.id === id ? { ...i, ...patch } : i))
-  const pickCatalog = (id: string, catId: string) => {
-    const c = catalog.find((x: any) => x.id === catId)
-    if (c) updateItem(id, { serviceName: c.name, description: c.description || '', unitPrice: c.basePrice })
+  const addItem = () => {
+    itemsEditedByUserRef.current = true
+    setItems(prev => [...prev, { id: crypto.randomUUID(), serviceName: '', description: '', quantity: 1, unitPrice: 0 }])
+  }
+  const removeItem = (id: string) => {
+    itemsEditedByUserRef.current = true
+    setItems(prev => prev.length > 1 ? prev.filter(i => i.id !== id) : prev)
+  }
+  const updateItem = (id: string, patch: Partial<Item>) => {
+    itemsEditedByUserRef.current = true
+    setItems(prev => prev.map(i => i.id === id ? { ...i, ...patch } : i))
+  }
+  // value is "" (custom), "client:<clientServiceId>" or "catalog:<serviceCatalogId>"
+  const pickService = (id: string, value: string) => {
+    if (!value) {
+      updateItem(id, { serviceKey: '' })
+      return
+    }
+    const [type, refId] = value.split(':')
+    if (type === 'client') {
+      const cs = clientServices.find((x: any) => x.id === refId)
+      if (cs) {
+        updateItem(id, {
+          serviceKey: value,
+          serviceName: cs.serviceName,
+          description: cs.description || cs.serviceName,
+          unitPrice: Number(cs.amount) || 0,
+        })
+      }
+    } else if (type === 'catalog') {
+      const c = catalog.find((x: any) => x.id === refId)
+      if (c) {
+        updateItem(id, { serviceKey: value, serviceName: c.name, description: c.description || '', unitPrice: c.basePrice })
+      }
+    }
   }
 
   const onClientChange = (cid: string) => {
@@ -147,36 +212,128 @@ function InvoiceBuilderInner() {
             </div>
             <div className="space-y-3">
               {items.map(item => (
-                <div key={item.id} className="border border-gray-200 rounded-lg p-3 space-y-2 bg-gray-50">
+                <div
+                  key={item.id}
+                  className="relative border border-gray-200 rounded-lg p-3 space-y-2 bg-gray-50"
+                >
+                  {/* Delete Button */}
+                  <button
+                    onClick={() => removeItem(item.id)}
+                    disabled={items.length === 1}
+                    className="absolute -top-2 -right-2 h-8 w-8 flex items-center justify-center rounded-full bg-white border border-red-100 shadow-sm text-red-500 hover:bg-red-50 hover:shadow transition disabled:opacity-30"
+                    title="Remove Item"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+
                   <div className="grid grid-cols-12 gap-2">
+                    {/* Service */}
                     <div className="col-span-12 md:col-span-5">
-                      <select value="" onChange={e => pickCatalog(item.id, e.target.value)} className="input">
-                        <option value="">— Custom —</option>
-                        {catalog.map((c: any) => <option key={c.id} value={c.id}>{c.name} — ₹{c.basePrice}</option>)}
+                      <select
+                        value={item.serviceKey || ''}
+                        onChange={e => pickService(item.id, e.target.value)}
+                        className="input"
+                      >
+                        <option value="">— Custom item —</option>
+
+                        {form.clientId && (
+                          <optgroup
+                            label={
+                              loadingClientServices
+                                ? "Loading client services…"
+                                : "Client's services"
+                            }
+                          >
+                            {clientServices.map((cs: any) => (
+                              <option key={cs.id} value={`client:${cs.id}`}>
+                                {cs.serviceName} — ₹
+                                {Number(cs.amount).toLocaleString("en-IN")} ({cs.status})
+                              </option>
+                            ))}
+
+                            {!loadingClientServices &&
+                              clientServices.length === 0 && (
+                                <option disabled value="">
+                                  No services on this client yet
+                                </option>
+                              )}
+                          </optgroup>
+                        )}
+
+                        <optgroup label="Service catalog">
+                          {catalog.map((c: any) => (
+                            <option key={c.id} value={`catalog:${c.id}`}>
+                              {c.name} — ₹{c.basePrice}
+                            </option>
+                          ))}
+                        </optgroup>
                       </select>
-                      <input type="text" className="input mt-2 text-sm" placeholder="Service name"
-                        value={item.serviceName}
-                        onChange={e => updateItem(item.id, { serviceName: e.target.value })} />
+
+                      {!item.serviceKey && (
+                        <input
+                          type="text"
+                          className="input mt-2 text-sm"
+                          placeholder="Service name"
+                          value={item.serviceName}
+                          onChange={e =>
+                            updateItem(item.id, {
+                              serviceName: e.target.value,
+                            })
+                          }
+                        />
+                      )}
                     </div>
+
+                    {/* Description */}
                     <div className="col-span-12 md:col-span-4">
-                      <textarea className="input" rows={2} placeholder="Description..."
+                      <textarea
+                        className="input"
+                        rows={2}
+                        placeholder="Description..."
                         value={item.description}
-                        onChange={e => updateItem(item.id, { description: e.target.value })} />
+                        onChange={e =>
+                          updateItem(item.id, {
+                            description: e.target.value,
+                          })
+                        }
+                      />
                     </div>
+
+                    {/* Quantity */}
                     <div className="col-span-4 md:col-span-1">
-                      <input type="number" className="input text-sm" placeholder="Qty" value={item.quantity}
-                        onChange={e => updateItem(item.id, { quantity: Number(e.target.value) })} min={1} />
+                      <input
+                        type="number"
+                        className="input text-sm"
+                        placeholder="Qty"
+                        value={item.quantity}
+                        min={1}
+                        onChange={e =>
+                          updateItem(item.id, {
+                            quantity: Number(e.target.value),
+                          })
+                        }
+                      />
                     </div>
+
+                    {/* Price */}
                     <div className="col-span-6 md:col-span-2">
-                      <input type="number" className="input text-sm" placeholder="₹" value={item.unitPrice}
-                        onChange={e => updateItem(item.id, { unitPrice: Number(e.target.value) })} min={0} />
-                      <p className="text-xs text-right mt-1 tabular-nums">= ₹{(item.quantity * item.unitPrice).toLocaleString('en-IN')}</p>
-                    </div>
-                    <div className="col-span-2 flex justify-end">
-                      <button onClick={() => removeItem(item.id)} disabled={items.length === 1}
-                        className="text-red-500 hover:bg-red-50 rounded p-1.5 disabled:opacity-30">
-                        <Trash2 size={14} />
-                      </button>
+                      <input
+                        type="number"
+                        className="input text-sm"
+                        placeholder="₹"
+                        value={item.unitPrice}
+                        min={0}
+                        onChange={e =>
+                          updateItem(item.id, {
+                            unitPrice: Number(e.target.value),
+                          })
+                        }
+                      />
+
+                      <p className="text-xs text-gray-500 text-right mt-1 tabular-nums">
+                        = ₹
+                        {(item.quantity * item.unitPrice).toLocaleString("en-IN")}
+                      </p>
                     </div>
                   </div>
                 </div>

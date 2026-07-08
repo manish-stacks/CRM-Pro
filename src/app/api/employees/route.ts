@@ -10,6 +10,7 @@ import { hash } from 'bcryptjs'
 import { generateEmployeeId } from '@/lib/idgen'
 import { logFromRequest } from '@/lib/audit'
 import { getTeamScope } from '@/lib/teamScope'
+import { sendEmployeeWelcome } from '@/lib/welcomeFlow'
 
 export async function GET(req: NextRequest) {
   const session = await getRequestSession(req)
@@ -116,6 +117,12 @@ export async function POST(req: NextRequest) {
       entityType: 'Employee',
       entityId: user.id,
       metadata: { employeeId, role, departmentId },
+    })
+
+    // Welcome email + WhatsApp with login credentials — best-effort, don't
+    // block/fail the employee-creation response if either fails to send.
+    sendEmployeeWelcome(user.id, password).catch((e) => {
+      console.error('Employee welcome send failed:', e)
     })
 
     return successResponse(user)

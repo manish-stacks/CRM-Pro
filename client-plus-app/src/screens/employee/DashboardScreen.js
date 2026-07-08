@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import ScreenWrapper from '../../components/ScreenWrapper';
+import CelebrationCard from '../../components/CelebrationCard';
 import { EmployeeAPI } from '../../services/employee.api';
 import {
   startTracking, stopTracking, getCurrentLocation, reverseGeocode, flushQueue,
@@ -65,10 +66,10 @@ export default function DashboardScreen({ navigation }) {
       setCheckedIn(!!st.isCheckedIn);
       // If checked in but tracking not running (e.g. app restarted), resume it
       if (st.isCheckedIn) {
-        startTracking().catch(() => {});
-        flushQueue().catch(() => {});
+        startTracking().catch(() => { });
+        flushQueue().catch(() => { });
       }
-    } catch {}
+    } catch { }
   };
 
   useEffect(() => {
@@ -147,6 +148,9 @@ export default function DashboardScreen({ navigation }) {
             <Text style={s.avatarText}>{user?.name ? user.name[0].toUpperCase() : 'E'}</Text>
           </View> */}
         </LinearGradient>
+
+
+
         <View style={[s.checkCard, { backgroundColor: colors.card, borderColor: checkedIn ? '#22C55E' : colors.border }]}>
 
           <View style={s.checkHeader}>
@@ -202,6 +206,7 @@ export default function DashboardScreen({ navigation }) {
           </View>
         )}
 
+        <CelebrationCard />
         <View style={s.cardBody}>
 
           {(data?.today_meetings > 0) && (
@@ -275,6 +280,7 @@ export default function DashboardScreen({ navigation }) {
               { icon: 'people-outline', label: 'Clients', screen: 'Clients', color: '#22C55E', bg: 'rgba(34,197,94,0.1)' },
               { icon: 'person-add-outline', label: 'Add Client', screen: 'AddClient', color: '#3B82F6', bg: 'rgba(59,130,246,0.1)' },
               { icon: 'map-outline', label: 'Visits', screen: 'Visits', color: '#F59E0B', bg: 'rgba(245,158,11,0.1)' },
+              { icon: 'calendar-number-outline', label: 'Apply Leave', screen: 'Leaves', color: '#EF4444', bg: 'rgba(239,68,68,0.1)' },
             ].map((a, i) => (
               <TouchableOpacity key={i} style={[s.actionCard, { backgroundColor: colors.card, borderColor: colors.border }]}
                 onPress={() => navigation.navigate(a.screen)}>

@@ -30,8 +30,12 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const clientId = searchParams.get('clientId')
 
-  const where: any = { createdById: session.userId }
-  if (clientId) where.clientId = clientId
+  // When viewing a specific client's proposals (client detail screen), show
+  // ALL proposals for that client — same as the web CRM's client page — so
+  // the count/list matches regardless of which staff member created them.
+  // Without a clientId (a hypothetical "my proposals" list) we still scope
+  // to the logged-in employee's own proposals.
+  const where: any = clientId ? { clientId } : { createdById: session.userId }
 
   const proposals = await prisma.proposal.findMany({
     where,

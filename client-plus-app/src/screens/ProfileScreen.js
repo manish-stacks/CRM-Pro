@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import ScreenWrapper from '../components/ScreenWrapper';
-import { AxiosInstance } from '../lib/Axios.instance';
+import { ClientAPI } from '../services/client.api';
 
 const ITEMS = [
   {
@@ -40,17 +40,14 @@ export default function ProfileScreen({ navigation }) {
   const s = styles(colors);
   const [user, setUser] = useState(null);
   useEffect(() => {
-    // const loadUser = async () => {
-    //   const data = await userData();
-    //   setUser(data);
-    // };
-
     fetchProfile();
-  }, []);
+    const unsub = navigation.addListener('focus', fetchProfile);
+    return unsub;
+  }, [navigation]);
 
   const fetchProfile = async () => {
     try {
-      const res = await AxiosInstance.get('/client-portal/profile');
+      const res = await ClientAPI.getProfile();
       setUser(res.data?.data || null);
     } catch (e) {
       console.log('Profile Error:', e);

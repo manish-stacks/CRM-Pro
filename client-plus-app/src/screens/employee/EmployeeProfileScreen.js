@@ -22,7 +22,9 @@ export default function EmployeeProfileScreen({ navigation }) {
 
   useEffect(() => {
     fetchProfile();
-  }, []);
+    const unsub = navigation.addListener('focus', fetchProfile);
+    return unsub;
+  }, [navigation]);
 
   const fetchProfile = async () => {
     try {
@@ -45,6 +47,8 @@ export default function EmployeeProfileScreen({ navigation }) {
   const handleAction = (action) => {
     if (action === 'clients') navigation.navigate('Clients');
     else if (action === 'visits') navigation.navigate('Visits');
+    else if (action === 'edit') navigation.navigate('EmployeeEditProfile');
+    else if (action === 'password') navigation.navigate('EmployeeChangePassword');
     else Alert.alert('Coming Soon', 'This feature will be available soon.');
   };
 

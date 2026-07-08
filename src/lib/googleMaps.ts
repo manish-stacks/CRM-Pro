@@ -33,20 +33,18 @@ export function loadGoogleMaps(): Promise<any> {
 }
 
 /**
- * Reverse geocode via Google Geocoding REST API. Returns a formatted address.
- * No JS API needed. Returns undefined on any failure (caller should fall back).
+ * Reverse geocode via Google Geocoding — routed through our own server
+ * (src/app/api/geocode/reverse) because Google's REST endpoint has no CORS
+ * headers and can't be called directly from browser JS. Returns undefined
+ * on any failure or if no Google key is configured server-side (caller
+ * should fall back, e.g. to OSM Nominatim).
  */
 export async function reverseGeocodeGoogle(lat: number, lng: number): Promise<string | undefined> {
-  if (!GOOGLE_MAPS_KEY) return undefined
   try {
-    const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${GOOGLE_MAPS_KEY}`
-    const res = await fetch(url)
+    const res = await fetch(`/api/geocode/reverse?lat=${lat}&lng=${lng}`)
     if (!res.ok) return undefined
     const data = await res.json()
-    if (data.status === 'OK' && data.results?.length) {
-      return data.results[0].formatted_address as string
-    }
-    return undefined
+    return data.address || undefined
   } catch {
     return undefined
   }

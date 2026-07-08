@@ -54,8 +54,23 @@ export function parseUA(userAgent: string | null | undefined): Omit<DeviceInfo, 
 /** Extract full device info from a NextRequest (route handler) */
 export function deviceFromRequest(req: NextRequest): DeviceInfo {
   const ua = req.headers.get('user-agent')
+  const ip = extractIp(req.headers)
+
+  // Our mobile app (React Native) sends a UA that generic UA parsers can't
+  // classify as a phone, so it was showing up as "Desktop" everywhere.
+  // The app instead sends explicit device headers — trust those when present.
+  if (req.headers.get('x-client-platform') === 'mobile-app') {
+    return {
+      ip,
+      userAgent: ua,
+      device: req.headers.get('x-device-type') || 'Mobile',
+      os: req.headers.get('x-device-os') || null,
+      browser: req.headers.get('x-device-model') || 'App',
+    }
+  }
+
   return {
-    ip: extractIp(req.headers),
+    ip,
     userAgent: ua,
     ...parseUA(ua),
   }

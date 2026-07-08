@@ -4,6 +4,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import * as Linking from 'expo-linking';
 import { useTheme } from '../../context/ThemeContext';
 import { EmployeeAPI } from '../../services/employee.api';
 import ScreenWrapper from '../../components/ScreenWrapper';
@@ -29,6 +30,8 @@ export default function ClientDetailScreen({ route, navigation }) {
 
   const [proposals, setProposals] = useState([]);
   const [invoices, setInvoices] = useState([]);
+  const [payments, setPayments] = useState([]);
+  const [openingLinkId, setOpeningLinkId] = useState(null);
 
   const services = client.services || client.assigned_services || [];
   const initials = client.name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || '??';
@@ -38,6 +41,7 @@ export default function ClientDetailScreen({ route, navigation }) {
     fetchDetail();
     fetchProposals();
     fetchInvoices();
+    fetchPayments();
   }, []);
 
   // The Clients list only passes basic fields — pull the full record
@@ -72,6 +76,61 @@ export default function ClientDetailScreen({ route, navigation }) {
     try {
       const res = await EmployeeAPI.getInvoices(clientParam.id);
       setInvoices(res.data?.data || []);
+    } catch (e) { console.log(e); }
+  };
+
+  // Open the proposal in the browser — public, no-login link
+  // (Proposal.shareToken), same pattern as invoice/receipt below.
+  const openProposalLink = async (proposal) => {
+    setOpeningLinkId(`prop-${proposal.id}`);
+    try {
+      const res = await EmployeeAPI.getProposalShareLink(proposal.id);
+      const url = res.data?.data?.url;
+      if (url) await Linking.openURL(url);
+      else Alert.alert('Error', 'Could not get proposal link');
+    } catch (e) {
+      Alert.alert('Error', e.message || 'Could not open proposal link');
+    } finally {
+      setOpeningLinkId(null);
+    }
+  };
+
+  // Open the invoice in the browser — a public, no-login link (Invoice.shareToken),
+  // generated on first request.
+  const openInvoiceLink = async (inv) => {
+    setOpeningLinkId(`inv-${inv.id}`);
+    try {
+      const res = await EmployeeAPI.getInvoiceShareLink(inv.id);
+      const url = res.data?.data?.url;
+      if (url) await Linking.openURL(url);
+      else Alert.alert('Error', 'Could not get invoice link');
+    } catch (e) {
+      Alert.alert('Error', e.message || 'Could not open invoice link');
+    } finally {
+      setOpeningLinkId(null);
+    }
+  };
+
+  // Open a payment's receipt in the browser — public, no-login link
+  // (Payment.receiptToken), same pattern as the invoice link above.
+  const openReceiptLink = async (payment) => {
+    setOpeningLinkId(`pay-${payment.id}`);
+    try {
+      const res = await EmployeeAPI.getPaymentReceiptLink(payment.id);
+      const url = res.data?.data?.url;
+      if (url) await Linking.openURL(url);
+      else Alert.alert('Error', 'Could not get receipt link');
+    } catch (e) {
+      Alert.alert('Error', e.message || 'Could not open receipt link');
+    } finally {
+      setOpeningLinkId(null);
+    }
+  };
+
+  const fetchPayments = async () => {
+    try {
+      const res = await EmployeeAPI.getPayments(clientParam.id);
+      setPayments(res.data?.data || []);
     } catch (e) { console.log(e); }
   };
 
@@ -210,6 +269,56 @@ export default function ClientDetailScreen({ route, navigation }) {
     } catch (e) {
       Alert.alert('Error', e.message || 'Failed to generate invoice');
     } finally { setSavingInvoice(false); }
+  };
+
+  const PAYMENT_METHODS = ['UPI', 'CASH', 'BANK_TRANSFER', 'CHEQUE', 'CARD', 'ONLINE_GATEWAY'];
+  const dueInvoices = invoices.filter(inv => (inv.due_amount || 0) > 0);
+
+  // Collect Payment builder
+  const [showPayment, setShowPayment] = useState(false);
+  const [payInvoiceId, setPayInvoiceId] = useState('');
+  const [payAmount, setPayAmount] = useState('');
+  const [payMethod, setPayMethod] = useState('UPI');
+  const [payReference, setPayReference] = useState('');
+  const [payDate, setPayDate] = useState('');
+  const [payNextDueDate, setPayNextDueDate] = useState('');
+  const [payNotes, setPayNotes] = useState('');
+  const [savingPayment, setSavingPayment] = useState(false);
+
+  const openPaymentModal = () => {
+    if (dueInvoices.length === 0) { Alert.alert('No due invoice', 'This client has no pending invoice to collect against.'); return; }
+    const first = dueInvoices[0];
+    setPayInvoiceId(first.id);
+    setPayAmount(String(first.due_amount || ''));
+    setPayMethod('UPI');
+    setPayReference('');
+    setPayDate(new Date().toISOString().slice(0, 10));
+    setPayNextDueDate('');
+    setPayNotes('');
+    setShowPayment(true);
+  };
+
+  const submitPayment = async () => {
+    if (!payInvoiceId) { Alert.alert('Error', 'Select an invoice'); return; }
+    if (!payAmount || Number(payAmount) <= 0) { Alert.alert('Error', 'Enter a valid amount'); return; }
+    setSavingPayment(true);
+    try {
+      const res = await EmployeeAPI.collectPayment({
+        invoiceId: payInvoiceId,
+        amount: parseFloat(payAmount),
+        method: payMethod,
+        reference: payReference || undefined,
+        paidAt: payDate || undefined,
+        nextDueDate: payNextDueDate || undefined,
+        notes: payNotes || undefined,
+      });
+      setShowPayment(false);
+      Alert.alert('Payment Collected', `₹${res.data?.data?.amount || payAmount} recorded successfully.`);
+      fetchPayments();
+      fetchInvoices();
+    } catch (e) {
+      Alert.alert('Error', e.message || 'Failed to collect payment');
+    } finally { setSavingPayment(false); }
   };
 
   const renderItemPicker = (list, setList) => (
@@ -374,18 +483,33 @@ export default function ClientDetailScreen({ route, navigation }) {
             {services.length === 0 ? (
               <Text style={{ color: colors.text3, fontSize: 13, textAlign: 'center', paddingVertical: 16 }}>No services assigned yet</Text>
             ) : (
-              services.map((sv, i) => (
-                <View key={i} style={[s.serviceItem, { borderColor: colors.border }]}>
-                  <View style={[s.serviceIcon, { backgroundColor: colors.primary + '15' }]}>
-                    <Ionicons name="layers-outline" size={16} color={colors.primary} />
+              services.map((sv, i) => {
+                const expiryDate = sv.expiryDate ? new Date(sv.expiryDate) : null;
+                const now = new Date();
+                const isExpired = expiryDate && expiryDate < now;
+                const daysLeft = expiryDate ? Math.ceil((expiryDate - now) / (1000 * 60 * 60 * 24)) : null;
+                const isExpiringSoon = !isExpired && daysLeft !== null && daysLeft <= 30;
+                const expiryColor = isExpired ? '#EF4444' : isExpiringSoon ? '#F59E0B' : colors.text3;
+                const expiryLabel = expiryDate
+                  ? isExpired
+                    ? `Expired ${Math.abs(daysLeft)}d ago`
+                    : isExpiringSoon
+                      ? `Expires: ${expiryDate.toLocaleDateString('en-IN')} (${daysLeft}d left)`
+                      : `Expires: ${expiryDate.toLocaleDateString('en-IN')}`
+                  : null;
+                return (
+                  <View key={i} style={[s.serviceItem, { borderColor: colors.border }, (isExpired || isExpiringSoon) && { backgroundColor: expiryColor + '10', borderRadius: 10, paddingHorizontal: 8 }]}>
+                    <View style={[s.serviceIcon, { backgroundColor: colors.primary + '15' }]}>
+                      <Ionicons name="layers-outline" size={16} color={colors.primary} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontWeight: '700', fontSize: 13, color: colors.text }}>{sv.serviceName || sv.name || sv.service_name}</Text>
+                      {(sv.amount ?? sv.price) != null ? <Text style={{ fontSize: 12, color: colors.green, fontWeight: '600', marginTop: 2 }}>₹{sv.amount ?? sv.price}</Text> : null}
+                      {expiryLabel ? <Text style={{ fontSize: 11, color: expiryColor, fontWeight: (isExpired || isExpiringSoon) ? '700' : '400', marginTop: 1 }}>{expiryLabel}</Text> : null}
+                    </View>
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontWeight: '700', fontSize: 13, color: colors.text }}>{sv.serviceName || sv.name || sv.service_name}</Text>
-                    {(sv.amount ?? sv.price) != null ? <Text style={{ fontSize: 12, color: colors.green, fontWeight: '600', marginTop: 2 }}>₹{sv.amount ?? sv.price}</Text> : null}
-                    {sv.expiryDate ? <Text style={{ fontSize: 11, color: colors.text3, marginTop: 1 }}>Expires: {new Date(sv.expiryDate).toLocaleDateString('en-IN')}</Text> : null}
-                  </View>
-                </View>
-              ))
+                );
+              })
             )}
           </View>
 
@@ -411,6 +535,17 @@ export default function ClientDetailScreen({ route, navigation }) {
                     <Text style={{ fontSize: 10, fontWeight: '700', color: PROPOSAL_STATUS_COLOR[p.status] || '#94A3B8' }}>{p.status}</Text>
                   </View>
                 </View>
+                <TouchableOpacity
+                  style={[s.dlIconBtn, { borderColor: colors.border }]}
+                  disabled={openingLinkId === `prop-${p.id}`}
+                  onPress={() => openProposalLink(p)}
+                >
+                  {openingLinkId === `prop-${p.id}` ? (
+                    <ActivityIndicator size="small" color={colors.primary} />
+                  ) : (
+                    <Ionicons name="open-outline" size={16} color={colors.primary} />
+                  )}
+                </TouchableOpacity>
               </View>
             ))}
           </View>
@@ -435,12 +570,70 @@ export default function ClientDetailScreen({ route, navigation }) {
                     <Text style={{ fontSize: 11, color: colors.greenText, marginTop: 2 }}>Fully paid</Text>
                   )}
                 </View>
-                <View style={{ alignItems: 'flex-end' }}>
+                <View style={{ alignItems: 'flex-end', gap: 6 }}>
                   <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text }}>₹{inv.total_amount}</Text>
                   <View style={[s.statusPill, { backgroundColor: (INVOICE_STATUS_COLOR[inv.status] || '#94A3B8') + '20' }]}>
                     <Text style={{ fontSize: 10, fontWeight: '700', color: INVOICE_STATUS_COLOR[inv.status] || '#94A3B8' }}>{inv.status}</Text>
                   </View>
                 </View>
+                <TouchableOpacity
+                  style={[s.dlIconBtn, { borderColor: colors.border }]}
+                  disabled={openingLinkId === `inv-${inv.id}`}
+                  onPress={() => openInvoiceLink(inv)}
+                >
+                  {openingLinkId === `inv-${inv.id}` ? (
+                    <ActivityIndicator size="small" color={colors.primary} />
+                  ) : (
+                    <Ionicons name="open-outline" size={16} color={colors.primary} />
+                  )}
+                </TouchableOpacity>
+              </View>
+            ))}
+          </View>
+
+          {/* Payments Received */}
+          <View style={[s.card, { borderColor: colors.border }]}>
+            <View style={s.cardHeader}>
+              <Text style={[s.cardTitle, { color: colors.text }]}>Payments ({payments.length})</Text>
+              <TouchableOpacity onPress={openPaymentModal} disabled={dueInvoices.length === 0}>
+                <Text style={{ color: dueInvoices.length === 0 ? colors.text3 : colors.primary, fontWeight: '700', fontSize: 13 }}>+ Collect</Text>
+              </TouchableOpacity>
+            </View>
+            {dueInvoices.length === 0 && payments.length === 0 ? (
+              <Text style={{ fontSize: 11, color: colors.text3, marginTop: 4 }}>No pending invoice — generate one first to collect payment.</Text>
+            ) : null}
+            {payments.length === 0 ? (
+              <Text style={{ color: colors.text3, fontSize: 13, textAlign: 'center', paddingVertical: 16 }}>No payments yet</Text>
+            ) : payments.map((p) => (
+              <View key={p.id} style={[s.docRow, { borderColor: colors.border }]}>
+                <View style={[s.serviceIcon, { backgroundColor: '#22C55E15' }]}>
+                  <Ionicons name="cash-outline" size={16} color="#22C55E" />
+                </View>
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <Text style={{ fontWeight: '700', fontSize: 13, color: colors.text }}>
+                    ₹{p.amount} <Text style={{ fontWeight: '400', color: colors.text2 }}>· {p.method?.replace('_', ' ')}</Text>
+                  </Text>
+                  <Text style={{ fontSize: 11, color: colors.text3, marginTop: 2 }}>
+                    Invoice {p.invoice_number} · {p.paid_at ? new Date(p.paid_at).toLocaleDateString('en-IN') : ''}
+                    {p.reference ? ` · Ref: ${p.reference}` : ''}
+                  </Text>
+                </View>
+                {p.source === 'CLIENT_PORTAL' ? (
+                  <View style={[s.statusPill, { backgroundColor: '#3B82F620', marginRight: 6 }]}>
+                    <Text style={{ fontSize: 10, fontWeight: '700', color: '#3B82F6' }}>Client Portal</Text>
+                  </View>
+                ) : null}
+                <TouchableOpacity
+                  style={[s.dlIconBtn, { borderColor: colors.border }]}
+                  disabled={openingLinkId === `pay-${p.id}`}
+                  onPress={() => openReceiptLink(p)}
+                >
+                  {openingLinkId === `pay-${p.id}` ? (
+                    <ActivityIndicator size="small" color={colors.primary} />
+                  ) : (
+                    <Ionicons name="receipt-outline" size={16} color={colors.primary} />
+                  )}
+                </TouchableOpacity>
               </View>
             ))}
           </View>
@@ -535,6 +728,74 @@ export default function ClientDetailScreen({ route, navigation }) {
           </ScrollView>
         </View>
       </Modal>
+
+      {/* Collect Payment Modal */}
+      <Modal visible={showPayment} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowPayment(false)}>
+        <View style={[s.modal, { backgroundColor: colors.bg, paddingTop: 40 }]}>
+          <View style={s.modalHeader}>
+            <Text style={[s.modalTitle, { color: colors.text }]}>Collect Payment</Text>
+            <TouchableOpacity onPress={() => setShowPayment(false)}>
+              <Ionicons name="close" size={24} color={colors.text2} />
+            </TouchableOpacity>
+          </View>
+          <ScrollView style={{ padding: 20 }} keyboardShouldPersistTaps="handled">
+            <Text style={s.fieldLabel}>INVOICE *</Text>
+            <View style={[s.fieldWrap, { backgroundColor: colors.bg2, borderColor: colors.border, marginBottom: 16, paddingHorizontal: 0 }]}>
+              <Picker
+                selectedValue={payInvoiceId}
+                onValueChange={(val) => {
+                  setPayInvoiceId(val);
+                  const inv = dueInvoices.find(i => i.id === val);
+                  if (inv) setPayAmount(String(inv.due_amount || ''));
+                }}
+                style={{ flex: 1, color: colors.text }}
+              >
+                {dueInvoices.map(inv => (
+                  <Picker.Item key={inv.id} label={`${inv.invoice_number} (Due: ₹${inv.due_amount})`} value={inv.id} />
+                ))}
+              </Picker>
+            </View>
+
+            <Text style={s.fieldLabel}>AMOUNT *</Text>
+            <View style={[s.fieldWrap, { backgroundColor: colors.bg2, borderColor: colors.border, marginBottom: 16 }]}>
+              <TextInput style={{ flex: 1, fontSize: 14, paddingVertical: 12, color: colors.text }} value={payAmount} onChangeText={setPayAmount} keyboardType="decimal-pad" placeholder="0" placeholderTextColor={colors.text3} />
+            </View>
+
+            <Text style={s.fieldLabel}>METHOD</Text>
+            <View style={[s.fieldWrap, { backgroundColor: colors.bg2, borderColor: colors.border, marginBottom: 16, paddingHorizontal: 0 }]}>
+              <Picker selectedValue={payMethod} onValueChange={setPayMethod} style={{ flex: 1, color: colors.text }}>
+                {PAYMENT_METHODS.map(m => (
+                  <Picker.Item key={m} label={m.replace('_', ' ')} value={m} />
+                ))}
+              </Picker>
+            </View>
+
+            <Text style={s.fieldLabel}>REFERENCE (UPI/txn ref)</Text>
+            <View style={[s.fieldWrap, { backgroundColor: colors.bg2, borderColor: colors.border, marginBottom: 16 }]}>
+              <TextInput style={{ flex: 1, fontSize: 14, paddingVertical: 12, color: colors.text }} value={payReference} onChangeText={setPayReference} placeholder="Optional" placeholderTextColor={colors.text3} />
+            </View>
+
+            <Text style={s.fieldLabel}>DATE (YYYY-MM-DD)</Text>
+            <View style={[s.fieldWrap, { backgroundColor: colors.bg2, borderColor: colors.border, marginBottom: 16 }]}>
+              <TextInput style={{ flex: 1, fontSize: 14, paddingVertical: 12, color: colors.text }} value={payDate} onChangeText={setPayDate} placeholderTextColor={colors.text3} />
+            </View>
+
+            <Text style={s.fieldLabel}>BALANCE DUE DATE (part payment, optional)</Text>
+            <View style={[s.fieldWrap, { backgroundColor: colors.bg2, borderColor: colors.border, marginBottom: 16 }]}>
+              <TextInput style={{ flex: 1, fontSize: 14, paddingVertical: 12, color: colors.text }} value={payNextDueDate} onChangeText={setPayNextDueDate} placeholder="Optional" placeholderTextColor={colors.text3} />
+            </View>
+
+            <Text style={s.fieldLabel}>NOTES</Text>
+            <View style={[s.fieldWrap, { backgroundColor: colors.bg2, borderColor: colors.border, marginBottom: 16 }]}>
+              <TextInput style={{ flex: 1, fontSize: 14, paddingVertical: 12, color: colors.text }} value={payNotes} onChangeText={setPayNotes} placeholder="Optional" placeholderTextColor={colors.text3} />
+            </View>
+
+            <TouchableOpacity onPress={submitPayment} disabled={savingPayment} style={{ marginTop: 4, backgroundColor: '#22C55E', borderRadius: 12, paddingVertical: 14, alignItems: 'center' }}>
+              {savingPayment ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 }}>Collect Payment</Text>}
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+      </Modal>
     </ScreenWrapper>
   );
 }
@@ -561,6 +822,7 @@ const styles = (c) => StyleSheet.create({
   serviceIcon: { width: 36, height: 36, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   docRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingVertical: 10, borderTopWidth: 1, marginTop: 8 },
   statusPill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, marginTop: 4 },
+  dlIconBtn: { width: 32, height: 32, borderRadius: 10, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', marginLeft: 8 },
   modal: { flex: 1 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingBottom: 16 },
   modalTitle: { fontSize: 18, fontWeight: '800' },

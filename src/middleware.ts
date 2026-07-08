@@ -10,6 +10,10 @@ const publicPaths = [
   '/login',
   '/api/auth/login',
   '/proposal/view',
+  '/invoice/view',               // Public "view invoice" page (Invoice.shareToken)
+  '/api/invoices/view',          // ...its data API
+  '/receipt/view',               // Public "view payment receipt" page (Payment.receiptToken)
+  '/api/receipts/view',          // ...its data API
   '/client-portal',              // Client portal page + login form
   '/api/client-portal/login',    // Client login endpoint
   '/api/client-portal/logout',   // Client logout endpoint
@@ -73,8 +77,16 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next()  // Actual verification happens in the route handler via getClientSession
   }
 
-  // Everything else requires employee auth-token
-  const token = req.cookies.get('auth-token')?.value
+  // Everything else requires employee auth-token — accepted either as the
+  // web session cookie, or as a Bearer header (mobile app calling a
+  // non-/api/mobile employee endpoint directly, e.g. share-link generators).
+  let token = req.cookies.get('auth-token')?.value
+  if (!token) {
+    const authHeader = req.headers.get('authorization') || req.headers.get('Authorization')
+    if (authHeader?.startsWith('Bearer ')) {
+      token = authHeader.slice(7).trim()
+    }
+  }
 
   if (!token) {
     if (pathname.startsWith('/api/')) {
