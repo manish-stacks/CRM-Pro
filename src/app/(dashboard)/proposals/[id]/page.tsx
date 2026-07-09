@@ -59,7 +59,7 @@ export default function ProposalDetailPage() {
   }
 
   const copyShareLink = () => {
-    const url = `${window.location.origin}/proposal/view/${proposal.shareToken}`
+    const url = `${window.location.origin}/api/proposals/view/${proposal.shareToken}/pdf`
     navigator.clipboard.writeText(url)
     toast.success('Share link copied')
   }
@@ -105,7 +105,7 @@ export default function ProposalDetailPage() {
           <button onClick={copyShareLink} className="btn-secondary btn-sm" title="Copy share link">
             <Copy size={13} /> Share Link
           </button>
-          <a href={`/proposal/view/${proposal.shareToken}`} target="_blank" className="btn-secondary btn-sm">
+          <a href={`/api/proposals/view/${proposal.shareToken}/pdf`} target="_blank" className="btn-secondary btn-sm">
             <ExternalLink size={13} /> Preview
           </a>
         </div>

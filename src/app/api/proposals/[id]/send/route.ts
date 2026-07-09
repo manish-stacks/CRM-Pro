@@ -29,7 +29,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const recipientEmail = proposal.client?.email || proposal.lead?.clientEmail
   const recipientPhone = proposal.client?.phone || proposal.lead?.clientPhone
 
-  const shareUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/proposal/view/${proposal.shareToken}`
+  const shareUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/proposals/view/${proposal.shareToken}/pdf`
 
   let emailSent = false, whatsappSent = false
 
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       <p>Please find your proposal <b>${proposal.proposalNumber}</b> for review.</p>
       <p><b>Total Amount:</b> ₹${proposal.finalAmount.toLocaleString('en-IN')}</p>
       ${customMessage ? `<p>${customMessage}</p>` : ''}
-      <p>You can view the full proposal and accept/reject it using the link below:</p>
+      <p>You can view the full proposal using the link below:</p>
     `
     const r = await sendMail({
       to: recipientEmail,

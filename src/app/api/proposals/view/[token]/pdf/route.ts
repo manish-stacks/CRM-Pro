@@ -1,22 +1,19 @@
-// src/app/api/proposals/[id]/pdf/route.ts
-// Real server-rendered PDF (Puppeteer) with the company letterhead
-// header/footer repeating on every page — same pattern as the letters
-// module. Session-protected (admin dashboard). For the public share-link
-// view, see /api/proposals/view/[token]/pdf.
+// src/app/api/proposals/view/[token]/pdf/route.ts
+// Public "view proposal PDF" endpoint — mirrors /api/proposals/[id]/pdf but
+// authenticated by the unguessable shareToken instead of a session, exactly
+// like /api/proposals/view/[token] (the JSON version used by the client
+// portal page). Returns a real server-rendered PDF (Puppeteer) with the
+// company letterhead header/footer repeating on every page.
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { getRequestSession } from '@/lib/auth'
-import { Settings } from '@/lib/settings'
 import { buildProposalBody, CompanyInfo } from '@/lib/businessPdf'
 import { renderBusinessPdf } from '@/lib/pdfRenderer'
 
-export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const session = await getRequestSession(req)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+export async function GET(req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
+  const { token } = await params
 
-  const p = await prisma.proposal.findUnique({
-    where: { id: id },
+  const p = await prisma.proposal.findFirst({
+    where: { shareToken: token },
     include: { client: true, lead: true, items: true, createdBy: { select: { name: true } } },
   })
   if (!p) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -27,24 +24,23 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     ? { name: p.lead.companyName || p.lead.clientName, contact: p.lead.clientName, phone: p.lead.clientPhone || undefined, email: p.lead.clientEmail || undefined }
     : { name: '—', contact: '—' }
 
-  const [companyName, companyAddress, companyPhone, companyEmail] = await Promise.all([
-    Settings.companyName(),
-    Settings.companyAddress(),
-    Settings.companyPhone(),
-    Settings.companyEmail(),
-  ])
+  const settings = await prisma.setting.findMany({
+    where: { key: { in: ['company_name', 'company_email', 'company_phone', 'company_address'] } },
+  })
+  const settingsMap: Record<string, string> = {}
+  settings.forEach((s: { key: string; value: string }) => { settingsMap[s.key] = s.value })
 
   const company: CompanyInfo = {
-    companyName: companyName || 'Hover Business Services LLP',
-    companyAddress: companyAddress || undefined,
-    companyPhone: companyPhone || undefined,
-    companyEmail: companyEmail || undefined,
+    companyName: settingsMap.company_name || 'Hover Business Services LLP',
+    companyAddress: settingsMap.company_address || undefined,
+    companyPhone: settingsMap.company_phone || undefined,
+    companyEmail: settingsMap.company_email || undefined,
   }
 
   const bodyHtml = buildProposalBody({
     proposalNumber: p.proposalNumber,
     title: p.title,
-    status: p.status,
+    status: p.status === 'SENT' ? 'VIEWED' : p.status,
     createdAt: p.createdAt,
     validUntil: p.validUntil,
     subtotal: p.subtotal,

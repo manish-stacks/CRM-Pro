@@ -174,12 +174,12 @@ export function CelebrationWidget() {
                   </div>
                 ))}
               </div>
-              <button
+              {/* <button
                 onClick={() => { setShowPopup(false); setDismissed(true) }}
                 className="mt-5 w-full py-2.5 rounded-lg bg-gradient-to-r from-pink-500 to-purple-500 text-white font-semibold hover:opacity-95"
               >
                 Sent Wishes! 💌
-              </button>
+              </button> */}
             </div>
           </div>
         </div>

@@ -9,7 +9,6 @@ import {
   ArrowLeft, Send, Loader2, DollarSign, Plus, CreditCard, Building2, Check, AlertCircle, Download
 } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { downloadInvoicePdf } from '@/lib/invoicePdf'
 
 const METHODS = ['UPI', 'CASH', 'BANK_TRANSFER', 'CHEQUE', 'CARD', 'ONLINE_GATEWAY']
 
@@ -84,26 +83,11 @@ export default function InvoiceDetailPage() {
     setModal('pay')
   }
 
-  const downloadPdf = async () => {
-    try {
-      // Fetch settings for company info (optional)
-      let company = {}
-      try {
-        const r = await api.get('/settings')
-        const g = r.data.data?.grouped || {}
-        company = {
-          name: g.company?.company_name || 'Hover Business Services',
-          address: g.company?.company_address,
-          phone: g.company?.company_phone,
-          email: g.company?.company_email,
-          gstNo: g.company?.company_gst,
-        }
-      } catch { }
-      downloadInvoicePdf(invoice, company)
-      toast.success('PDF downloaded')
-    } catch (e: any) {
-      toast.error('Failed to generate PDF')
-    }
+  const downloadPdf = () => {
+    // Real server-rendered PDF (with company letterhead header/footer on
+    // every page) opens directly in the browser's PDF viewer — same "view
+    // first, download after" flow as letters/payments/payroll.
+    window.open(`/api/invoices/${id}/pdf`, '_blank')
   }
 
   if (loading) return <div className="p-12 text-center"><Loader2 className="animate-spin mx-auto text-gray-400" /></div>

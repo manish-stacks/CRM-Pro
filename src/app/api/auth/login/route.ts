@@ -2,11 +2,21 @@
 // Phase 2: login now records LoginActivity (device/IP/browser/geo)
 // Returns loginActivityId which the client stores in a cookie
 // so logout can close the activity record.
+//
+// Admin 2FA: ADMIN / SUPER_ADMIN accounts don't get a session from this
+// route directly — after the password checks out, an OTP is emailed and
+// the client must call /api/auth/verify-login-otp with that code before a
+// session is issued. This way a leaked/guessed password alone can never
+// unlock admin data — the inbox on file has to be compromised too.
 import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/prisma'
-import { signToken } from '@/lib/auth'
 import { logLogin } from '@/lib/audit'
+import { completeLogin } from '@/lib/loginSession'
+import { generateOtp, hashOtp, OTP_TTL_MS } from '@/lib/otp'
+import { sendMail, wrapEmailHtml } from '@/lib/mailer'
+
+const ADMIN_ROLES = ['ADMIN', 'SUPER_ADMIN']
 
 export async function POST(req: NextRequest) {
   try {
@@ -43,55 +53,45 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 })
     }
 
-    // Success — log activity + track lastLoginAt
-    const loginActivityId = await logLogin({
-      userId: user.id,
-      status: 'SUCCESS',
-      req,
-      latitude,
-      longitude,
-      location,
-    })
+    // Password is correct. Admin roles need a second factor before a
+    // session is issued — email an OTP and stop here.
+    if (ADMIN_ROLES.includes(user.role)) {
+      if (!user.email) {
+        return NextResponse.json(
+          { error: 'No email on file to send the login code to. Contact a super admin.' },
+          { status: 400 }
+        )
+      }
 
-    const token = await signToken({
-      userId: user.id,
-      email: user.email,
-      role: user.role,
-      name: user.name,
-    })
-
-    const response = NextResponse.json({
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        avatar: user.avatar,
-        phone: user.phone,
-        employee: user.employee,
-      },
-    })
-
-    response.cookies.set('auth-token', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 60 * 60 * 24 * 7,
-      path: '/',
-    })
-
-    if (loginActivityId) {
-      // Non-httpOnly so the logout endpoint can read it, but sameSite=lax + no js access to auth-token
-      response.cookies.set('login-activity-id', loginActivityId, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 60 * 60 * 24 * 7,
-        path: '/',
+      const otp = generateOtp()
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          loginOtp: await hashOtp(otp),
+          loginOtpExpiry: new Date(Date.now() + OTP_TTL_MS),
+          loginOtpAttempts: 0,
+        },
       })
+
+      sendMail({
+        to: user.email,
+        subject: 'Your admin login code',
+        html: wrapEmailHtml(
+          'Admin Login Verification',
+          `<p>Hi ${user.name},</p>
+           <p>Someone is signing in to your admin account. Use this code to complete sign-in:</p>
+           <p style="font-size:30px;font-weight:800;letter-spacing:8px;color:#0f172a;">${otp}</p>
+           <p>This code is valid for 10 minutes. If this wasn't you, change your password immediately and contact a super admin.</p>`
+        ),
+        referenceType: 'USER',
+        referenceId: user.id,
+      }).catch(() => {})
+
+      return NextResponse.json({ requiresOtp: true, email: user.email })
     }
 
-    return response
+    // Non-admin roles: unchanged, immediate session.
+    return completeLogin(user, req, { latitude, longitude, location })
   } catch (error) {
     console.error('Login error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

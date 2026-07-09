@@ -1,9 +1,13 @@
 // src/app/api/payroll/[id]/pdf/route.ts
+// Real server-rendered PDF (Puppeteer) with the company letterhead
+// header/footer repeating on every page — same pattern as the letters
+// module. Replaces the old approach of returning raw HTML.
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getRequestSession } from '@/lib/auth'
-import { generatePayslipHTML } from '@/lib/pdf'
 import { Settings } from '@/lib/settings'
+import { buildPayslipBody, CompanyInfo } from '@/lib/businessPdf'
+import { renderBusinessPdf } from '@/lib/pdfRenderer'
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -27,13 +31,21 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December']
 
-    const [companyName, companyAddress, companyLogoUrl] = await Promise.all([
+    const [companyName, companyAddress, companyPhone, companyEmail] = await Promise.all([
       Settings.companyName(),
       Settings.companyAddress(),
-      Settings.companyLogo(),
+      Settings.companyPhone(),
+      Settings.companyEmail(),
     ])
 
-    const html = generatePayslipHTML({
+    const company: CompanyInfo = {
+      companyName: companyName || 'Hover Business Services LLP',
+      companyAddress: companyAddress || undefined,
+      companyPhone: companyPhone || undefined,
+      companyEmail: companyEmail || undefined,
+    }
+
+    const bodyHtml = buildPayslipBody({
       month: MONTH_NAMES[payslip.month - 1] || String(payslip.month),
       year: payslip.year,
       paidDays: Math.round((payslip.workingDays || 0) - (payslip.lopDays || 0)),
@@ -65,15 +77,25 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       grossEarnings: payslip.grossSalary + payslip.otherEarnings,
       totalDeduction: payslip.totalDeduct + payslip.otherDeduct,
       netSalary: payslip.netSalary,
-      companyName: companyName || 'Company',
-      companyAddress: companyAddress || undefined,
-      companyLogoUrl: companyLogoUrl || undefined,
+      company,
     })
 
-    return new NextResponse(html, {
+    let pdfBuffer: Buffer
+    try {
+      pdfBuffer = await renderBusinessPdf(bodyHtml, `Payslip ${MONTH_NAMES[payslip.month - 1]} ${payslip.year}`)
+    } catch (err) {
+      console.error('Payslip PDF render failed:', err)
+      return NextResponse.json({ error: 'Failed to generate PDF' }, { status: 500 })
+    }
+
+    const safeName = (payslip.employee.user.name || 'employee').replace(/[^a-zA-Z0-9]+/g, '-')
+    const fileName = `Payslip-${safeName}-${payslip.month}-${payslip.year}.pdf`
+
+    return new NextResponse(pdfBuffer as unknown as BodyInit, {
       headers: {
-        'Content-Type': 'text/html',
-        'Content-Disposition': `inline; filename="payslip-${payslip.id}.html"`,
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `inline; filename="${fileName}"`,
+        'Cache-Control': 'no-store',
       },
     })
   } catch (error) {

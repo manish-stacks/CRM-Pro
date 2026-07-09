@@ -23,7 +23,8 @@ export interface AuthUser {
 interface AuthContextType {
   user: AuthUser | null
   loading: boolean
-  login: (email: string, password: string) => Promise<boolean>
+  login: (email: string, password: string) => Promise<{ success: boolean; requiresOtp?: boolean; email?: string }>
+  verifyLoginOtp: (email: string, otp: string) => Promise<boolean>
   logout: () => Promise<void>
   refreshUser: () => Promise<void>
   hasRole: (...roles: string[]) => boolean
@@ -62,7 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     fetchUser()
   }, [fetchUser])
 
-  const login = async (email: string, password: string): Promise<boolean> => {
+  const login = async (email: string, password: string) => {
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
@@ -72,6 +73,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const data = await res.json()
       if (!res.ok) {
         toast.error(data.error || 'Login failed')
+        return { success: false }
+      }
+      if (data.requiresOtp) {
+        toast.success(`Verification code sent to ${data.email}`)
+        return { success: false, requiresOtp: true, email: data.email }
+      }
+      setUser(data.user)
+      toast.success(`Welcome back, ${data.user.name}!`)
+      return { success: true }
+    } catch {
+      toast.error('Network error')
+      return { success: false }
+    }
+  }
+
+  const verifyLoginOtp = async (email: string, otp: string): Promise<boolean> => {
+    try {
+      const res = await fetch('/api/auth/verify-login-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, otp }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        toast.error(data.error || 'Verification failed')
         return false
       }
       setUser(data.user)
@@ -99,7 +125,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, refreshUser, hasRole, isAtLeast }}>
+    <AuthContext.Provider value={{ user, loading, login, verifyLoginOtp, logout, refreshUser, hasRole, isAtLeast }}>
       {children}
     </AuthContext.Provider>
   )

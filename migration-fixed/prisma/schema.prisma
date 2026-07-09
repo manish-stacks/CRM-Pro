@@ -32,6 +32,17 @@ model User {
   disabledReason   String?
   lastLoginAt      DateTime?
   expoPushToken    String?   // mobile push (Expo/FCM)
+
+  // Password-reset OTP (staff forgot-password flow)
+  resetOtp         String?   // Hashed OTP
+  resetOtpExpiry   DateTime?
+  resetOtpAttempts Int       @default(0)
+
+  // Login OTP — 2FA required for ADMIN/SUPER_ADMIN on every login
+  loginOtp         String?   // Hashed OTP
+  loginOtpExpiry   DateTime?
+  loginOtpAttempts Int       @default(0)
+
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -66,6 +77,7 @@ model User {
   projectMemberships     ProjectAssignment[]  @relation("ProjectMember")
   locationPings          LocationPing[]       @relation("UserLocationPings")
   clientVisits           ClientVisit[]        @relation("UserClientVisits")
+  lettersGenerated       Letter[]             @relation("LetterGeneratedBy")
 
   @@index([email])
   @@index([role])
@@ -207,10 +219,31 @@ model Employee {
   leaves            Leave[]
   payslips          Payslip[]
   leaveBalance      LeaveBalance?
+  letters           Letter[]
 
   @@index([employeeId])
   @@index([departmentId])
   @@map("employees")
+}
+
+// HR Letters — Offer Letter, Salary Revision Letter, Relieving & Experience Letter.
+// Only ADMIN/SUPER_ADMIN can generate these. `data` stores the exact snapshot of
+// values (employee + admin-entered fields) used to render the letter, so re-prints
+// stay identical even if the employee's record changes later.
+model Letter {
+  id            String   @id @default(cuid())
+  employeeId    String
+  type          String   // OFFER, SALARY_REVISION, RELIEVING_EXPERIENCE
+  data          String   @db.Text // JSON snapshot of fields used to render the letter
+  generatedById String
+  createdAt     DateTime @default(now())
+
+  employee      Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  generatedBy   User     @relation("LetterGeneratedBy", fields: [generatedById], references: [id])
+
+  @@index([employeeId])
+  @@index([type])
+  @@map("letters")
 }
 
 model Attendance {
@@ -601,6 +634,11 @@ model Client {
   portalPasswordSet    Boolean         @default(false)
   lastPortalLoginAt    DateTime?
 
+  // Password-reset OTP (forgot-password flow)
+  resetOtp             String?         // Hashed OTP
+  resetOtpExpiry       DateTime?
+  resetOtpAttempts     Int             @default(0)
+
   // Assignments
   telecallerId         String?         // TELECALLER responsible
   marketingPersonId    String?         // MARKETING_EXECUTIVE who onboarded
@@ -741,6 +779,7 @@ model Invoice {
   notes         String?       @db.Text
   terms         String?       @db.Text
   paymentLink   String?       // Online payment URL (optional)
+  shareToken    String?       @unique // Public "view invoice" link token (like Proposal.shareToken)
   whatsappSentAt DateTime?
   emailSentAt   DateTime?
   createdAt     DateTime      @default(now())
@@ -783,6 +822,7 @@ model Payment {
   source      String   @default("MANUAL") // MANUAL, CLIENT_PORTAL, GATEWAY
   gatewayName String?  // Razorpay, PhonePe, etc
   gatewayRef  String?
+  receiptToken String? @unique // Public "view receipt" link token (like Invoice.shareToken)
   createdAt   DateTime @default(now())
 
   invoice     Invoice  @relation(fields: [invoiceId], references: [id])

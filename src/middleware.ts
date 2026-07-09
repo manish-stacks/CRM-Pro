@@ -9,9 +9,9 @@ import { verifyToken } from './lib/auth'
 const publicPaths = [
   '/login',
   '/api/auth/login',
-  '/proposal/view',
-  '/invoice/view',               // Public "view invoice" page (Invoice.shareToken)
-  '/api/invoices/view',          // ...its data API
+  '/api/auth/verify-login-otp',  // Step 2 of admin login (2FA) — no session exists yet
+  '/api/proposals/view',         // Public "view proposal" PDF (Proposal.shareToken) + its data API — replaces the old /proposal/view HTML page
+  '/api/invoices/view',          // Public "view invoice" PDF (Invoice.shareToken) + its data API — replaces the old /invoice/view HTML page
   '/receipt/view',               // Public "view payment receipt" page (Payment.receiptToken)
   '/api/receipts/view',          // ...its data API
   '/client-portal',              // Client portal page + login form

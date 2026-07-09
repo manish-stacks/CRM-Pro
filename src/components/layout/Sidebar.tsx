@@ -26,6 +26,7 @@ const NAV: NavItem[] = [
       { label: 'Attendance', href: '/attendance', icon: Clock },
       { label: 'Leaves', href: '/leaves', icon: Calendar },
       { label: 'Payroll', href: '/payroll', icon: DollarSign },
+      { label: 'Letters', href: '/letters', icon: FileText, roles: ['SUPER_ADMIN', 'ADMIN'] },
       { label: 'Departments', href: '/departments', icon: Building2, roles: ['SUPER_ADMIN', 'ADMIN'] },
     ]
   },

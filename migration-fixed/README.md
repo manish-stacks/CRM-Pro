@@ -61,6 +61,14 @@ npm run migrate:leaves
 npm run migrate:all
 ```
 
+Remove-Item -Recurse -Force .data
+npm run seed
+npm run migrate:users
+npm run migrate:clients
+npm run migrate:leads
+npm run migrate:attendance
+npm run migrate:leaves
+
 ## Schema update note (SEO dept merge)
 
 Naya schema update hua hai:

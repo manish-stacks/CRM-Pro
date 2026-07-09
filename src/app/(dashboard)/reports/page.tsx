@@ -163,7 +163,7 @@ export default function ReportsPage() {
       <div className="card p-6">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h2 className="text-lg font-display font-semibold text-slate-100">Revenue Overview</h2>
+            <h2 className="text-lg font-display font-semibold text-slate-700">Revenue Overview</h2>
             <p className="text-sm text-slate-500">Monthly revenue trend</p>
           </div>
           <Button variant="ghost" size="sm" onClick={exportRevenue}>
@@ -192,7 +192,7 @@ export default function ReportsPage() {
         <div className="card p-6">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-base font-display font-semibold text-slate-100">Lead Pipeline</h2>
+              <h2 className="text-base font-display font-semibold text-slate-700">Lead Pipeline</h2>
               <p className="text-xs text-slate-500">Leads by status</p>
             </div>
             <Button variant="ghost" size="sm" onClick={exportLeads}><Download size={14} /></Button>
@@ -215,7 +215,7 @@ export default function ReportsPage() {
         {/* Lead Sources */}
         <div className="card p-6">
           <div className="mb-4">
-            <h2 className="text-base font-display font-semibold text-slate-100">Lead Sources</h2>
+            <h2 className="text-base font-display font-semibold text-slate-700">Lead Sources</h2>
             <p className="text-xs text-slate-500">Where leads come from</p>
           </div>
           <div className="flex items-center gap-6">
@@ -236,7 +236,7 @@ export default function ReportsPage() {
         {/* Attendance Summary */}
         <div className="card p-6">
           <div className="mb-4">
-            <h2 className="text-base font-display font-semibold text-slate-100">Attendance Summary</h2>
+            <h2 className="text-base font-display font-semibold text-slate-700">Attendance Summary</h2>
             <p className="text-xs text-slate-500">Overall attendance distribution</p>
           </div>
           <ResponsiveContainer width="100%" height={220}>
@@ -254,7 +254,7 @@ export default function ReportsPage() {
 
         {/* Summary Table */}
         <div className="card p-6">
-          <h2 className="text-base font-display font-semibold text-slate-100 mb-4">Performance Summary</h2>
+          <h2 className="text-base font-display font-semibold text-slate-700 mb-4">Performance Summary</h2>
           <div className="space-y-3">
             {[
               { label: 'Total Clients', value: data?.totals?.totalClients || 0, unit: 'clients' },
@@ -264,8 +264,8 @@ export default function ReportsPage() {
               { label: 'Active Employees', value: data?.totals?.totalEmployees || 0, unit: 'employees' },
             ].map(item => (
               <div key={item.label} className="flex items-center justify-between py-2 border-b border-slate-800">
-                <span className="text-sm text-slate-400">{item.label}</span>
-                <span className="font-display font-bold text-slate-100">
+                <span className="text-sm text-slate-500">{item.label}</span>
+                <span className="font-display font-bold text-slate-600">
                   {item.value} <span className="font-normal text-xs text-slate-500">{item.unit}</span>
                 </span>
               </div>

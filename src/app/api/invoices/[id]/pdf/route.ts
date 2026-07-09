@@ -1,7 +1,7 @@
-// src/app/api/payments/[id]/pdf/route.ts
+// src/app/api/invoices/[id]/pdf/route.ts
 // Real server-rendered PDF (Puppeteer) with the company letterhead
 // header/footer repeating on every page — same pattern as the letters
-// module. Replaces the old approach of returning raw HTML + window.print().
+// module. Used by the admin dashboard invoice detail page.
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getRequestSession } from '@/lib/auth'

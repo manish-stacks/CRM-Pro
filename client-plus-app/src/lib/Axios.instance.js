@@ -6,7 +6,7 @@ import * as Device from 'expo-device';
 // ── New HBS CRM (Next.js) base URL ──
 // Mobile endpoints live under /api/mobile/* and return { success, data, token }.
 // Update this to your deployed CRM domain.
-const BASE_URL = 'http://192.168.1.18:3000/api'//'https://crm.hoverbusinessservices.com/api';
+const BASE_URL = 'http://192.168.1.10:3000/api'//'https://crm.hoverbusinessservices.com/api';
 
 // React Native's default fetch/axios User-Agent doesn't look like a phone UA
 // to server-side UA parsers, so the CRM was logging every app punch-in as

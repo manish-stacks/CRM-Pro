@@ -96,7 +96,7 @@ export default function PaymentsPage() {
     fetchData()
   }
 
-  const downloadInvoice = (id: string) => window.open(`/api/payments/${id}/pdf`, '_blank')
+  const downloadInvoice = (id: string) => window.open(`/api/invoices/${id}/pdf`, '_blank')
 
   // Public, no-login "view invoice" / "view receipt" links (same links the
   // mobile app opens directly). Generated on first request, then reused.

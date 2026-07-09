@@ -1,39 +1,35 @@
-// src/app/api/payments/[id]/pdf/route.ts
-// Real server-rendered PDF (Puppeteer) with the company letterhead
-// header/footer repeating on every page — same pattern as the letters
-// module. Replaces the old approach of returning raw HTML + window.print().
+// src/app/api/invoices/view/[token]/pdf/route.ts
+// Public "view invoice PDF" endpoint — mirrors /api/proposals/view/[token]/pdf.
+// No session required; the unguessable shareToken IS the access control,
+// same as the existing /api/invoices/view/[token] JSON endpoint. This is
+// what the "Share Link" button now points to (replacing the old
+// /invoice/view/[token] HTML page, which just duplicated this PDF's design).
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { getRequestSession } from '@/lib/auth'
-import { Settings } from '@/lib/settings'
 import { buildInvoiceBody, CompanyInfo } from '@/lib/businessPdf'
 import { renderBusinessPdf } from '@/lib/pdfRenderer'
 
-export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const session = await getRequestSession(req)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+export async function GET(req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
+  const { token } = await params
 
-  const invoice = await prisma.invoice.findUnique({
-    where: { id: id },
+  const invoice = await prisma.invoice.findFirst({
+    where: { shareToken: token },
     include: { client: true, items: true, payments: { orderBy: { paidAt: 'desc' } } },
   })
   if (!invoice) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const [companyName, companyAddress, companyPhone, companyEmail, companyGst] = await Promise.all([
-    Settings.companyName(),
-    Settings.companyAddress(),
-    Settings.companyPhone(),
-    Settings.companyEmail(),
-    Settings.companyGst(),
-  ])
+  const settings = await prisma.setting.findMany({
+    where: { key: { in: ['company_name', 'company_email', 'company_phone', 'company_address', 'company_gst'] } },
+  })
+  const settingsMap: Record<string, string> = {}
+  settings.forEach((s: { key: string; value: string }) => { settingsMap[s.key] = s.value })
 
   const company: CompanyInfo = {
-    companyName: companyName || 'Hover Business Services LLP',
-    companyAddress: companyAddress || undefined,
-    companyPhone: companyPhone || undefined,
-    companyEmail: companyEmail || undefined,
-    companyGst: companyGst || undefined,
+    companyName: settingsMap.company_name || 'Hover Business Services LLP',
+    companyAddress: settingsMap.company_address || undefined,
+    companyPhone: settingsMap.company_phone || undefined,
+    companyEmail: settingsMap.company_email || undefined,
+    companyGst: settingsMap.company_gst || undefined,
   }
 
   const bodyHtml = buildInvoiceBody({

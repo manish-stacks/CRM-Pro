@@ -7,7 +7,7 @@ const phases = [
   '01-migrate-users.ts',
   '02-migrate-clients.ts',
   '03-migrate-leads.ts',
-  '04-migrate-attendance.ts',
+  // '04-migrate-attendance.ts',
   '05-migrate-leaves.ts',
 ]
 

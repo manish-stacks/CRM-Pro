@@ -1,9 +1,9 @@
 // src/app/api/invoices/[id]/share-link/route.ts
-// Returns a public, no-login-required "view invoice" link — same idea as
-// Proposal.shareToken (/proposal/view/[token]). Generates the token the
-// first time it's requested, then reuses it. Usable by the web dashboard
-// (window.open) and the mobile app (Linking.openURL) alike, since the
-// destination page itself requires no session.
+// Returns a public, no-login-required "view invoice" PDF link
+// (/api/invoices/view/[token]/pdf). Generates the token the first time it's
+// requested, then reuses it. Usable by the web dashboard (window.open) and
+// the mobile app (Linking.openURL) alike, since the destination itself
+// requires no session — only the unguessable token.
 import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/auth'
@@ -29,7 +29,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const base = new URL(req.url).origin
     return successResponse({
       token: invoice.shareToken,
-      url: `${base}/invoice/view/${invoice.shareToken}`,
+      url: `${base}/api/invoices/view/${invoice.shareToken}/pdf`,
     })
   } catch (e: any) {
     console.error('Invoice share-link error:', e)
