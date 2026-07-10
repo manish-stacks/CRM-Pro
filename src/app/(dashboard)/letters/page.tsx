@@ -178,7 +178,7 @@ export default function LettersPage() {
   const employeeOptions = [{ value: '', label: 'Select employee...' }, ...employees.map(e => ({ value: e.id, label: `${e.user?.name} (${e.employeeId})` }))]
 
   return (
-    <div>
+    <div className="space-y-4">
       <div className="page-header">
         <div>
           <h1 className="page-title">HR Letters</h1>

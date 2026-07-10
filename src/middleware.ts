@@ -14,6 +14,8 @@ const publicPaths = [
   '/api/invoices/view',          // Public "view invoice" PDF (Invoice.shareToken) + its data API — replaces the old /invoice/view HTML page
   '/receipt/view',               // Public "view payment receipt" page (Payment.receiptToken)
   '/api/receipts/view',          // ...its data API
+  '/id-verify',                  // Public "verify employee ID card" page (QR code on the printed card)
+  '/api/id-verify',              // ...its data API
   '/client-portal',              // Client portal page + login form
   '/api/client-portal/login',    // Client login endpoint
   '/api/client-portal/logout',   // Client logout endpoint

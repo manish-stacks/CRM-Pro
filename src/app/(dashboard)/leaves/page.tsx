@@ -5,7 +5,8 @@ import api from '@/lib/axios'
 import { Button, Input, Select, Textarea, Modal, EmptyState, Pagination, Badge } from '@/components/ui'
 import { formatDate, getInitials } from '@/lib/utils'
 import {
-  Plus, Calendar, Filter, X, Check, Ban, Clock, CalendarDays, Loader2, Search
+  Plus, Calendar, Filter, X, Check, Ban, Clock, CalendarDays, Loader2, Search,
+  Eye
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -63,7 +64,7 @@ export default function LeavesPage() {
 
   useEffect(() => { fetchLeaves() }, [fetchLeaves])
   useEffect(() => {
-    api.get('/leaves/balance').then(r => setBalance(r.data.data)).catch(() => {})
+    api.get('/leaves/balance').then(r => setBalance(r.data.data)).catch(() => { })
   }, [])
   useEffect(() => {
     if (isAtLeast('ADMIN')) {
@@ -290,14 +291,20 @@ export default function LeavesPage() {
                   </td>
                   {canApprove && (
                     <td className="text-right">
-                      {l.status === 'PENDING' ? (
-                        <div className="flex items-center justify-end gap-1">
-                          <button onClick={() => approve(l)} className="btn-ghost btn-sm text-green-600" title="Approve"><Check size={13} /></button>
-                          <button onClick={() => openReject(l)} className="btn-ghost btn-sm text-red-600" title="Reject"><Ban size={13} /></button>
-                        </div>
-                      ) : (
-                        <span className="text-xs text-gray-400">Done</span>
-                      )}
+                      <div className="flex items-center justify-end">
+                        {l.status === 'PENDING' ?
+                          (
+                            <>
+                              <button onClick={() => approve(l)} className="btn-ghost btn-sm text-green-600" title="Approve"><Check size={13} /></button>
+                              <button onClick={() => openReject(l)} className="btn-ghost btn-sm text-red-600" title="Reject"><Ban size={13} /></button>
+                            </>
+                          ) : (
+                            <span className="text-xs text-gray-400">Done</span>
+                          )}
+                        <button onClick={() => setReasonModal(l)} className="btn-ghost btn-sm text-gray-600 ml-2" title="View reason">
+                          <Eye size={13} />
+                        </button>
+                      </div>
                     </td>
                   )}
                 </tr>

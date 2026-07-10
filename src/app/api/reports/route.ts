@@ -53,12 +53,19 @@ export async function GET(req: NextRequest) {
         .sort((a, b) => a.daysUntil - b.daysUntil)
         .slice(0, 10)
 
+      let pendingLeavesWhere: any = { status: 'PENDING' }
+      if (session.role === 'MANAGER') {
+        const { getTeamScope } = await import('@/lib/teamScope')
+        const scope = await getTeamScope(session.userId)
+        pendingLeavesWhere.employeeId = { in: scope.visibleIds.length ? scope.visibleIds : ['__none__'] }
+      }
+
       const [totalEmployees, totalLeads, totalClients, totalProposals, pendingLeaves, monthRevenue] = await Promise.all([
         prisma.employee.count({ where: { user: { isActive: true } } }),
         prisma.lead.count(),
         prisma.client.count(),
         prisma.proposal.count(),
-        prisma.leave.count({ where: { status: 'PENDING' } }),
+        prisma.leave.count({ where: pendingLeavesWhere }),
         prisma.payment.aggregate({ _sum: { amount: true }, where: { paidAt: { gte: monthStart } } }),
       ])
 

@@ -120,14 +120,16 @@ export default function EmployeesPage() {
     try {
       const r = await api.get(`/employees/${e.id}`)
       const emp = r.data.data
-      generateIdCard({
+      await generateIdCard({
         employeeId: emp.employeeId,
         name: emp.user?.name || e.user?.name,
         department: emp.department?.name,
         position: emp.position,
         bloodGroup: emp.bloodGroup,
         phone: emp.user?.phone,
+        email: emp.user?.email,
         joiningDate: emp.joiningDate,
+        avatarUrl: emp.user?.avatar,
         avatarInitials: getInitials(emp.user?.name || e.user?.name || 'NA'),
       }, company)
     } catch {

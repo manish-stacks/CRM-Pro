@@ -6,6 +6,7 @@ import { requireAuth } from '@/lib/auth'
 import { successResponse, successStatusResponse, errorResponse, getPaginationParams } from '@/lib/api'
 import { logFromRequest } from '@/lib/audit'
 import { getTeamScope } from '@/lib/teamScope'
+import { sendMail, wrapEmailHtml } from '@/lib/mailer'
 
 const LEAVE_TYPES = ['PAID', 'UNPAID', 'SICK', 'CASUAL', 'MATERNITY', 'PATERNITY']
 const DURATIONS   = ['SINGLE_DAY', 'MULTIPLE_DAYS', 'SHORT_HOURLY']
@@ -164,6 +165,29 @@ export async function POST(req: NextRequest) {
       entityId: leave.id,
       metadata: { leaveType, duration, days },
     })
+
+    // Email admin/HR that a new leave request needs review (best-effort)
+    prisma.user.findMany({
+      where: { role: { in: ['SUPER_ADMIN', 'ADMIN'] }, isActive: true },
+      select: { email: true },
+    }).then(admins => {
+      const to = admins.map(a => a.email).filter(Boolean)
+      if (!to.length) return
+      const fmt = (d: Date) => new Date(d).toLocaleDateString('en-IN')
+      const dateRange = duration === 'SINGLE_DAY' ? fmt(start) : `${fmt(start)} to ${fmt(end)}`
+      return sendMail({
+        to,
+        subject: `New Leave Request - ${leave.employee.user.name}`,
+        html: wrapEmailHtml('New Leave Request', `
+          <p><b>${leave.employee.user.name}</b> has applied for leave and it is awaiting your approval.</p>
+          <p style="margin:4px 0;"><b>Type:</b> ${leaveType}</p>
+          <p style="margin:4px 0;"><b>Dates:</b> ${dateRange} (${days} day${days === 1 ? '' : 's'})</p>
+          <p style="margin:4px 0;"><b>Reason:</b> ${reason}</p>
+        `, 'Review Leave Request', `${process.env.NEXT_PUBLIC_APP_URL || ''}/leaves`),
+        referenceType: 'LEAVE',
+        referenceId: leave.id,
+      })
+    }).catch(() => {})
 
     return successStatusResponse(leave, 201)
   } catch (error) {

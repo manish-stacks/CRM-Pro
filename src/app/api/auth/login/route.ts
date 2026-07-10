@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
           loginOtpAttempts: 0,
         },
       })
-
+      console.log('Admin login OTP:', otp);
       sendMail({
         to: user.email,
         subject: 'Your admin login code',

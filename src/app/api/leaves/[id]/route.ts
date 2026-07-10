@@ -7,8 +7,10 @@ import { requireAuth } from '@/lib/auth'
 import { successResponse, errorResponse, notFoundResponse } from '@/lib/api'
 import { logFromRequest } from '@/lib/audit'
 import { sendWhatsapp } from '@/lib/whatsapp'
+import { sendMail, wrapEmailHtml } from '@/lib/mailer'
 import { Notifications } from '@/lib/notify'
 import { dateOnly } from '@/lib/attendanceDate'
+import { getTeamScope } from '@/lib/teamScope'
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -23,10 +25,17 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const leave = await prisma.leave.findUnique({
       where: { id },
       include: {
-        employee: { include: { user: { select: { name: true, phone: true } } } },
+        employee: { include: { user: { select: { name: true, phone: true, email: true } } } },
       },
     })
     if (!leave) return notFoundResponse('Leave')
+
+    // Managers (team leads) can only approve/reject leaves of their own team
+    // (dept they head + direct reports). Admins can act on anyone.
+    if (!['SUPER_ADMIN', 'ADMIN'].includes(session.role)) {
+      const scope = await getTeamScope(session.userId)
+      if (!scope.visibleIds.includes(leave.employeeId)) return errorResponse('Forbidden', 403)
+    }
 
     const newStatus = action === 'approve' ? 'APPROVED' : 'REJECTED'
 
@@ -68,6 +77,27 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         : `${fmt(leave.startDate)} to ${fmt(leave.endDate)}`
       if (action === 'approve') Notifications.leaveApproved(leave.employee.userId, nDateRange).catch(() => {})
       else Notifications.leaveRejected(leave.employee.userId, nDateRange, rejectionReason).catch(() => {})
+    }
+
+    // Email employee about the approval/rejection (best-effort)
+    if (leave.employee?.user.email) {
+      const fmt = (d: Date) => new Date(d).toLocaleDateString('en-IN')
+      const dateRange = leave.duration === 'SINGLE_DAY'
+        ? fmt(leave.startDate)
+        : `${fmt(leave.startDate)} to ${fmt(leave.endDate)}`
+      const approved = action === 'approve'
+      sendMail({
+        to: leave.employee.user.email,
+        subject: `Leave ${approved ? 'Approved' : 'Rejected'} - ${leave.leaveType}`,
+        html: wrapEmailHtml(`Leave ${approved ? 'Approved' : 'Rejected'}`, `
+          <p>Hi <b>${leave.employee.user.name}</b>,</p>
+          <p>Your <b>${leave.leaveType}</b> leave request for <b>${dateRange}</b> has been
+          <b style="color:${approved ? '#16a34a' : '#dc2626'}">${approved ? 'APPROVED' : 'REJECTED'}</b>.</p>
+          ${!approved && rejectionReason ? `<p style="margin:4px 0;"><b>Reason:</b> ${rejectionReason}</p>` : ''}
+        `),
+        referenceType: 'LEAVE',
+        referenceId: id,
+      }).catch(() => {})
     }
 
     // Mark attendance as LEAVE for full-day leaves only (not SHORT_HOURLY)

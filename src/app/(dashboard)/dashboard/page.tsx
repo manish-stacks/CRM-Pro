@@ -176,20 +176,20 @@ export default function DashboardPage() {
       )}
 
       {/* Stats grid */}
-      {loading ? (
+      {showBiz && (loading ? (
         <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
           {Array.from({ length: 6 }).map((_, i) => <div key={i} className="skeleton h-28 rounded-xl" />)}
         </div>
       ) : (
         <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
           <StatCard label="Employees" value={stats?.totalEmployees || 0} icon={Users} color="text-blue-600" />
-          {showBiz && <StatCard label="Leads" value={stats?.totalLeads || 0} icon={Target} color="text-purple-600" />}
+          <StatCard label="Leads" value={stats?.totalLeads || 0} icon={Target} color="text-purple-600" />
           <StatCard label="Clients" value={stats?.totalClients || 0} icon={UserCheck} color="text-green-600" />
           <StatCard label="Proposals" value={stats?.totalProposals || 0} icon={FileText} color="text-indigo-600" />
           <StatCard label="Pending Leaves" value={stats?.pendingLeaves || 0} icon={Clock} color="text-yellow-600" />
-          {showBiz && <StatCard label="Month Revenue" value={formatCurrency(stats?.monthRevenue || 0)} icon={DollarSign} color="text-emerald-600" />}
+          <StatCard label="Month Revenue" value={formatCurrency(stats?.monthRevenue || 0)} icon={DollarSign} color="text-emerald-600" />
         </div>
-      )}
+      ))}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Revenue chart */}

@@ -55,7 +55,7 @@ export default function EmployeeDetailPage() {
 
   useEffect(() => {
     api.get('/departments').then(r => setDepartments(r.data.data || [])).catch(() => {})
-    api.get('/employees?limit=500').then(r => setAllEmployees(r.data.data || [])).catch(() => {})
+    api.get('/employees?role=MANAGER&limit=200').then(r => setAllEmployees(r.data.data || [])).catch(() => {})
   }, [])
 
   const toInputDate = (d: any) => d ? new Date(d).toISOString().split('T')[0] : ''
@@ -165,6 +165,7 @@ export default function EmployeeDetailPage() {
               <InfoRow label="Role" value={emp.user.role.replace(/_/g,' ')} />
               <InfoRow label="Position" value={emp.position} />
               <InfoRow label="Department" value={emp.department?.name} />
+              <InfoRow label="Reports To (Team Lead)" value={emp.reportingTo?.user?.name} />
               <InfoRow label="Work Mode" value={emp.workMode} />
               <InfoRow label="Joining Date" value={emp.joiningDate ? formatDate(emp.joiningDate) : undefined} />
               <InfoRow label="Salary" value={emp.salary ? formatCurrency(emp.salary) : undefined} />
@@ -256,7 +257,7 @@ export default function EmployeeDetailPage() {
               <Input label="Phone" value={form.phone} onChange={e => setForm((p: any) => ({...p, phone: e.target.value}))} />
               <Input label="Alt Phone" value={form.altPhone} onChange={e => setForm((p: any) => ({...p, altPhone: e.target.value}))} />
               <Select label="Department" value={form.departmentId} onChange={e => setForm((p: any) => ({...p, departmentId: e.target.value}))} options={departments.map((d: any) => ({ value: d.id, label: d.name }))} />
-              <Select label="Reports To (Team Lead)" value={form.reportingToId} onChange={e => setForm((p: any) => ({...p, reportingToId: e.target.value}))} options={[{ value: '', label: '— None —' }, ...allEmployees.filter((e: any) => e.id !== emp.id).map((e: any) => ({ value: e.id, label: `${e.user?.name} · ${e.employeeId}${e.department?.name ? ` (${e.department.name})` : ''}` }))]} />
+              <Select label="Reports To (Team Lead)" value={form.reportingToId} onChange={e => setForm((p: any) => ({...p, reportingToId: e.target.value}))} options={[{ value: '', label: '— None —' }, ...allEmployees.filter((e: any) => e.id !== emp.id && e.user?.role === 'MANAGER').map((e: any) => ({ value: e.id, label: `${e.user?.name} · ${e.employeeId}${e.department?.name ? ` (${e.department.name})` : ''}` }))]} />
               <Input label="Position" value={form.position} onChange={e => setForm((p: any) => ({...p, position: e.target.value}))} />
               <Input label="Salary" type="number" value={form.salary} onChange={e => setForm((p: any) => ({...p, salary: e.target.value}))} />
               <Select label="Work Mode" value={form.workMode} onChange={e => setForm((p: any) => ({...p, workMode: e.target.value}))} options={WORK_MODES.map(w => ({ value: w, label: w }))} />

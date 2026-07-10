@@ -1,31 +1,11 @@
 // src/lib/pdfRenderer.ts
-// Server-side HTML -> PDF rendering via Puppeteer.
-//
-// Why this exists: the old approach relied on the *browser's* print dialog
-// (position:fixed header/footer images + @page margin CSS) to "Save as PDF".
-// That only works if the user leaves the dialog's margin/header settings
-// exactly as instructed — if they pick "Margins: None" (a very common click),
-// Chrome zeroes out the @page margin and page-2+ content slides straight
-// under the fixed header image.
-//
-// This renders an actual PDF on the server instead. Puppeteer's
-// `headerTemplate`/`footerTemplate` + `margin` are enforced by the PDF
-// engine itself, not by any setting the end user can change — so the
-// letterhead repeats correctly on every page with content always flowing
-// between them, no matter how the PDF is later opened or printed.
-
 import puppeteer, { Browser } from 'puppeteer'
 import fs from 'fs'
 import path from 'path'
+import sharp from 'sharp'
 
-// Header/footer image proportions (2480px wide source @ 300dpi = 210mm page width).
-// header.jpg is 2480x300 -> 25.4mm tall at 210mm width.
-// footer.jpg is 2480x338 -> 28.6mm tall at 210mm width.
-const HEADER_H_MM = 25.4
-const FOOTER_H_MM = 28.6
+const PAGE_W_MM = 210
 
-// Reuse a single browser instance across requests (launching Chromium per
-// request is slow and leaks memory under load).
 let browserPromise: Promise<Browser> | null = null
 function getBrowser(): Promise<Browser> {
   if (!browserPromise) {
@@ -33,25 +13,35 @@ function getBrowser(): Promise<Browser> {
       headless: true,
       args: ['--no-sandbox', '--disable-setuid-sandbox'],
     })
-    // If the browser process dies, drop the cached promise so the next
-    // call launches a fresh one instead of reusing a dead reference.
     browserPromise.then(b => b.on('disconnected', () => { browserPromise = null }))
   }
   return browserPromise
 }
 
-// Letterhead images are inlined as base64 data URIs. Puppeteer's
-// headerTemplate/footerTemplate render in an isolated context that can't
-// reliably load site-relative/network image URLs, so data URIs are the
-// safe way to guarantee they always show up.
-let letterheadCache: { header: string; footer: string } | null = null
-function getLetterheadImages(): { header: string; footer: string } {
+type Letterhead = { dataUri: string; heightMm: number }
+let letterheadCache: { header: Letterhead; footer: Letterhead } | null = null
+
+async function loadTrimmed(filePath: string): Promise<Letterhead> {
+  const raw = fs.readFileSync(filePath)
+  // trim() strips any uniform white/blank border baked into the source
+  // image itself — this removes white space that no CSS/margin change
+  // could touch, since it lives inside the JPG pixels.
+  const trimmed = await sharp(raw).trim().toBuffer({ resolveWithObject: true })
+  const { width, height } = trimmed.info
+  const heightMm = (height / width) * PAGE_W_MM
+  return {
+    dataUri: `data:image/jpeg;base64,${trimmed.data.toString('base64')}`,
+    heightMm,
+  }
+}
+
+async function getLetterheadImages() {
   if (!letterheadCache) {
     const headerPath = path.join(process.cwd(), 'public', 'letterhead', 'header.jpg')
     const footerPath = path.join(process.cwd(), 'public', 'letterhead', 'footer.jpg')
     letterheadCache = {
-      header: `data:image/jpeg;base64,${fs.readFileSync(headerPath).toString('base64')}`,
-      footer: `data:image/jpeg;base64,${fs.readFileSync(footerPath).toString('base64')}`,
+      header: await loadTrimmed(headerPath),
+      footer: await loadTrimmed(footerPath),
     }
   }
   return letterheadCache
@@ -74,9 +64,6 @@ const LETTER_BODY_STYLES = `
   .sig-block { margin-top: 46px; }
 `
 
-// Business documents (invoice, payment receipt, payslip, proposal) use a
-// tighter sans-serif, table-heavy layout instead of the letter's serif
-// prose style.
 const BUSINESS_BODY_STYLES = `
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
@@ -126,8 +113,6 @@ const BUSINESS_BODY_STYLES = `
 `
 
 interface RenderOptions {
-  /** true = use the company letterhead header/footer JPGs (letters).
-   *  false = plain page margins + a slim printed page-number footer only. */
   useLetterheadImages: boolean
 }
 
@@ -150,28 +135,29 @@ async function renderHtmlToPdf(bodyHtml: string, title: string, bodyStyles: stri
     await page.setContent(fullHtml, { waitUntil: 'networkidle0' })
 
     if (opts.useLetterheadImages) {
-      const { header, footer } = getLetterheadImages()
+      const { header, footer } = await getLetterheadImages()
       const pdf = await page.pdf({
         format: 'A4',
         printBackground: true,
         displayHeaderFooter: true,
-        // These margins are what reserve space for the header/footer images
-        // on EVERY page, enforced by Puppeteer's PDF engine — not by any
-        // dialog setting a user could uncheck.
         margin: {
-          top: `${HEADER_H_MM + 3}mm`,
-          bottom: `${FOOTER_H_MM + 3}mm`,
+          top: `${header.heightMm}mm`,
+          bottom: `${footer.heightMm}mm`,
           left: '0mm',
           right: '0mm',
         },
-        headerTemplate: `<div style="width:100%;margin:0;padding:0;"><img src="${header}" style="width:210mm;display:block;" /></div>`,
-        footerTemplate: `<div style="width:100%;margin:0;padding:0;"><img src="${footer}" style="width:210mm;display:block;" /></div>`,
+        headerTemplate: `
+          <div style="width:100%;height:100%;margin:0;padding:0;">
+            <img src="${header.dataUri}" style="display:block;width:100%;margin:0;padding:0;" />
+          </div>`,
+        footerTemplate: `
+          <div style="width:100%;height:100%;margin:0;padding:0;">
+            <img src="${footer.dataUri}" style="display:block;width:100%;height:100%;margin:0;padding:0;" />
+          </div>`,
       })
       return Buffer.from(pdf)
     }
 
-    // Plain document: no letterhead image, just clean page margins and a
-    // slim "Page X of Y" footer (Puppeteer's built-in template tokens).
     const pdf = await page.pdf({
       format: 'A4',
       printBackground: true,
@@ -186,23 +172,10 @@ async function renderHtmlToPdf(bodyHtml: string, title: string, bodyStyles: stri
   }
 }
 
-/**
- * Renders letter body HTML (just the inner content — no letterhead, no
- * print button) into a finished multi-page A4 PDF with the company
- * letterhead header/footer repeating on every page.
- */
 export async function renderLetterPdf(bodyHtml: string, title: string): Promise<Buffer> {
   return renderHtmlToPdf(bodyHtml, title, LETTER_BODY_STYLES, { useLetterheadImages: true })
 }
 
-/**
- * Same idea as renderLetterPdf but for business documents — invoices,
- * payment receipts, payslips, proposals. Different (sans-serif, table-based)
- * styling. Unlike letters, these do NOT use the letterhead header/footer
- * images — the document's own header block (company name/address/contact,
- * printed as text) already carries the branding, and the images looked out
- * of place on tightly-tabled documents. Just clean margins + page numbers.
- */
 export async function renderBusinessPdf(bodyHtml: string, title: string): Promise<Buffer> {
   return renderHtmlToPdf(bodyHtml, title, BUSINESS_BODY_STYLES, { useLetterheadImages: false })
 }

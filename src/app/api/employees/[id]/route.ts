@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma'
 import { requireAuth, getRequestSession } from '@/lib/auth'
 import { successResponse, errorResponse, notFoundResponse, unauthorizedResponse } from '@/lib/api'
 import { logFromRequest } from '@/lib/audit'
+import { getTeamScope } from '@/lib/teamScope'
 
 // Fields admin can update on User row
 const USER_ADMIN_FIELDS = new Set([
@@ -42,14 +43,20 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       department: true,
       managedDept: { select: { id: true, name: true } },
       leaveBalance: true,
+      reportingTo: { select: { id: true, employeeId: true, user: { select: { name: true } } } },
     },
   })
   if (!emp) return notFoundResponse('Employee')
 
-  // Non-admin can only see own
-  const canSeeOthers = ['SUPER_ADMIN', 'ADMIN', 'MANAGER'].includes(session.role)
-  if (!canSeeOthers && emp.userId !== session.userId) {
-    return errorResponse('Forbidden', 403)
+  // Admins see everyone. Managers (team leads) see themselves + their team
+  // (dept they head + direct reports). Everyone else can only see their own record.
+  if (!['SUPER_ADMIN', 'ADMIN'].includes(session.role)) {
+    if (session.role === 'MANAGER') {
+      const scope = await getTeamScope(session.userId)
+      if (!scope.visibleIds.includes(emp.id)) return errorResponse('Forbidden', 403)
+    } else if (emp.userId !== session.userId) {
+      return errorResponse('Forbidden', 403)
+    }
   }
 
   return successResponse(emp)
