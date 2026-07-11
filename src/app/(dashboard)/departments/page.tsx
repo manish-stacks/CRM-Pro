@@ -55,9 +55,10 @@ export default function DepartmentsPage() {
 
   useEffect(() => {
     if (canEdit) {
-      api.get('/employees?limit=200').then(r => setEmployees(r.data.data || [])).catch(() => { })
+      api.get('/employees?role=MANAGER&limit=200').then(r => setEmployees(r.data.data || [])).catch(() => { })
     }
   }, [canEdit])
+
 
   const openAdd = () => {
     setTarget(null)

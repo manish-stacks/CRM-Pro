@@ -178,7 +178,9 @@ export default function ClientPortalPage() {
           <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full bg-white/10 blur-2xl" />
           <div className="absolute -bottom-32 -left-20 w-96 h-96 rounded-full bg-indigo-400/20 blur-3xl" />
           <div className="relative">
-            <div className="w-12 h-12 rounded-2xl bg-white/15 backdrop-blur flex items-center justify-center font-bold text-lg">HBS</div>
+            <div className="w-40 h-auto bg-white backdrop-blur flex items-center justify-center p-1 rounded-sm">
+              <img src="https://hoverbusinessservices.com/images/hbs-logo.png" alt="HBS" className="w-full" />
+            </div>
           </div>
           <div className="relative space-y-4">
             <h2 className="text-4xl font-bold leading-tight">Your projects,<br />all in one place.</h2>

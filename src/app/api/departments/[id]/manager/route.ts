@@ -49,6 +49,31 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     },
   })
 
+  // Sab employees ko new manager assign karo
+  await prisma.employee.updateMany({
+    where: {
+      departmentId: id,
+      NOT: {
+        id: managerId,
+      },
+    },
+    data: {
+      reportingToId: managerId || null,
+    },
+  })
+
+  // Manager khud kisi ko report nahi karega
+  if (managerId) {
+    await prisma.employee.update({
+      where: {
+        id: managerId,
+      },
+      data: {
+        reportingToId: null,
+      },
+    })
+  }
+
   if (managerId) {
     await prisma.departmentManagerHistory.create({
       data: {
