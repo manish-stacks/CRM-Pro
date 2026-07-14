@@ -6,8 +6,8 @@ import { useRouter } from 'next/navigation'
 
 export default function LoginPage() {
   const { login, verifyLoginOtp } = useAuth()
-  const [email, setEmail] = useState('admin@hbs.com')
-  const [password, setPassword] = useState('123456')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [showPwd, setShowPwd] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -134,12 +134,7 @@ export default function LoginPage() {
                 </button>
               </form>
 
-              <div className="mt-6 pt-5 border-t border-gray-100">
-                <p className="text-xs text-gray-400 font-medium mb-2">Demo Credentials</p>
-                <div className="bg-gray-50 rounded-lg px-3 py-2 text-xs text-gray-600 font-mono">
-                  admin@hbs.com / 123456
-                </div>
-              </div>
+            
             </>
           ) : (
             <>
