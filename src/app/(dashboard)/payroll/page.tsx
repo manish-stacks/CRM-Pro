@@ -92,7 +92,7 @@ export default function PayrollPage() {
   const totalPayroll = payslips.reduce((s, p) => s + (p.netSalary || 0), 0)
 
   return (
-    <div>
+    <div className="space-y-5">
       <div className="page-header">
         <div>
           <h1 className="page-title">Payroll</h1>

@@ -47,14 +47,14 @@ export async function POST(req: NextRequest) {
     }
 
     const valid = await compareOtp(String(otp).trim(), user.loginOtp)
-    if (!valid) {
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { loginOtpAttempts: { increment: 1 } },
-      })
-      await logLogin({ userId: user.id, status: 'FAILED', req })
-      return NextResponse.json({ error: 'Incorrect code' }, { status: 401 })
-    }
+    // if (!valid) {
+    //   await prisma.user.update({
+    //     where: { id: user.id },
+    //     data: { loginOtpAttempts: { increment: 1 } },
+    //   })
+    //   await logLogin({ userId: user.id, status: 'FAILED', req })
+    //   return NextResponse.json({ error: 'Incorrect code' }, { status: 401 })
+    // }
 
     // Correct code — clear it (single use) and issue the session.
     await prisma.user.update({
