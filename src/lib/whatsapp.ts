@@ -27,6 +27,7 @@ export const WHATSAPP_TEMPLATES = {
   hbs_ticket_resolved:           ['ticketNumber', 'subject'] as const,
   hbs_client_report_uploaded:    ['clientName', 'reportTitle', 'downloadUrl'] as const,
   hbs_password_reset:            ['name', 'resetCode'] as const,
+  hbs_otp:                       ['code'] as const,
 } as const
 
 export type WhatsappTemplate = keyof typeof WHATSAPP_TEMPLATES

@@ -13,7 +13,7 @@ next-env.d.ts
 
 # Production
 /build
-
+/migration-fixed
 # Prisma
 prisma/migrations/dev.db*
 
