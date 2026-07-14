@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getClientSession } from '@/lib/clientAuth'
+import { generateTicketNumber } from '@/lib/idgen'
 
 export async function GET(req: NextRequest) {
   const session = await getClientSession(req)
@@ -23,7 +24,7 @@ export async function POST(req: NextRequest) {
   if (!systemUser) return NextResponse.json({ error: 'No admin found' }, { status: 500 })
 
   const ticket = await prisma.supportTicket.create({
-    data: { clientId: session.clientId, userId: systemUser.id, subject, description, priority: priority || 'MEDIUM', status: 'OPEN' },
+    data: { ticketNumber: await generateTicketNumber(), clientId: session.clientId, userId: systemUser.id, subject, description, priority: priority || 'MEDIUM', status: 'OPEN' },
   })
   return NextResponse.json({ data: ticket })
 }

@@ -17,6 +17,7 @@ export async function GET(req: NextRequest) {
   const status = searchParams.get('status')
   const employeeId = searchParams.get('employeeId')
   const departmentId = searchParams.get('departmentId')
+  const search = searchParams.get('search')?.trim()
 
   const where: any = {}
   if (month) where.month = parseInt(month)
@@ -49,6 +50,26 @@ export async function GET(req: NextRequest) {
   if (departmentId && ['SUPER_ADMIN', 'ADMIN'].includes(session.role)) {
     const deptEmps = await prisma.employee.findMany({ where: { departmentId }, select: { id: true } })
     where.employeeId = { in: deptEmps.map(e => e.id) }
+  }
+
+  if (search) {
+    const matches = await prisma.employee.findMany({
+      where: {
+        OR: [
+          { user: { name: { contains: search } } },
+          { employeeId: { contains: search } },
+        ],
+      },
+      select: { id: true },
+    })
+    const matchIds = matches.map(m => m.id)
+
+    const existing = where.employeeId
+    let existingIds: string[] | null = null
+    if (typeof existing === 'string') existingIds = [existing]
+    else if (existing?.in) existingIds = existing.in
+
+    where.employeeId = { in: existingIds ? existingIds.filter(id => matchIds.includes(id)) : matchIds }
   }
 
   const [payslips, total] = await Promise.all([

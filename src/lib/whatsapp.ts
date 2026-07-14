@@ -17,6 +17,7 @@ export const WHATSAPP_TEMPLATES = {
   hbs_invoice_generated:         ['clientName', 'invoiceNumber', 'amount', 'dueDate', 'payUrl'] as const,
   hbs_payment_received:          ['clientName', 'amount', 'invoiceNumber', 'paymentMethod'] as const,
   hbs_service_expiry_reminder:   ['clientName', 'serviceName', 'expiryDate', 'daysLeft'] as const,
+  hbs_payment_due_reminder:      ['clientName', 'amount', 'invoiceNumber', 'dueDate'] as const,
   hbs_service_renewed:           ['clientName', 'serviceName', 'newExpiryDate'] as const,
   hbs_birthday_wish:             ['name'] as const,
   hbs_work_anniversary:          ['name', 'years'] as const,

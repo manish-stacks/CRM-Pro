@@ -70,9 +70,7 @@ export default function MyTicketDetailPage() {
             </div>
             <h1 className="text-xl font-bold">{ticket.subject}</h1>
           </div>
-          <Select value={ticket.status} onChange={e => changeStatus(e.target.value)} className="max-w-xs">
-            {STATUSES.map(s => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
-          </Select>
+          <Select  label="Status" value={ticket.status} onChange={e => changeStatus(e.target.value)} className="max-w-xs" options={STATUSES.map(s => ({ label: s.replace(/_/g, ' '), value: s }))} />
         </div>
       </div>
 
