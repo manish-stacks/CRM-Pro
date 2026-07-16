@@ -75,7 +75,7 @@ export default function CollectionPage() {
 
   useEffect(() => {
     api.get('/users/by-role?roles=MARKETING_EXECUTIVE')
-      .then(r => setPeople(r.data.data || [])).catch(() => {})
+      .then(r => setPeople(r.data.data || [])).catch(() => { })
   }, [])
 
   const openDrill = async (row: any) => {
@@ -234,7 +234,7 @@ export default function CollectionPage() {
         {txnLoading ? (
           <div className="flex justify-center py-10"><Loader2 className="animate-spin text-gray-400" /></div>
         ) : !txns.length ? (
-          <EmptyState icon={Receipt} title="No transactions" description="Is period me koi payment record nahi hai." />
+          <EmptyState icon={<Receipt size={40} />} title="No transactions" description="Is period me koi payment record nahi hai." />
         ) : (
           <>
             <div className="overflow-x-auto">
