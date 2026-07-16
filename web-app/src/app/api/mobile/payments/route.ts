@@ -8,6 +8,7 @@ import { requireMobileEmployee, ok, fail } from '@/lib/mobileAuth'
 import { logFromRequest } from '@/lib/audit'
 import { sendWhatsapp } from '@/lib/whatsapp'
 import { Notifications } from '@/lib/notify'
+import { randomToken } from '@/lib/idgen'
 
 const METHODS = ['UPI', 'CASH', 'BANK_TRANSFER', 'CHEQUE', 'CARD', 'ONLINE_GATEWAY']
 
@@ -25,10 +26,29 @@ export async function GET(req: NextRequest) {
   const payments = await prisma.payment.findMany({
     where: { invoice: invoiceFilter },
     include: {
-      invoice: { select: { id: true, invoiceNumber: true, totalAmount: true, status: true } },
+      invoice: {
+        select: {
+          id: true, invoiceNumber: true, totalAmount: true, paidAmount: true,
+          dueAmount: true, status: true,
+          client: { select: { id: true, clientName: true, companyName: true } },
+        },
+      },
     },
     orderBy: { paidAt: 'desc' },
   })
+
+  // Har payment ka public receipt link ho — PARTIAL bhi. Missing token bana do.
+  await Promise.all(
+    payments.filter(p => !p.receiptToken).map(async p => {
+      const token = randomToken(32)
+      try {
+        await prisma.payment.update({ where: { id: p.id }, data: { receiptToken: token } })
+        ;(p as any).receiptToken = token
+      } catch { /* ignore */ }
+    })
+  )
+
+  const base = new URL(req.url).origin
 
   return ok(payments.map(p => ({
     id: p.id,
@@ -40,6 +60,13 @@ export async function GET(req: NextRequest) {
     source: p.source,
     invoice_id: p.invoiceId,
     invoice_number: p.invoice?.invoiceNumber,
+    invoice_total: p.invoice?.totalAmount,
+    invoice_due: p.invoice?.dueAmount,
+    invoice_status: p.invoice?.status,     // PARTIAL / PAID
+    client_id: p.invoice?.client?.id,
+    client_name: p.invoice?.client?.companyName || p.invoice?.client?.clientName,
+    receipt_token: p.receiptToken,
+    receipt_url: p.receiptToken ? `${base}/receipt/view/${p.receiptToken}` : null,
   })))
 }
 
@@ -126,5 +153,17 @@ export async function POST(req: NextRequest) {
     ).catch(() => {})
   }
 
-  return ok({ id: payment.id, amount: payment.amount, invoice_status: newStatus })
+  const base = new URL(req.url).origin
+  return ok({
+    id: payment.id,
+    amount: payment.amount,
+    method: payment.method,
+    paid_at: payment.paidAt,
+    invoice_id: invoiceId,
+    invoice_number: invoice.invoiceNumber,
+    invoice_status: newStatus,           // PARTIAL / PAID
+    invoice_due: newDue,
+    receipt_token: payment.receiptToken,
+    receipt_url: payment.receiptToken ? `${base}/receipt/view/${payment.receiptToken}` : null,
+  })
 }

@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, ActivityIndicator, TextInput, Modal, Switch,
-} from 'react-native';
+  View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, ActivityIndicator, TextInput, Modal, Switch, Share } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as Linking from 'expo-linking';
@@ -114,6 +113,12 @@ export default function ClientDetailScreen({ route, navigation }) {
   // Open a payment's receipt in the browser — public, no-login link
   // (Payment.receiptToken), same pattern as the invoice link above.
   const openReceiptLink = async (payment) => {
+    // /mobile/payments ab har payment ke saath receipt_url bhejta hai — us case
+    // me seedha khol do, warna purane tarike se link maang lo.
+    if (payment?.receipt_url) {
+      Linking.openURL(payment.receipt_url).catch(() => Alert.alert('Error', 'Could not open receipt'));
+      return;
+    }
     setOpeningLinkId(`pay-${payment.id}`);
     try {
       const res = await EmployeeAPI.getPaymentReceiptLink(payment.id);
@@ -313,9 +318,25 @@ export default function ClientDetailScreen({ route, navigation }) {
         notes: payNotes || undefined,
       });
       setShowPayment(false);
-      Alert.alert('Payment Collected', `₹${res.data?.data?.amount || payAmount} recorded successfully.`);
+      const d = res.data?.data || {};
+      const partial = d.invoice_status === 'PARTIAL';
       fetchPayments();
       fetchInvoices();
+
+      // Receipt turant — PARTIAL payment ka bhi. Yahi link client ko uske app/
+      // portal me aur admin ko Daily Collection me dikhta hai.
+      Alert.alert(
+        'Payment Collected',
+        `₹${d.amount || payAmount} recorded.` +
+          (partial ? `\nBalance due: ₹${d.invoice_due ?? 0}` : '\nInvoice fully paid.'),
+        d.receipt_url
+          ? [
+              { text: 'Done', style: 'cancel' },
+              { text: 'View Receipt', onPress: () => Linking.openURL(d.receipt_url).catch(() => {}) },
+              { text: 'Share', onPress: () => Share.share({ message: `Payment receipt: ${d.receipt_url}` }).catch(() => {}) },
+            ]
+          : [{ text: 'OK' }]
+      );
     } catch (e) {
       Alert.alert('Error', e.message || 'Failed to collect payment');
     } finally { setSavingPayment(false); }

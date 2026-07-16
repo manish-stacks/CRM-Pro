@@ -37,10 +37,18 @@ export async function notify(input: NotifyInput) {
       select: { expoPushToken: true },
     })
     if (withTokens.length) {
-      sendExpoPush(
+      // IMPORTANT: this MUST be awaited. Previously it was fire-and-forget, so on
+      // serverless/PM2-clustered production the response returned and the request
+      // context was torn down before the Expo HTTP call actually went out — which
+      // is why meeting-assign pushes never reached the device.
+      await sendExpoPush(
         withTokens.map(u => u.expoPushToken),
-        { title: input.title, body: input.message, data: { link: input.link || '' } },
-      ).catch(() => {})
+        {
+          title: input.title,
+          body: input.message,
+          data: { link: input.link || '', type: input.type || 'info', ...(input.metadata || {}) },
+        },
+      )
     }
   } catch (e) {
     console.error('Notify failed:', e)
@@ -52,10 +60,43 @@ export const Notifications = {
   meetingScheduled: (marketingExecId: string, clientName: string, date: string, leadId: string) =>
     notify({
       userIds: marketingExecId,
-      title: 'New Meeting Scheduled',
+      title: 'New Meeting Assigned',
       message: `Meeting with ${clientName} on ${date}`,
       type: 'meeting',
-      link: `/leads/${leadId}`,
+      link: `/marketing`,
+      // `screen` is read by the mobile app's notification tap handler
+      metadata: { screen: 'MeetingDetail', leadId, meetingId: leadId },
+    }),
+
+  // ---- Field visits ----
+  visitAssigned: (userId: string, clientName: string, date: string, visitId: string) =>
+    notify({
+      userIds: userId,
+      title: 'New Visit Scheduled',
+      message: `${clientName} — ${date}`,
+      type: 'meeting',
+      link: `/visits`,
+      metadata: { screen: 'Visits', visitId },
+    }),
+
+  visitUpdated: (userId: string, clientName: string, date: string, visitId: string) =>
+    notify({
+      userIds: userId,
+      title: 'Visit Updated',
+      message: `${clientName} — ${date}`,
+      type: 'meeting',
+      link: `/visits`,
+      metadata: { screen: 'Visits', visitId },
+    }),
+
+  visitCompleted: (userIds: string | string[], clientName: string, outcome: string) =>
+    notify({
+      userIds,
+      title: outcome === 'DEAL_DONE' ? '🎉 Deal Done' : 'Visit Completed',
+      message: `${clientName} — ${outcome.replace(/_/g, ' ').toLowerCase()}`,
+      type: outcome === 'DEAL_DONE' ? 'success' : 'info',
+      link: `/visits`,
+      metadata: { screen: 'Visits' },
     }),
 
   leadReassigned: (userId: string, leadNumber: string, leadId: string, reason?: string) =>

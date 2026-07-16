@@ -1,7 +1,10 @@
 // src/app/api/client-portal/invoices/route.ts
+// Client ke invoices + har invoice ka public PDF link (Invoice.shareToken).
+// App/web bas link kholte hain — koi client-side file generation nahi.
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getClientSession } from '@/lib/clientAuth'
+import { randomToken } from '@/lib/idgen'
 
 export async function GET(req: NextRequest) {
   const session = await getClientSession(req)
@@ -16,5 +19,28 @@ export async function GET(req: NextRequest) {
     orderBy: { createdAt: 'desc' },
   })
 
-  return NextResponse.json({ data: invoices })
+  // Jinke paas shareToken nahi hai unka bana do
+  await Promise.all(
+    invoices.filter(i => !i.shareToken).map(async i => {
+      const token = randomToken(32)
+      try {
+        await prisma.invoice.update({ where: { id: i.id }, data: { shareToken: token } })
+        ;(i as any).shareToken = token
+      } catch { /* ignore */ }
+    })
+  )
+
+  const base = new URL(req.url).origin
+
+  const data = invoices.map(i => ({
+    ...i,
+    share_token: i.shareToken,
+    pdf_url: i.shareToken ? `${base}/api/invoices/view/${i.shareToken}/pdf` : null,
+    payments: i.payments.map(p => ({
+      ...p,
+      receipt_url: p.receiptToken ? `${base}/receipt/view/${p.receiptToken}` : null,
+    })),
+  }))
+
+  return NextResponse.json({ data })
 }

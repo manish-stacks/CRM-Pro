@@ -7,6 +7,8 @@ import { successResponse, errorResponse, notFoundResponse } from '@/lib/api'
 import { logFromRequest } from '@/lib/audit'
 import { sendWhatsapp } from '@/lib/whatsapp'
 import { Notifications } from '@/lib/notify'
+import { syncVisitForMeeting } from '@/lib/visitSync'
+import { geocodeAddress } from '@/lib/distance'
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -38,6 +40,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const md = new Date(meetingDate)
 
+  // Meeting location ko ek baar geocode kar ke store karo — app me ETA/distance
+  // ("aap yahan se 8 km, ~24 min") isi lat/lng se calculate hota hai.
+  const geoSource = meetingLocation || [lead.address, lead.city, lead.state].filter(Boolean).join(', ')
+  const locationChanged = (meetingLocation || null) !== (lead.meetingLocation || null)
+  let geo: { lat: number; lng: number } | null = null
+  if (geoSource && (locationChanged || lead.meetingLat == null)) {
+    geo = await geocodeAddress(geoSource)
+  }
+
   const updated = await prisma.lead.update({
     where: { id },
     data: {
@@ -48,6 +59,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       meetingLocation: meetingLocation || null,
       meetingNotes: meetingNotes || null,
       meetingAssignedToId: marketingExecId,
+      ...(geo ? { meetingLat: geo.lat, meetingLng: geo.lng } : {}),
+      ...(locationChanged && !geo ? { meetingLat: null, meetingLng: null } : {}),
     },
     include: { meetingAssignedTo: { select: { name: true, phone: true } } },
   })
@@ -83,13 +96,31 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }).catch(() => {})
   }
 
-  // In-app notification to the marketing exec
-  Notifications.meetingScheduled(
-    marketingExecId,
-    lead.clientName,
-    `${md.toLocaleDateString('en-IN')}${meetingSlot ? ` (${meetingSlot})` : ''}`,
-    id
-  ).catch(() => {})
+  // Auto-create / update the visit-sheet entry for this marketing exec
+  const visit = await syncVisitForMeeting(
+    {
+      id: updated.id,
+      clientName: updated.clientName,
+      companyName: updated.companyName,
+      meetingAssignedToId: updated.meetingAssignedToId,
+      meetingDate: updated.meetingDate,
+      meetingTime: updated.meetingTime,
+      meetingSlot: updated.meetingSlot,
+      meetingLocation: updated.meetingLocation,
+      meetingNotes: updated.meetingNotes,
+    },
+    session.userId
+  )
+
+  // In-app + FCM/Expo push. MUST be awaited — fire-and-forget production me
+  // request teardown se pehle bhej hi nahi paata tha.
+  const whenTxt = `${md.toLocaleDateString('en-IN')}${meetingSlot ? ` (${meetingSlot})` : meetingTime ? ` (${meetingTime})` : ''}`
+  try {
+    await Notifications.meetingScheduled(marketingExecId, lead.clientName, whenTxt, id)
+    if (visit) await Notifications.visitAssigned(marketingExecId, lead.clientName, whenTxt, visit.id)
+  } catch (e) {
+    console.error('Meeting notify failed:', e)
+  }
 
   await logFromRequest(req, {
     userId: session.userId,

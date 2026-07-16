@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Users, Clock, Calendar, DollarSign, Building2,
   Target, FileText, Users2, CreditCard, BarChart3, Settings,
   Briefcase, Package, Bell, ChevronDown, ChevronRight, LogOut,
-  User, Menu, X, Video, UserCheck, Shield, MessageSquare, AlertCircle, MapPin
+  User, Menu, X, Video, UserCheck, Shield, MessageSquare, AlertCircle, MapPin, MapPinned, Wallet
 } from 'lucide-react'
 
 interface NavItem {
@@ -51,9 +51,11 @@ const NAV: NavItem[] = [
   {
     label: 'Finance', icon: CreditCard, children: [
       { label: 'Payments', href: '/payments', icon: CreditCard, roles: ['SUPER_ADMIN', 'ADMIN'] },
+      { label: 'Daily Collection', href: '/collection', icon: Wallet, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER'] },
       { label: 'Reports', href: '/reports', icon: BarChart3, roles: ['SUPER_ADMIN', 'ADMIN'] },
     ]
   },
+  { label: 'Visit Sheet', href: '/visits', icon: MapPinned, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'MARKETING_EXECUTIVE'] },
   { label: 'Field Tracking', href: '/tracking', icon: MapPin, roles: ['SUPER_ADMIN', 'ADMIN'] },
   { label: 'Notifications', href: '/notifications', icon: Bell },
   { label: 'Audit Log', href: '/audit-logs', icon: Shield, roles: ['SUPER_ADMIN', 'ADMIN'] },

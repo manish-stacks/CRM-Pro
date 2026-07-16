@@ -200,7 +200,11 @@ export default function PaymentsPage() {
                 : items.length === 0 ? <tr><td colSpan={8}><EmptyState title="No invoices" /></td></tr>
                   : items.map((inv: any) => (
                     <tr key={inv.id}>
-                      <td><div className="font-mono text-xs text-blue-600">{inv.invoiceNumber}</div><div className="text-xs text-gray-400">{formatDate(inv.createdAt)}</div></td>
+                      <td><div className="font-mono text-xs text-blue-600">
+                        <a href={`/invoices/${inv.id}`} target="_blank" rel="noreferrer" className="hover:underline">
+                          {inv.invoiceNumber}
+                        </a>
+                      </div><div className="text-xs text-gray-400">{formatDate(inv.createdAt)}</div></td>
                       <td>
                         <div className="flex items-center gap-2">
                           <div className="w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center text-xs font-bold">{getInitials(inv.client?.companyName || '?')}</div>

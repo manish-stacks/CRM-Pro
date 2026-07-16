@@ -77,6 +77,8 @@ model User {
   projectMemberships     ProjectAssignment[]  @relation("ProjectMember")
   locationPings          LocationPing[]       @relation("UserLocationPings")
   clientVisits           ClientVisit[]        @relation("UserClientVisits")
+  createdClientVisits    ClientVisit[]        @relation("CreatedClientVisits")
+  collectedPayments      Payment[]            @relation("PaymentCollectedBy")
   lettersGenerated       Letter[]             @relation("LetterGeneratedBy")
 
   @@index([email])
@@ -322,6 +324,10 @@ model ClientVisit {
   id           String    @id @default(cuid())
   userId       String    // Marketing person who visited
   clientId     String?   // Linked client (if existing)
+  leadId       String?   // Linked lead/meeting (auto-created visits)
+  createdById  String?   // Who scheduled it (admin / self / system)
+  source       String    @default("MANUAL") // MANUAL, MEETING_ASSIGNED, DEAL_DONE
+  outcome      String?   // DEAL_DONE, LOST, NOT_INTERESTED, FOLLOW_UP
   clientName   String    // Snapshot name (for quick display)
   purpose      String?
   notes        String?
@@ -346,11 +352,15 @@ model ClientVisit {
   updatedAt    DateTime  @updatedAt
 
   user         User      @relation("UserClientVisits", fields: [userId], references: [id], onDelete: Cascade)
+  createdBy    User?     @relation("CreatedClientVisits", fields: [createdById], references: [id], onDelete: SetNull)
   client       Client?   @relation("ClientVisits", fields: [clientId], references: [id], onDelete: SetNull)
+  lead         Lead?     @relation("LeadVisits", fields: [leadId], references: [id], onDelete: SetNull)
 
   @@index([userId, scheduledDate])
   @@index([clientId])
+  @@index([leadId])
   @@index([status])
+  @@index([scheduledDate])
   @@map("client_visits")
 }
 
@@ -480,6 +490,8 @@ model Lead {
   meetingTime          String?   // "10:00"
   meetingSlot          String?   // "10:00 - 11:00 AM"
   meetingLocation      String?
+  meetingLat           Float?    // geocoded once — used for ETA / distance
+  meetingLng           Float?
   meetingNotes         String?   @db.Text
   meetingAssignedToId  String?   // MARKETING_EXECUTIVE assigned for meeting
 
@@ -500,6 +512,7 @@ model Lead {
   client               Client?
   activities           LeadActivity[]
   assignmentHistory    LeadAssignmentHistory[]
+  visits               ClientVisit[]          @relation("LeadVisits")
 
   @@index([status])
   @@index([source])
@@ -811,10 +824,11 @@ model InvoiceItem {
 }
 
 model Payment {
-  id          String   @id @default(cuid())
-  invoiceId   String
-  clientId    String?
-  amount      Float
+  id            String   @id @default(cuid())
+  invoiceId     String
+  clientId      String?
+  collectedById String?  // Staff member who actually collected the money (field cash/UPI)
+  amount        Float
   method      String   @default("UPI") // UPI, CASH, BANK_TRANSFER, CHEQUE, CARD, ONLINE_GATEWAY
   reference   String?  // UPI ref, cheque number, transaction id
   paidAt      DateTime @default(now())
@@ -826,9 +840,12 @@ model Payment {
   createdAt   DateTime @default(now())
 
   invoice     Invoice  @relation(fields: [invoiceId], references: [id])
+  collectedBy User?    @relation("PaymentCollectedBy", fields: [collectedById], references: [id], onDelete: SetNull)
 
   @@index([invoiceId])
   @@index([paidAt])
+  @@index([collectedById])
+  @@index([method])
   @@map("payments")
 }
 

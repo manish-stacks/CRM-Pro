@@ -481,7 +481,7 @@ export default function LeadDetailPage() {
             <Input label="Time" type="time" value={meetForm.meetingTime} onChange={e => setMeetForm(p => ({ ...p, meetingTime: e.target.value }))} />
           </div>
           <Input label="Time Slot" value={meetForm.meetingSlot} onChange={e => setMeetForm(p => ({ ...p, meetingSlot: e.target.value }))} placeholder="e.g. 10:00 - 11:00 AM" />
-          <Input label="Location" value={meetForm.meetingLocation} onChange={e => setMeetForm(p => ({ ...p, meetingLocation: e.target.value }))} placeholder="Client office / online / etc." />
+          <Input label="Location" value={meetForm.meetingLocation || lead.address} onChange={e => setMeetForm(p => ({ ...p, meetingLocation: e.target.value }))} placeholder="Client office / online / etc." />
           <Textarea label="Notes for Marketing Exec" value={meetForm.meetingNotes} onChange={e => setMeetForm(p => ({ ...p, meetingNotes: e.target.value }))} rows={3} placeholder="Client's key points, service to pitch, questions raised..." />
           <p className="text-xs text-gray-500">📲 An automated WhatsApp will be sent to the client with meeting details + marketing person's contact.</p>
           <div className="flex justify-end gap-2 pt-1">

@@ -32,6 +32,7 @@ export default function PaymentsScreen() {
   const { colors } = useTheme();
   const s = styles(colors);
   const [invoices, setInvoices] = useState([]);
+  const [receipts, setReceipts] = useState([]);   // har collected payment (PARTIAL bhi)
   const [summary, setSummary] = useState(null);
   const [downloadingId, setDownloadingId] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -42,10 +43,16 @@ export default function PaymentsScreen() {
 
   const fetchInvoices = async () => {
     try {
-      const res = await AxiosInstance.get('/client-portal/invoices');
+      const [res, payRes] = await Promise.all([
+        AxiosInstance.get('/client-portal/invoices'),
+        // Har collected payment ka receipt link — PARTIAL payments bhi.
+        // Wahi link admin aur marketing executive ko bhi dikhta hai.
+        AxiosInstance.get('/client-portal/payments?type=payments').catch(() => ({ data: { data: [] } })),
+      ]);
       const raw = res?.data?.data || [];
 
       setInvoices(raw.map(shapeInvoice));
+      setReceipts(payRes?.data?.data || []);
       setSummary({
         totalPaid: fmtMoney(raw.reduce((s, i) => s + (i.paidAmount || 0), 0)),
         pending: fmtMoney(raw.reduce((s, i) => s + (i.dueAmount || 0), 0)),
@@ -118,7 +125,21 @@ export default function PaymentsScreen() {
   // Web downloads a PDF generated client-side from full invoice + company info
   // (see src/lib/invoicePdf.ts). There's no server-side invoice file, so we
   // build an equivalent receipt here and let the user save/share it.
+  // Server-side PDF (wahi jo web download karta hai). Payment Receipts ki tarah
+  // seedha link khol dete hain — koi local file generation nahi.
   const downloadReceipt = async (inv) => {
+    if (inv.pdf_url) {
+      try {
+        await Linking.openURL(inv.pdf_url);
+      } catch {
+        Alert.alert('Error', 'Could not open invoice PDF');
+      }
+      return;
+    }
+
+    // Fallback: purana local HTML. NOTE: Expo SDK 54+ me expo-file-system ka
+    // classic API 'expo-file-system/legacy' me chala gaya hai — isliye upar
+    // import legacy se hona chahiye, warna documentDirectory undefined hota hai.
     setDownloadingId(inv.id);
     try {
       const [invRes, companyRes] = await Promise.all([
@@ -148,7 +169,7 @@ export default function PaymentsScreen() {
           .muted { color: #6b7280; font-size: 12px; }
         </style></head>
         <body>
-          <h1>${company.companyName || 'Invoice Receipt'}</h1>
+          <h1>${company.name || company.companyName || 'Invoice Receipt'}</h1>
           <p class="muted">${company.address || ''}</p>
           <hr />
           <p><b>Invoice:</b> ${full.invoiceNumber} &nbsp; <b>Status:</b> ${full.status}</p>
@@ -164,8 +185,11 @@ export default function PaymentsScreen() {
           </table>
         </body></html>`;
 
-      const fileUri = `${FileSystem.documentDirectory}receipt-${full.invoiceNumber}.html`;
-      await FileSystem.writeAsStringAsync(fileUri, html, { encoding: FileSystem.EncodingType.UTF8 });
+      const dir = FileSystem.documentDirectory || FileSystem.cacheDirectory;
+      if (!dir) { Alert.alert('Error', 'Storage not available on this device'); return; }
+
+      const fileUri = `${dir}receipt-${full.invoiceNumber}.html`;
+      await FileSystem.writeAsStringAsync(fileUri, html, { encoding: 'utf8' });
 
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(fileUri, { mimeType: 'text/html', dialogTitle: `Receipt ${full.invoiceNumber}` });
@@ -174,7 +198,7 @@ export default function PaymentsScreen() {
       }
     } catch (e) {
       console.log('Receipt download error:', e);
-      Alert.alert('Error', 'Could not generate receipt');
+      Alert.alert('Error', e?.message || 'Could not generate receipt');
     } finally {
       setDownloadingId(null);
     }
@@ -205,6 +229,51 @@ export default function PaymentsScreen() {
               </View>
             ))}
           </View>
+
+          {/* ── Payment Receipts — har collection ka receipt, PARTIAL bhi ── */}
+          {receipts.length > 0 && (
+            <>
+              <Text style={s.sectionTitle}>Payment Receipts</Text>
+              {receipts.map(p => (
+                <View key={p.id} style={s.receiptCard}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                    <View style={[s.invoiceIcon, { backgroundColor: 'rgba(34,197,94,0.1)' }]}>
+                      <Ionicons name="receipt-outline" size={19} color="#16A34A" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontWeight: '800', fontSize: 15, color: colors.text }}>
+                        {fmtMoney(p.amount)}
+                      </Text>
+                      <Text style={{ fontSize: 11, color: colors.text2, marginTop: 2 }}>
+                        {p.invoice_number ? `${p.invoice_number} · ` : ''}
+                        {new Date(p.paid_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      </Text>
+                    </View>
+                    <View style={[s.methodChip, { backgroundColor: colors.bg2 }]}>
+                      <Text style={{ fontSize: 10, fontWeight: '800', color: colors.text2 }}>
+                        {String(p.method || '').replace(/_/g, ' ')}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {p.reference ? (
+                    <Text style={{ fontSize: 11, color: colors.text3, marginTop: 8 }}>Ref: {p.reference}</Text>
+                  ) : null}
+
+                  <TouchableOpacity
+                    style={[s.receiptBtn, { borderColor: colors.green }]}
+                    disabled={!p.receipt_url}
+                    onPress={() => Linking.openURL(p.receipt_url)}
+                  >
+                    <Ionicons name="open-outline" size={14} color={colors.greenText} />
+                    <Text style={{ color: colors.greenText, fontWeight: '700', fontSize: 12 }}>
+                      View / Download Receipt
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </>
+          )}
 
           <Text style={s.sectionTitle}>Recent Invoices</Text>
           {invoices.map(inv => {
@@ -268,6 +337,9 @@ export default function PaymentsScreen() {
 
 const styles = (c) => StyleSheet.create({
   container: { flex: 1, backgroundColor: c.bg },
+  receiptCard: { backgroundColor: c.card, borderWidth: 1.5, borderColor: c.border, borderRadius: 14, padding: 14, marginBottom: 10 },
+  methodChip: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  receiptBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 12, paddingVertical: 9, borderWidth: 1.5, borderRadius: 10 },
   header: { paddingHorizontal: 20, paddingTop: 18, paddingBottom: 12 },
   title: { fontSize: 22, fontWeight: '800', color: c.text },
   sub: { fontSize: 13, color: c.text2, marginTop: 2 },
@@ -277,6 +349,6 @@ const styles = (c) => StyleSheet.create({
   sectionTitle: { fontSize: 16, fontWeight: '700', color: c.text, marginBottom: 12 },
   invoiceCard: { backgroundColor: c.card, borderWidth: 1.5, borderColor: c.border, borderRadius: 12, padding: 16, marginBottom: 10 },
   invoiceIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  invoiceFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, paddingTop: 12, borderTopWidth: 1,borderTopColor: c.border },
+  invoiceFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: c.border },
   dlBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
 });

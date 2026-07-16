@@ -1,4 +1,4 @@
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Image, RefreshControl } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Image, RefreshControl, Linking } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -67,6 +67,24 @@ export default function HomeScreen({ navigation }) {
       const services = (servicesRes.data?.data || []).map(shapeService);
       const invoices = invoicesRes.data?.data || [];
 
+      // Account Manager = client ka MARKETING_EXECUTIVE (jisne meeting kar ke
+      // client add kiya). Koi assign na ho to backend "Hover" bhejta hai.
+      // const am = profileRes.data?.accountManager || client.accountManager || null;
+      let am =
+        profileRes.data?.accountManager ||
+        profileRes.data?.data?.accountManager ||
+        profileRes.data?.data?.account_manager ||
+        client.accountManager ||
+        null;
+
+      if (!am?.name) {
+        try {
+          const cached = await userData?.();
+          am = cached?.account_manager || cached?.reporting_person || null;
+        } catch { }
+      }
+      if (!am?.name) am = { name: 'Hover', email: null, phone: null, is_default: true };
+
       const expiringList = services.filter(s => s.status === 'expiring' || s.status === 'critical');
       const totalPaid = invoices.reduce((sum, i) => sum + (i.paidAmount || 0), 0);
 
@@ -83,11 +101,12 @@ export default function HomeScreen({ navigation }) {
           company_name: client.companyName || '',
           image: client.image || null,
         },
+        accountManager: am,
         totalNotifications: 0,
       });
     } catch (error) {
       console.log('Dashboard Error:', error);
-      setDashboard({ stats: {}, expiringServices: [], recentServices: [], user: {}, totalNotifications: 0 });
+      setDashboard({ stats: {}, expiringServices: [], recentServices: [], user: {}, accountManager: null, totalNotifications: 0 });
     } finally {
       setRefreshing(false);
     }
@@ -108,6 +127,10 @@ export default function HomeScreen({ navigation }) {
   const expiring = dashboard?.expiringServices || [];
   const recent = dashboard?.recentServices || [];
   const user = dashboard?.user;
+  const manager = dashboard?.accountManager;
+  const managerInitials = manager?.name
+    ? manager.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
+    : 'H';
   const totalNotifications = dashboard?.totalNotifications || 0;
   const userImage = dashboard?.user?.image;
   if (!dashboard) {
@@ -188,6 +211,62 @@ export default function HomeScreen({ navigation }) {
             ))}
           </View>
 
+          {/* Account Manager — web portal ki tarah dashboard pe */}
+          {manager?.name ? (
+            <View style={s.managerCard}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+                <LinearGradient
+                  colors={[colors.gradStart, colors.gradEnd]}
+                  style={s.managerAvatar}
+                  start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                >
+                  <Text style={{ color: 'white', fontWeight: '800', fontSize: 17 }}>{managerInitials}</Text>
+                </LinearGradient>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.managerLabel}>YOUR ACCOUNT MANAGER</Text>
+                  <Text style={{ fontWeight: '800', fontSize: 15, color: colors.text, marginTop: 2 }}>
+                    {manager.name}
+                  </Text>
+                  {manager.email ? (
+                    <Text style={{ fontSize: 11, color: colors.text2, marginTop: 1 }} numberOfLines={1}>
+                      {manager.email}
+                    </Text>
+                  ) : null}
+                </View>
+              </View>
+
+              <View style={{ flexDirection: 'row', gap: 8, marginTop: 14 }}>
+                {manager.phone ? (
+                  <TouchableOpacity
+                    style={[s.managerBtn, { backgroundColor: 'rgba(34,197,94,0.1)' }]}
+                    onPress={() => Linking.openURL(`tel:${manager.phone}`)}
+                  >
+                    <Ionicons name="call-outline" size={15} color="#16A34A" />
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#16A34A' }}>Call</Text>
+                  </TouchableOpacity>
+                ) : null}
+                {manager.email ? (
+                  <TouchableOpacity
+                    style={[s.managerBtn, { backgroundColor: 'rgba(59,130,246,0.1)' }]}
+                    onPress={() => Linking.openURL(`mailto:${manager.email}`)}
+                  >
+                    <Ionicons name="mail-outline" size={15} color="#3B82F6" />
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#3B82F6' }}>Email</Text>
+                  </TouchableOpacity>
+                ) : null}
+                {manager.phone ? (
+                  <TouchableOpacity
+                    style={[s.managerBtn, { backgroundColor: 'rgba(37,211,102,0.12)' }]}
+                    onPress={() => Linking.openURL(`https://wa.me/${String(manager.phone).replace(/[^0-9]/g, '')}`)}
+                  >
+                    <Ionicons name="logo-whatsapp" size={15} color="#25D366" />
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#25D366' }}>WhatsApp</Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+            </View>
+          ) : null}
+
           {/* Renewal Alerts */}
           {expiring.length > 0 && (
             <>
@@ -266,6 +345,10 @@ const styles = (c) => StyleSheet.create({
   statIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
   statValue: { fontSize: 20, fontWeight: '800', color: c.text },
   statLabel: { fontSize: 10, color: c.text2, fontWeight: '500', marginTop: 2, textAlign: 'center' },
+  managerCard: { backgroundColor: c.card, borderWidth: 1.5, borderColor: c.border, borderRadius: 16, padding: 16, marginBottom: 20 },
+  managerAvatar: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  managerLabel: { fontSize: 10, fontWeight: '800', color: c.text3, letterSpacing: 0.6 },
+  managerBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 9, borderRadius: 10 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
   sectionTitle: { fontSize: 16, fontWeight: '700', color: c.text },
   alertCard: { borderRadius: 12, padding: 16, marginBottom: 10, borderWidth: 1.5 },

@@ -3,7 +3,10 @@ import { useFocusEffect } from '@react-navigation/native';
 import { AxiosInstance } from '../lib/Axios.instance';
 import { ClientAPI } from '../services/client.api';
 import { shapeTicket } from '../lib/shape';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, LayoutAnimation, Alert, RefreshControl } from 'react-native';
+import {
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, LayoutAnimation, Alert,
+  RefreshControl, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard,
+} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -160,99 +163,113 @@ export default function SupportScreen({ navigation }) {
         visible={modalVisible}
         transparent
         animationType="slide"
+        onRequestClose={() => setModalVisible(false)}
       >
-        <View style={{
-          flex: 1,
-          backgroundColor: 'rgba(0,0,0,0.5)',
-          justifyContent: 'center',
-          padding: 10
-        }}>
+        {/* KeyboardAvoidingView + scrollable body — pehle keyboard khulte hi
+            Submit button neeche chhup jaata tha. Ab modal upar shift ho jaata
+            hai aur andar scroll bhi ho jaata hai. */}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
+        >
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+            <View style={{
+              flex: 1,
+              backgroundColor: 'rgba(0,0,0,0.5)',
+              justifyContent: 'center',
+              padding: 12,
+            }}>
+              <View style={{
+                backgroundColor: colors.card,
+                borderRadius: 20,
+                maxHeight: '85%',
+                overflow: 'hidden',
+              }}>
+                <ScrollView
+                  contentContainerStyle={{ padding: 20 }}
+                  keyboardShouldPersistTaps="handled"
+                  showsVerticalScrollIndicator={false}
+                  bounces={false}
+                >
+                  <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>
+                    Raise Ticket
+                  </Text>
 
-          <View style={{
-            backgroundColor: colors.card,
-            borderRadius: 20,
-            padding: 20
-          }}>
+                  {/* Title */}
+                  <TextInput
+                    placeholder="Enter title"
+                    placeholderTextColor={colors.text2}
+                    value={title}
+                    onChangeText={setTitle}
+                    returnKeyType="next"
+                    style={{
+                      borderWidth: 1.5,
+                      borderColor: colors.border,
+                      borderRadius: 10,
+                      padding: 12,
+                      marginTop: 15,
+                      color: colors.text,
+                    }}
+                  />
 
-            <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>
-              Raise Ticket
-            </Text>
+                  {/* Description */}
+                  <TextInput
+                    placeholder="Enter description"
+                    placeholderTextColor={colors.text2}
+                    value={description}
+                    onChangeText={setDescription}
+                    multiline
+                    numberOfLines={4}
+                    style={{
+                      borderWidth: 1.5,
+                      borderColor: colors.border,
+                      borderRadius: 10,
+                      padding: 12,
+                      marginTop: 12,
+                      height: 100,
+                      textAlignVertical: 'top',
+                      color: colors.text,
+                    }}
+                  />
 
-            {/* Title */}
-            <TextInput
-              placeholder="Enter title"
-              placeholderTextColor={colors.text2}
-              value={title}
-              onChangeText={setTitle}
-              style={{
-                borderWidth: 1.5,
-                borderColor: colors.border,
-                borderRadius: 10,
-                padding: 12,
-                marginTop: 15,
-                color: colors.text
-              }}
-            />
+                  {/* Buttons — ab ScrollView ke andar hain, keyboard ke saath
+                      scroll ho jaate hain */}
+                  <View style={{ flexDirection: 'row', marginTop: 20 }}>
+                    <TouchableOpacity
+                      onPress={() => { Keyboard.dismiss(); setModalVisible(false); }}
+                      style={{
+                        flex: 1,
+                        padding: 14,
+                        borderRadius: 10,
+                        backgroundColor: colors.bg2,
+                        marginRight: 8,
+                      }}
+                    >
+                      <Text style={{ textAlign: 'center', color: colors.text }}>
+                        Cancel
+                      </Text>
+                    </TouchableOpacity>
 
-            {/* Description */}
-            <TextInput
-              placeholder="Enter description"
-              placeholderTextColor={colors.text2}
-              value={description}
-              onChangeText={setDescription}
-              multiline
-              numberOfLines={4}
-              style={{
-                borderWidth: 1.5,
-                borderColor: colors.border,
-                borderRadius: 10,
-                padding: 12,
-                marginTop: 12,
-                height: 100,
-                textAlignVertical: 'top',
-                color: colors.text
-              }}
-            />
-
-            {/* Buttons */}
-            <View style={{ flexDirection: 'row', marginTop: 20 }}>
-
-              {/* Cancel */}
-              <TouchableOpacity
-                onPress={() => setModalVisible(false)}
-                style={{
-                  flex: 1,
-                  padding: 14,
-                  borderRadius: 10,
-                  backgroundColor: colors.bg2,
-                  marginRight: 8
-                }}
-              >
-                <Text style={{ textAlign: 'center', color: colors.text }}>
-                  Cancel
-                </Text>
-              </TouchableOpacity>
-
-              {/* Submit */}
-              <TouchableOpacity
-                onPress={handleTicketSubmit}
-                style={{
-                  flex: 1,
-                  padding: 14,
-                  borderRadius: 10,
-                  backgroundColor: colors.primary,
-                  marginLeft: 8
-                }}
-              >
-                <Text style={{ textAlign: 'center', color: '#fff', fontWeight: '700' }}>
-                  Submit
-                </Text>
-              </TouchableOpacity>
-
+                    <TouchableOpacity
+                      onPress={() => { Keyboard.dismiss(); handleTicketSubmit(); }}
+                      style={{
+                        flex: 1,
+                        padding: 14,
+                        borderRadius: 10,
+                        backgroundColor: colors.primary,
+                        marginLeft: 8,
+                      }}
+                    >
+                      <Text style={{ textAlign: 'center', color: '#fff', fontWeight: '700' }}>
+                        Submit
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </ScrollView>
+              </View>
             </View>
-
-          </View>
-        </View>
+          </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
       </Modal>
     </ScreenWrapper>
   );

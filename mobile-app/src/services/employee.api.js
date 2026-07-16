@@ -1,5 +1,15 @@
 import { AxiosInstance } from '../lib/Axios.instance';
 
+// Helper: object -> query string (khaali values drop kar deta hai)
+const qs = (params) => {
+  const p = new URLSearchParams();
+  Object.entries(params || {}).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && v !== '' && v !== 'all') p.append(k, v);
+  });
+  const q = p.toString();
+  return q ? `?${q}` : '';
+};
+
 // All employee (marketing person) calls hit the new CRM /mobile/* endpoints.
 export const EmployeeAPI = {
   // Auth
@@ -21,7 +31,8 @@ export const EmployeeAPI = {
   checkOut: (loc) => AxiosInstance.post('/mobile/attendance/check-out', loc || {}),
 
   // Clients
-  getClients: () => AxiosInstance.get('/mobile/clients'),
+  // params: { range, date, dateFrom, dateTo, status, expiry, search }
+  getClients: (params) => AxiosInstance.get(`/mobile/clients${qs(params)}`),
   createClient: (data) => AxiosInstance.post('/mobile/clients', data),
   getClientById: (id) => AxiosInstance.get(`/mobile/clients/${id}`),
 
@@ -40,13 +51,16 @@ export const EmployeeAPI = {
   collectPayment: (data) => AxiosInstance.post('/mobile/payments', data),
 
   // Meetings assigned to this marketing executive
-  getMeetings: () => AxiosInstance.get('/mobile/meetings'),
+  // params: { range, date, dateFrom, dateTo, status, search, lat, lng }
+  // lat/lng bhejo to har meeting pe distance + ETA milega
+  getMeetings: (params) => AxiosInstance.get(`/mobile/meetings${qs(params)}`),
   getMeetingById: (id) => AxiosInstance.get(`/mobile/meetings/${id}`),
   logMeetingActivity: (id, data) => AxiosInstance.post(`/mobile/meetings/${id}/activity`, data),
   closeMeeting: (id, data) => AxiosInstance.post(`/mobile/meetings/${id}/close`, data),
 
   // Visits
-  getVisits: () => AxiosInstance.get('/mobile/visits'),
+  // params: { range, status, date, dateFrom, dateTo, search }
+  getVisits: (params) => AxiosInstance.get(`/mobile/visits${qs(params)}`),
   createVisit: (data) => AxiosInstance.post('/mobile/visits', data),
   startVisit: (id, loc) => AxiosInstance.post(`/mobile/visits/${id}/start`, loc || {}),
   completeVisit: (id, loc) => AxiosInstance.post(`/mobile/visits/${id}/complete`, loc || {}),

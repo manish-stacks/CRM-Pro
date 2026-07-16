@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { compare } from 'bcryptjs'
 import { SignJWT } from 'jose'
+import { accountManagerInclude, resolveAccountManager } from '@/lib/accountManager'
 
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || 'fallback-secret-change-in-production'
@@ -21,12 +22,7 @@ export async function POST(req: NextRequest) {
   try {
     const client = await prisma.client.findFirst({
       where: { email: email.toLowerCase() },
-      include: {
-        reportingPerson:  { select: { id: true, name: true, email: true, phone: true } },
-        marketingPerson:  { select: { id: true, name: true, email: true, phone: true } },
-        telecaller:       { select: { id: true, name: true, email: true, phone: true } },
-        assignedTo:       { select: { id: true, name: true, email: true, phone: true } },
-      },
+      include: accountManagerInclude,
     })
 
     if (!client) {
@@ -66,9 +62,10 @@ export async function POST(req: NextRequest) {
     const totalPaid = invoices.reduce((s, i) => s + i.paidAmount, 0)
     const totalDue = invoices.reduce((s, i) => s + i.dueAmount, 0)
 
-    // Reporting person = explicit > marketing > telecaller > assignedTo
-    const reportingPerson =
-      client.reportingPerson || client.marketingPerson || client.telecaller || client.assignedTo || null
+    // Account Manager = marketing exec (jisne client add kiya) > reporting >
+    // telecaller > assignedTo > company default ("Hover"). Single source of
+    // truth: src/lib/accountManager.ts
+    const reportingPerson = await resolveAccountManager(client)
 
     // Create JWT client session
     const token = await new SignJWT({ clientId: client.id, type: 'client' })
@@ -93,7 +90,8 @@ export async function POST(req: NextRequest) {
         phone: client.phone,
         image: client.image,
       },
-      reportingPerson,
+      reportingPerson,          // legacy key — dashboard isi ko padhta hai
+      accountManager: reportingPerson,
       stats: { activeServices, totalPaid, totalDue, openTickets, reports },
     })
 

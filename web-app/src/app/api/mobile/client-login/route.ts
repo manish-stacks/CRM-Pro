@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { compare } from 'bcryptjs'
 import { SignJWT } from 'jose'
+import { accountManagerInclude, resolveAccountManager, toMobileShape } from '@/lib/accountManager'
 
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || 'fallback-secret-change-in-production'
@@ -19,10 +20,7 @@ export async function POST(req: NextRequest) {
   try {
     const client = await prisma.client.findFirst({
       where: { email: String(email).toLowerCase() },
-      include: {
-        reportingPerson: { select: { name: true, phone: true, email: true } },
-        marketingPerson: { select: { name: true, phone: true, email: true } },
-      },
+      include: accountManagerInclude,
     })
 
     if (!client) {
@@ -48,7 +46,7 @@ export async function POST(req: NextRequest) {
 
     await prisma.client.update({ where: { id: client.id }, data: { lastPortalLoginAt: new Date() } }).catch(() => {})
 
-    const reportingPerson = client.reportingPerson || client.marketingPerson || null
+    const accountManager = toMobileShape(await resolveAccountManager(client))
 
     return NextResponse.json({
       success: true,
@@ -60,7 +58,8 @@ export async function POST(req: NextRequest) {
         email: client.email,
         phone: client.phone,
         client_code: client.clientCode,
-        reporting_person: reportingPerson,
+        reporting_person: accountManager,   // legacy key
+        account_manager: accountManager,
       },
     })
   } catch (e: any) {

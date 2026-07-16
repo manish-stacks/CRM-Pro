@@ -24,7 +24,13 @@ export default function ClientsPage() {
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
   const [showFilter, setShowFilter] = useState(false)
-  const [filters, setFilters] = useState({ search: '', status: '', state: '' })
+  const [filters, setFilters] = useState({
+    search: '', status: '', state: '',
+    marketingPersonId: '', telecallerId: '',
+    serviceCatalogId: '', expiry: '',
+    dateField: 'createdAt', dateFrom: '', dateTo: '',
+  })
+  const [catalog, setCatalog] = useState<any[]>([])
 
   const [users, setUsers] = useState<any[]>([])
   const [modal, setModal] = useState<'none' | 'add'>('none')
@@ -55,6 +61,7 @@ export default function ClientsPage() {
   useEffect(() => { fetchClients() }, [fetchClients])
   useEffect(() => {
     if (isAtLeast('MANAGER')) {
+      api.get('/services?limit=200').then(r => setCatalog(r.data.data || [])).catch(() => {})
       api.get('/users/by-role?roles=TELECALLER,MARKETING_EXECUTIVE,MANAGER,EMPLOYEE')
         .then(r => setUsers(r.data.data || []))
         .catch(() => { })
@@ -94,7 +101,27 @@ export default function ClientsPage() {
     } finally { setSaving(false) }
   }
 
-  const activeFilterCount = Object.values(filters).filter(v => v).length
+  const activeFilterCount = Object.entries(filters)
+    .filter(([k, v]) => k !== 'dateField' && !!v).length
+
+  const setF = (k: string, v: string) => { setFilters(p => ({ ...p, [k]: v })); setPage(1) }
+  const resetFilters = () => {
+    setFilters({
+      search: '', status: '', state: '',
+      marketingPersonId: '', telecallerId: '',
+      serviceCatalogId: '', expiry: '',
+      dateField: 'createdAt', dateFrom: '', dateTo: '',
+    })
+    setPage(1)
+  }
+
+  const expiryLabel = (c: any) => {
+    const withExp = (c.services || []).filter((s: any) => s.expiryDate)
+    if (!withExp.length) return null
+    const d = new Date(withExp[0].expiryDate)
+    const days = Math.ceil((d.getTime() - Date.now()) / 86400000)
+    return { date: d, days, name: withExp[0].serviceName }
+  }
 
   return (
     <div>
@@ -127,16 +154,66 @@ export default function ClientsPage() {
         </div>
 
         {showFilter && (
-          <div className="px-5 py-4 bg-gray-50 border-b border-gray-100 grid grid-cols-2 md:grid-cols-4 gap-3">
-            <select value={filters.status} onChange={e => { setFilters(p => ({ ...p, status: e.target.value })); setPage(1) }} className="input">
-              <option value="">Status: All</option>
-              {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-            <Input placeholder="State" value={filters.state} onChange={e => { setFilters(p => ({ ...p, state: e.target.value })); setPage(1) }} />
+          <div className="px-5 py-4 bg-gray-50 border-b border-gray-100 space-y-3">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <select value={filters.status} onChange={e => setF('status', e.target.value)} className="input">
+                <option value="">Status: All</option>
+                {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+
+              {/* Marketing Executive name-wise */}
+              <select value={filters.marketingPersonId} onChange={e => setF('marketingPersonId', e.target.value)} className="input">
+                <option value="">Marketing Exec: All</option>
+                {users.filter((u: any) => u.role === 'MARKETING_EXECUTIVE').map((u: any) => (
+                  <option key={u.id} value={u.id}>{u.name}</option>
+                ))}
+              </select>
+
+              {/* Telecaller */}
+              <select value={filters.telecallerId} onChange={e => setF('telecallerId', e.target.value)} className="input">
+                <option value="">Telecaller: All</option>
+                {users.filter((u: any) => u.role === 'TELECALLER').map((u: any) => (
+                  <option key={u.id} value={u.id}>{u.name}</option>
+                ))}
+              </select>
+
+              {/* Service-wise */}
+              <select value={filters.serviceCatalogId} onChange={e => setF('serviceCatalogId', e.target.value)} className="input">
+                <option value="">Service: All</option>
+                {catalog.map((c: any) => <option key={c.id} value={c.id}>{c.name || c.serviceName}</option>)}
+              </select>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {/* Service expiry-wise */}
+              <select value={filters.expiry} onChange={e => setF('expiry', e.target.value)} className="input">
+                <option value="">Expiry: All</option>
+                <option value="expired">Already expired</option>
+                <option value="7">Expiring in 7 days</option>
+                <option value="15">Expiring in 15 days</option>
+                <option value="30">Expiring in 30 days</option>
+                <option value="60">Expiring in 60 days</option>
+                <option value="90">Expiring in 90 days</option>
+                <option value="active">Active (not expired)</option>
+                <option value="none">No expiry set</option>
+              </select>
+
+              {/* Date-wise */}
+              <select value={filters.dateField} onChange={e => setF('dateField', e.target.value)} className="input">
+                <option value="createdAt">Date: Created</option>
+                <option value="onboardingDate">Date: Onboarding</option>
+              </select>
+              <Input type="date" value={filters.dateFrom} onChange={e => setF('dateFrom', e.target.value)} />
+              <Input type="date" value={filters.dateTo} onChange={e => setF('dateTo', e.target.value)} />
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <Input placeholder="State" value={filters.state} onChange={e => setF('state', e.target.value)} />
+            </div>
+
             {activeFilterCount > 0 && (
-              <button onClick={() => { setFilters({ search: '', status: '', state: '' }); setPage(1) }}
-                className="text-xs text-red-600 hover:underline flex items-center gap-1 col-span-full">
-                <X size={12} /> Clear all
+              <button onClick={resetFilters} className="text-xs text-red-600 hover:underline flex items-center gap-1">
+                <X size={12} /> Clear all filters
               </button>
             )}
           </div>
@@ -151,6 +228,7 @@ export default function ClientsPage() {
                 <th>Contact</th>
                 <th>Location</th>
                 <th>Services</th>
+                <th>Next Expiry</th>
                 <th>Invoices</th>
                 <th>Status</th>
                 <th className="text-right">Actions</th>
@@ -158,9 +236,9 @@ export default function ClientsPage() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={8} className="text-center py-8"><Loader2 className="animate-spin inline text-gray-400" /></td></tr>
+                <tr><td colSpan={9} className="text-center py-8"><Loader2 className="animate-spin inline text-gray-400" /></td></tr>
               ) : clients.length === 0 ? (
-                <tr><td colSpan={8}><EmptyState icon={<Users2 size={40} />} title="No clients" description="No clients match your filters" /></td></tr>
+                <tr><td colSpan={9}><EmptyState icon={<Users2 size={40} />} title="No clients" description="No clients match your filters" /></td></tr>
               ) : clients.map((c: any) => (
                 <tr key={c.id} className="hover:bg-slate-50">
                   <td className="font-mono text-xs text-gray-600">{c.clientCode}</td>
@@ -175,7 +253,29 @@ export default function ClientsPage() {
                   <td className="text-xs text-gray-600">
                     {c.city && <div className="flex items-center gap-1"><MapPin size={10} />{c.city}{c.state ? `, ${c.state}` : ''}</div>}
                   </td>
-                  <td className="text-sm"><Package size={12} className="inline text-gray-400 mr-1" />{c._count?.services || 0}</td>
+                  <td className="text-sm">
+                    <Package size={12} className="inline text-gray-400 mr-1" />{c._count?.services || 0}
+                    {c.services?.length ? (
+                      <span className="block text-[10px] text-gray-400 truncate max-w-[140px]">
+                        {c.services.map((x: any) => x.serviceName).join(', ')}
+                      </span>
+                    ) : null}
+                  </td>
+                  <td className="text-xs">
+                    {(() => {
+                      const e = expiryLabel(c)
+                      if (!e) return <span className="text-gray-300">—</span>
+                      const cls = e.days < 0 ? 'text-red-600' : e.days <= 15 ? 'text-amber-600' : 'text-gray-600'
+                      return (
+                        <>
+                          <span className={`font-semibold ${cls}`}>{formatDate(e.date)}</span>
+                          <span className={`block text-[10px] ${cls}`}>
+                            {e.days < 0 ? `${Math.abs(e.days)}d overdue` : e.days === 0 ? 'today' : `in ${e.days}d`}
+                          </span>
+                        </>
+                      )
+                    })()}
+                  </td>
                   <td className="text-sm"><FileText size={12} className="inline text-gray-400 mr-1" />{c._count?.invoices || 0}</td>
                   <td><Badge status={c.status} /></td>
                   <td className="text-right">

@@ -7,6 +7,8 @@ import { requireAuth } from '@/lib/auth'
 import { successResponse, errorResponse, notFoundResponse } from '@/lib/api'
 import { logFromRequest } from '@/lib/audit'
 import { generateClientCode } from '@/lib/idgen'
+import { completeVisitForLead, CloseOutcome } from '@/lib/visitSync'
+import { Notifications } from '@/lib/notify'
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -79,13 +81,32 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     clientId = c.id
   }
 
+  // ---- Visit sheet auto-complete ----
+  const outcome: CloseOutcome =
+    newStatus === 'CONVERTED' ? 'DEAL_DONE' :
+    newStatus === 'CLOSED'    ? 'LOST' : 'NOT_INTERESTED'
+
+  const visitOwnerId = lead.meetingAssignedToId || session.userId
+  const visit = await completeVisitForLead({
+    leadId: id,
+    userId: visitOwnerId,
+    clientName: lead.companyName || lead.clientName,
+    clientId,
+    outcome,
+    note: note || reason || null,
+  })
+
+  if (visit && visitOwnerId !== session.userId) {
+    await Notifications.visitCompleted(visitOwnerId, lead.companyName || lead.clientName, outcome).catch(() => {})
+  }
+
   await logFromRequest(req, {
     userId: session.userId,
     action: newStatus,
     entityType: 'Lead',
     entityId: id,
-    metadata: { fromStatus: lead.status, reason, clientId },
+    metadata: { fromStatus: lead.status, reason, clientId, visitId: visit?.id, outcome },
   })
 
-  return successResponse({ lead: updated, clientId })
+  return successResponse({ lead: updated, clientId, visitId: visit?.id || null })
 }

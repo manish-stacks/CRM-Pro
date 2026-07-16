@@ -203,6 +203,11 @@ export async function POST(req: NextRequest) {
       data: {
         invoiceId,
         clientId: invoice.clientId,
+        // Collection report ke liye: paisa kisne liya. Admin doosre ke naam pe
+        // entry kar raha ho to body.collectedById bhej sakta hai, warna khud.
+        collectedById:
+          body.collectedById ||
+          (session.role === 'MARKETING_EXECUTIVE' ? session.userId : invoice.client.marketingPersonId || session.userId),
         amount: payAmount,
         method,
         reference: reference || null,

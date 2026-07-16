@@ -16,23 +16,49 @@ export default function App() {
   useEffect(() => {
     setupAndroidChannel();
 
-    // Tap on a notification → route where possible
+    const route = (data) => {
+      if (!navRef.current || !data) return;
+      const { screen, leadId, link } = data;
+      try {
+        // The server now sends an explicit `screen` in the push payload —
+        // prefer it, and fall back to the old link sniffing for older messages.
+        if (screen === 'MeetingDetail' && leadId) {
+          navRef.current.navigate('MeetingDetail', { id: leadId, meetingId: leadId });
+          return;
+        }
+        if (screen === 'Visits') {
+          navRef.current.navigate('Visits', { refresh: Date.now() });
+          return;
+        }
+        if (screen) {
+          navRef.current.navigate(screen, { refresh: Date.now() });
+          return;
+        }
+        if (!link) return;
+        if (link.includes('visit')) {
+          navRef.current.navigate('Visits', { refresh: Date.now() });
+        } else if (link.includes('lead') || link.includes('meeting') || link.includes('marketing')) {
+          navRef.current.navigate('Meetings', { refresh: Date.now() });
+        } else if (link.includes('ticket')) {
+          navRef.current.navigate('Notifications');
+        } else if (link.includes('invoice') || link.includes('payment')) {
+          navRef.current.navigate('Payments');
+        }
+      } catch {}
+    };
+
+    // Tap on a notification while the app is running
     const sub = Notifications.addNotificationResponseReceivedListener((response) => {
-      const link = response?.notification?.request?.content?.data?.link;
-      // Deep-link mapping is best-effort; the app opens and shows the relevant tab.
-      if (link && navRef.current) {
-        try {
-          // Meeting assigned to a marketing exec → open the Meetings tab and refresh.
-          if (link.includes('lead') || link.includes('meeting')) {
-            navRef.current.navigate('Meetings', { refresh: Date.now() });
-          } else if (link.includes('ticket')) {
-            navRef.current.navigate('Notifications');
-          } else if (link.includes('invoice') || link.includes('payment')) {
-            navRef.current.navigate('Payments');
-          }
-        } catch {}
-      }
+      route(response?.notification?.request?.content?.data);
     });
+
+    // App opened from a cold start by tapping a notification
+    Notifications.getLastNotificationResponseAsync()
+      .then((response) => {
+        if (response) setTimeout(() => route(response.notification?.request?.content?.data), 600);
+      })
+      .catch(() => {});
+
     return () => sub.remove();
   }, []);
 

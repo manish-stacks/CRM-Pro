@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getClientSession } from '@/lib/clientAuth'
 import { compare, hash } from 'bcryptjs'
+import { getAccountManager, toMobileShape } from '@/lib/accountManager'
 
 const EDITABLE = new Set([
   'clientName', 'phone', 'altPhone', 'email',
@@ -15,17 +16,27 @@ export async function GET(req: NextRequest) {
   const session = await getClientSession(req)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const client = await prisma.client.findUnique({
-    where: { id: session.clientId },
-    select: {
-      id: true, clientCode: true, companyName: true, clientName: true,
-      phone: true, altPhone: true, email: true,
-      address: true, city: true, state: true, pincode: true,
-      gstApplicable: true, gstNo: true,
-      image: true, status: true, onboardingDate: true,
-    },
+  const [client, am] = await Promise.all([
+    prisma.client.findUnique({
+      where: { id: session.clientId },
+      select: {
+        id: true, clientCode: true, companyName: true, clientName: true,
+        phone: true, altPhone: true, email: true,
+        address: true, city: true, state: true, pincode: true,
+        gstApplicable: true, gstNo: true,
+        image: true, status: true, onboardingDate: true,
+      },
+    }),
+    // Account Manager = client ka MARKETING_EXECUTIVE (default: Hover).
+    // Mobile app apna dashboard isi endpoint se banata hai, isliye yahin bhej
+    // rahe hain — koi extra call nahi.
+    getAccountManager(session.clientId),
+  ])
+
+  return NextResponse.json({
+    data: client ? { ...client, accountManager: am, account_manager: toMobileShape(am) } : null,
+    accountManager: am,
   })
-  return NextResponse.json({ data: client })
 }
 
 export async function PUT(req: NextRequest) {

@@ -7,6 +7,7 @@ import { prisma } from '@/lib/prisma'
 import { requireMobileEmployee, ok, fail } from '@/lib/mobileAuth'
 import { logFromRequest } from '@/lib/audit'
 import { generateClientCode } from '@/lib/idgen'
+import { completeVisitForLead, CloseOutcome } from '@/lib/visitSync'
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -80,13 +81,27 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     clientId = c.id
   }
 
+  // ---- Visit sheet auto-complete (same helper the web uses) ----
+  const outcome: CloseOutcome =
+    newStatus === 'CONVERTED' ? 'DEAL_DONE' :
+    newStatus === 'CLOSED'    ? 'LOST' : 'NOT_INTERESTED'
+
+  const visit = await completeVisitForLead({
+    leadId: id,
+    userId: lead.meetingAssignedToId || session.userId,
+    clientName: lead.companyName || lead.clientName,
+    clientId,
+    outcome,
+    note: note || reason || null,
+  })
+
   await logFromRequest(req, {
     userId: session.userId,
     action: newStatus,
     entityType: 'Lead',
     entityId: id,
-    metadata: { via: 'mobile', fromStatus: lead.status, reason, clientId },
+    metadata: { via: 'mobile', fromStatus: lead.status, reason, clientId, visitId: visit?.id, outcome },
   })
 
-  return ok({ status: updated.status, clientId })
+  return ok({ status: updated.status, clientId, visitId: visit?.id || null })
 }

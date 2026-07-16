@@ -19,10 +19,53 @@ export async function GET(req: NextRequest) {
   const status = searchParams.get('status')
   const state = searchParams.get('state')
   const assignedToMe = searchParams.get('assignedToMe')
+  // ---- New filters ----
+  const marketingPersonId = searchParams.get('marketingPersonId')  // exec name-wise
+  const telecallerId = searchParams.get('telecallerId')
+  const dateFrom = searchParams.get('dateFrom')                    // onboarding date-wise
+  const dateTo = searchParams.get('dateTo')
+  const dateField = searchParams.get('dateField') || 'createdAt'   // createdAt | onboardingDate
+  const serviceName = searchParams.get('serviceName')              // service-wise
+  const serviceCatalogId = searchParams.get('serviceCatalogId')
+  const expiry = searchParams.get('expiry')                        // expired|7|15|30|60|90|active|none
 
   const where: any = {}
   if (status) where.status = status
   if (state) where.state = state
+  if (marketingPersonId) where.marketingPersonId = marketingPersonId
+  if (telecallerId) where.telecallerId = telecallerId
+
+  if (dateFrom || dateTo) {
+    const field = dateField === 'onboardingDate' ? 'onboardingDate' : 'createdAt'
+    where[field] = {}
+    if (dateFrom) where[field].gte = new Date(dateFrom)
+    if (dateTo) where[field].lte = new Date(dateTo + 'T23:59:59')
+  }
+
+  // ---- Service + expiry filters (Client -> services relation) ----
+  const svc: any = {}
+  if (serviceName) svc.serviceName = { contains: serviceName }
+  if (serviceCatalogId) svc.serviceCatalogId = serviceCatalogId
+
+  if (expiry) {
+    const now = new Date()
+    const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0)
+    if (expiry === 'expired') {
+      svc.expiryDate = { lt: todayStart }
+    } else if (expiry === 'none') {
+      svc.expiryDate = null
+    } else if (expiry === 'active') {
+      svc.expiryDate = { gte: todayStart }
+      svc.status = 'ACTIVE'
+    } else {
+      const days = parseInt(expiry)
+      if (!isNaN(days)) {
+        const until = new Date(todayStart); until.setDate(until.getDate() + days); until.setHours(23, 59, 59, 999)
+        svc.expiryDate = { gte: todayStart, lte: until }
+      }
+    }
+  }
+  if (Object.keys(svc).length) where.services = { some: svc }
 
   if (search) {
     where.OR = [
@@ -61,6 +104,12 @@ export async function GET(req: NextRequest) {
       include: {
         telecaller: { select: { id: true, name: true } },
         marketingPerson: { select: { id: true, name: true } },
+        // Expiry column ke liye — sabse pehle expire hone wali service upar
+        services: {
+          select: { id: true, serviceName: true, status: true, expiryDate: true, amount: true },
+          orderBy: { expiryDate: 'asc' },
+          take: 5,
+        },
         _count: { select: { services: true, invoices: true } },
       },
       orderBy: { createdAt: 'desc' },
