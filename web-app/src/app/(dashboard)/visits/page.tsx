@@ -208,7 +208,7 @@ export default function VisitsPage() {
         {loading ? (
           <div className="flex justify-center py-16"><div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" /></div>
         ) : rows.length === 0 ? (
-          <EmptyState icon={MapPin} title="No visits found" description="Try changing the filters, or schedule a new visit." />
+          <EmptyState icon={<MapPin size={48} />} title="No visits found" description="Try changing the filters, or schedule a new visit." />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
