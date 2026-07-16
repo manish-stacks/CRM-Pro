@@ -4,16 +4,79 @@ import fs from 'fs'
 import path from 'path'
 import sharp from 'sharp'
 
+export const runtime = 'nodejs'
+
 const PAGE_W_MM = 210
 
+/** Production pe puppeteer ka bundled Chromium aksar missing hota hai.
+ *  ENV se ya system se resolve karo. */
+function resolveExecutablePath(): string | undefined {
+  const envPath =
+    process.env.PUPPETEER_EXECUTABLE_PATH ||
+    process.env.CHROME_PATH ||
+    process.env.CHROMIUM_PATH
+  if (envPath && fs.existsSync(envPath)) return envPath
+
+  const candidates = [
+    '/usr/bin/google-chrome-stable',
+    '/usr/bin/google-chrome',
+    '/usr/bin/chromium-browser',
+    '/usr/bin/chromium',
+    '/snap/bin/chromium',
+    '/opt/google/chrome/chrome',
+    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+  ]
+  for (const c of candidates) {
+    try { if (fs.existsSync(c)) return c } catch {}
+  }
+
+  // puppeteer ka apna download (agar hai to)
+  try {
+    const p = puppeteer.executablePath()
+    if (p && fs.existsSync(p)) return p
+  } catch {}
+
+  return undefined
+}
+
+const LAUNCH_ARGS = [
+  '--no-sandbox',
+  '--disable-setuid-sandbox',
+  '--disable-dev-shm-usage',
+  '--disable-gpu',
+  '--no-zygote',
+  '--single-process',
+  '--font-render-hinting=none',
+  '--disable-extensions',
+  '--hide-scrollbars',
+  '--mute-audio',
+]
+
 let browserPromise: Promise<Browser> | null = null
+
+async function launchBrowser(): Promise<Browser> {
+  const executablePath = resolveExecutablePath()
+  if (!executablePath) {
+    throw new Error(
+      'Chromium not found. Server pe install karo (apt install -y chromium OR npx puppeteer browsers install chrome) ' +
+      'aur PUPPETEER_EXECUTABLE_PATH env set karo.'
+    )
+  }
+  return puppeteer.launch({
+    headless: true,
+    executablePath,
+    args: LAUNCH_ARGS,
+    protocolTimeout: 120_000,
+  })
+}
+
 function getBrowser(): Promise<Browser> {
   if (!browserPromise) {
-    browserPromise = puppeteer.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    })
-    browserPromise.then(b => b.on('disconnected', () => { browserPromise = null }))
+    browserPromise = launchBrowser()
+    browserPromise
+      .then(b => b.on('disconnected', () => { browserPromise = null }))
+      .catch(() => { browserPromise = null })
   }
   return browserPromise
 }
@@ -23,9 +86,6 @@ let letterheadCache: { header: Letterhead; footer: Letterhead } | null = null
 
 async function loadTrimmed(filePath: string): Promise<Letterhead> {
   const raw = fs.readFileSync(filePath)
-  // trim() strips any uniform white/blank border baked into the source
-  // image itself — this removes white space that no CSS/margin change
-  // could touch, since it lives inside the JPG pixels.
   const trimmed = await sharp(raw).trim().toBuffer({ resolveWithObject: true })
   const { width, height } = trimmed.info
   const heightMm = (height / width) * PAGE_W_MM
@@ -39,6 +99,9 @@ async function getLetterheadImages() {
   if (!letterheadCache) {
     const headerPath = path.join(process.cwd(), 'public', 'letterhead', 'header.jpg')
     const footerPath = path.join(process.cwd(), 'public', 'letterhead', 'footer.jpg')
+    if (!fs.existsSync(headerPath) || !fs.existsSync(footerPath)) {
+      throw new Error(`Letterhead images missing: ${headerPath} / ${footerPath}`)
+    }
     letterheadCache = {
       header: await loadTrimmed(headerPath),
       footer: await loadTrimmed(footerPath),
@@ -116,7 +179,7 @@ interface RenderOptions {
   useLetterheadImages: boolean
 }
 
-async function renderHtmlToPdf(bodyHtml: string, title: string, bodyStyles: string, opts: RenderOptions): Promise<Buffer> {
+async function pdfOnce(bodyHtml: string, title: string, bodyStyles: string, opts: RenderOptions): Promise<Buffer> {
   const fullHtml = `<!DOCTYPE html>
 <html>
 <head>
@@ -132,7 +195,10 @@ async function renderHtmlToPdf(bodyHtml: string, title: string, bodyStyles: stri
   const browser = await getBrowser()
   const page = await browser.newPage()
   try {
-    await page.setContent(fullHtml, { waitUntil: 'networkidle0' })
+    page.setDefaultNavigationTimeout(60_000)
+    // networkidle0 par local pe hang hota hai jab koi external asset ho -> domcontentloaded + fonts wait
+    await page.setContent(fullHtml, { waitUntil: 'domcontentloaded', timeout: 60_000 })
+    await page.evaluate(() => (document as any).fonts?.ready).catch(() => {})
 
     if (opts.useLetterheadImages) {
       const { header, footer } = await getLetterheadImages()
@@ -140,6 +206,7 @@ async function renderHtmlToPdf(bodyHtml: string, title: string, bodyStyles: stri
         format: 'A4',
         printBackground: true,
         displayHeaderFooter: true,
+        timeout: 90_000,
         margin: {
           top: `${header.heightMm}mm`,
           bottom: `${footer.heightMm}mm`,
@@ -162,13 +229,25 @@ async function renderHtmlToPdf(bodyHtml: string, title: string, bodyStyles: stri
       format: 'A4',
       printBackground: true,
       displayHeaderFooter: true,
+      timeout: 90_000,
       margin: { top: '10mm', bottom: '14mm', left: '0mm', right: '0mm' },
       headerTemplate: `<div></div>`,
       footerTemplate: `<div style="width:100%;font-family:Arial,Helvetica,sans-serif;font-size:8.5px;color:#94a3b8;text-align:center;padding-top:2px;">Page <span class="pageNumber"></span> of <span class="totalPages"></span></div>`,
     })
     return Buffer.from(pdf)
   } finally {
-    await page.close()
+    await page.close().catch(() => {})
+  }
+}
+
+async function renderHtmlToPdf(bodyHtml: string, title: string, bodyStyles: string, opts: RenderOptions): Promise<Buffer> {
+  try {
+    return await pdfOnce(bodyHtml, title, bodyStyles, opts)
+  } catch (err) {
+    // stale/crashed browser — ek baar reset kar ke retry
+    try { const b = await browserPromise; await b?.close() } catch {}
+    browserPromise = null
+    return await pdfOnce(bodyHtml, title, bodyStyles, opts)
   }
 }
 
