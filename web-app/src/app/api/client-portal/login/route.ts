@@ -90,7 +90,7 @@ export async function POST(req: NextRequest) {
         phone: client.phone,
         image: client.image,
       },
-      reportingPerson,          // legacy key — dashboard isi ko padhta hai
+      reportingPerson,          // legacy key — the dashboard reads this one
       accountManager: reportingPerson,
       stats: { activeServices, totalPaid, totalDue, openTickets, reports },
     })

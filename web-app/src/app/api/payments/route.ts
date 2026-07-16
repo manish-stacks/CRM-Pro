@@ -203,8 +203,7 @@ export async function POST(req: NextRequest) {
       data: {
         invoiceId,
         clientId: invoice.clientId,
-        // Collection report ke liye: paisa kisne liya. Admin doosre ke naam pe
-        // entry kar raha ho to body.collectedById bhej sakta hai, warna khud.
+        // For the collection report: who collected the payment. If admin is entering on someone else's behalf, they can send body.collectedById, otherwise it defaults to themselves.
         collectedById:
           body.collectedById ||
           (session.role === 'MARKETING_EXECUTIVE' ? session.userId : invoice.client.marketingPersonId || session.userId),
@@ -224,7 +223,7 @@ export async function POST(req: NextRequest) {
         paidAmount: newPaid,
         dueAmount: newDue,
         status: newStatus,
-        // Part payment: agar balance bacha hai aur balance-due-date di gayi hai to set karo
+        // Part payment: if there's a remaining balance and a balance-due-date is given, set it
         ...(newDue > 0 && nextDueDate ? { dueDate: new Date(nextDueDate) } : {}),
       },
     }),

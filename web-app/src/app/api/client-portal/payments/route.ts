@@ -1,5 +1,5 @@
 // src/app/api/client-portal/payments/route.ts
-// Client apne invoices + un pe hui SAARI payments (PARTIAL bhi) dekh sakta hai,
+// Client can see their invoices + ALL payments made on them (including PARTIAL),
 // aur har payment ka public receipt link.
 //
 //   GET                 -> invoices (payments ke saath, har payment pe receipt_url)
@@ -9,7 +9,7 @@ import { prisma } from '@/lib/prisma'
 import { getClientSession } from '@/lib/clientAuth'
 import { randomToken } from '@/lib/idgen'
 
-/** Jis payment ka receiptToken nahi hai uska bana do — receipt sabko dikhna chahiye */
+/**  Generate one for payments that don't have a receiptToken — everyone should be able to see the receipt */
 async function ensureTokens(payments: { id: string; receiptToken: string | null }[]) {
   const missing = payments.filter(p => !p.receiptToken)
   if (!missing.length) return

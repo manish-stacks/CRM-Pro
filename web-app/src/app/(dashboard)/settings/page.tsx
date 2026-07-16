@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import api from '@/lib/axios'
 import { useAuth } from '@/hooks/useAuth'
 import { Button, Input, Select, Textarea } from '@/components/ui'
-import { Settings as SettingsIcon, Building2, DollarSign, Calendar, Clock, Save, Loader2 } from 'lucide-react'
+import { Settings as SettingsIcon, Building2, DollarSign, Calendar, Clock, Save, Loader2, Camera, Bell } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 // Default settings shown in the form (populated from API + falls back to these)
@@ -35,6 +35,16 @@ const DEFAULTS: Record<string, any> = {
   // Leave accrual + carry-forward
   leave_monthly_accrual: 1,
   leave_max_carryforward: 6,
+  // Desktop Tracker (screenshot monitoring)
+  tracker_enabled: true,
+  tracker_screenshots_per_day: 4,
+  tracker_idle_threshold_seconds: 300,
+  tracker_screenshot_quality: 70,
+  tracker_office_hours_only: true,
+  tracker_retention_days: 30,
+  // Notifications kill-switches
+  email_enabled: true,
+  whatsapp_enabled: true,
 }
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -60,7 +70,7 @@ export default function SettingsPage() {
   const [values, setValues] = useState<Record<string, any>>(DEFAULTS)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [tab, setTab] = useState<'company' | 'finance' | 'hrm' | 'attendance'>('company')
+  const [tab, setTab] = useState<'company' | 'finance' | 'hrm' | 'attendance' | 'tracker' | 'notifications'>('company')
 
   useEffect(() => {
     api.get('/settings').then(r => {
@@ -98,6 +108,8 @@ export default function SettingsPage() {
         finance: ['currency', 'currency_symbol', 'gst_default_rate', 'gst_enabled_by_default', 'invoice_due_days', 'invoice_prefix', 'payment_methods'],
         hrm: ['weekly_off_days', 'working_hours_per_day', 'half_day_threshold_hours'],
         attendance: ['office_start_time', 'office_end_time', 'late_grace_minutes', 'leave_monthly_accrual', 'leave_max_carryforward'],
+        tracker: ['tracker_enabled', 'tracker_screenshots_per_day', 'tracker_idle_threshold_seconds', 'tracker_screenshot_quality', 'tracker_office_hours_only', 'tracker_retention_days'],
+        notifications: ['email_enabled', 'whatsapp_enabled'],
       }
       const settings: Record<string, { value: any; category: string }> = {}
       for (const [cat, keys] of Object.entries(CATS)) {
@@ -134,6 +146,8 @@ export default function SettingsPage() {
             { key: 'finance', label: 'Finance & Invoicing', icon: DollarSign },
             { key: 'hrm', label: 'HRM & Payroll', icon: Calendar },
             { key: 'attendance', label: 'Attendance & Late Mark', icon: Clock },
+            { key: 'tracker', label: 'Desktop Tracker', icon: Camera },
+            { key: 'notifications', label: 'Notifications', icon: Bell },
           ].map((t: any) => (
             <button key={t.key} onClick={() => setTab(t.key)}
               className={`px-5 py-3 text-sm font-medium border-b-2 flex items-center gap-2 whitespace-nowrap ${
@@ -269,22 +283,22 @@ export default function SettingsPage() {
               <div className="rounded-lg bg-amber-50 border border-amber-100 p-3 text-sm text-amber-800 flex items-start gap-2">
                 <Clock size={15} className="mt-0.5 flex-shrink-0" />
                 <div>
-                  Punch-in <b>{pretty(cutoff)}</b> ke baad → <b>Late Mark</b>.
+                  Punch-in after <b>{pretty(cutoff)}</b> → <b>Late Mark</b>.
                   <div className="text-xs text-amber-700 mt-0.5">
-                    Office {pretty(values.office_start_time || '10:00')} start + {graceMins} min grace.
-                    {graceMins === 0 && ' (Grace 0 — start ke baad hi late.)'}
+                    Office start {pretty(values.office_start_time || '10:00')} + {graceMins} min grace.
+                    {graceMins === 0 && ' (Grace 0 — late immediately after start time.)'}
                   </div>
                 </div>
               </div>
 
               <p className="text-xs text-gray-500">
-                Time IST (Asia/Kolkata) me evaluate hota hai. <code>lateBy</code> = office start se kitne minute late.
-                Ye punch-in ke waqt calculate hota hai — purane records par lagu nahi hota.
+                Time is evaluated in IST (Asia/Kolkata). <code>lateBy</code> = minutes late from office start.
+                This is calculated at the time of punch-in — it does not apply to past records.
               </p>
 
               <div className="border-t border-gray-100 pt-4 mt-2">
                 <h3 className="font-semibold text-gray-900 text-sm mb-1">Leave — accrual &amp; carry-forward</h3>
-                <p className="text-xs text-gray-500 mb-3">Har month itne paid leave milte hain; balance max cap tak carry-forward hota hai, upar wala lapse.</p>
+                <p className="text-xs text-gray-500 mb-3">Employees earn this many paid leaves each month; the balance carries forward up to the max cap, and anything above that lapses.</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <Input label="Leaves earned per month" type="number" step="0.5" min="0"
                     value={values.leave_monthly_accrual ?? 1}
@@ -294,10 +308,101 @@ export default function SettingsPage() {
                     onChange={e => set('leave_max_carryforward', Number(e.target.value))} />
                 </div>
                 <div className="rounded-lg bg-indigo-50 border border-indigo-100 p-3 text-xs text-indigo-800 mt-3">
-                  Abhi: <b>{values.leave_monthly_accrual ?? 1}</b> leave/month · max <b>{values.leave_max_carryforward ?? 6}</b> accumulate.
-                  Yaani {(values.leave_monthly_accrual ?? 1) * 12}/year milenge, par ek saath {values.leave_max_carryforward ?? 6} se zyada jama nahi honge.
+                  Currently: <b>{values.leave_monthly_accrual ?? 1}</b> leave/month · max <b>{values.leave_max_carryforward ?? 6}</b> accumulate.
+                  That means {(values.leave_monthly_accrual ?? 1) * 12}/year will be earned, but no more than {values.leave_max_carryforward ?? 6} can accumulate at once.
                 </div>
               </div>
+            </>
+          )}
+
+          {tab === 'tracker' && (
+            <>
+              <div className="flex items-center justify-between rounded-lg border border-gray-200 p-3">
+                <div>
+                  <p className="text-sm font-medium text-gray-900">Screenshot Monitoring</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Master switch — when off, no employee's desktop app will take screenshots; only check-in/out will still run.</p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer flex-shrink-0 ml-3">
+                  <input type="checkbox" className="sr-only peer" checked={!!values.tracker_enabled}
+                    onChange={e => set('tracker_enabled', e.target.checked)} />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-5" />
+                </label>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Input label="Screenshots Per Day" type="number" min="1" max="50"
+                  value={values.tracker_screenshots_per_day ?? 4}
+                  onChange={e => set('tracker_screenshots_per_day', Number(e.target.value))} />
+                <Input label="Idle Threshold (minutes)" type="number" min="1"
+                  value={Math.round((values.tracker_idle_threshold_seconds ?? 300) / 60)}
+                  onChange={e => set('tracker_idle_threshold_seconds', Number(e.target.value) * 60)} />
+              </div>
+              <p className="text-xs text-gray-500">
+                It will take <b>{values.tracker_screenshots_per_day ?? 4}</b> random screenshots throughout the day (spread within office hours).
+                If an employee stays inactive for <b>{Math.round((values.tracker_idle_threshold_seconds ?? 300) / 60)} minutes</b>, capturing will pause.
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Input label="Screenshot Quality (1-100)" type="number" min="10" max="100"
+                  value={values.tracker_screenshot_quality ?? 70}
+                  onChange={e => set('tracker_screenshot_quality', Number(e.target.value))} />
+                <Input label="Auto-delete After (days)" type="number" min="1"
+                  value={values.tracker_retention_days ?? 30}
+                  onChange={e => set('tracker_retention_days', Number(e.target.value))} />
+              </div>
+              <p className="text-xs text-gray-500">
+                Higher quality = clearer screenshots but more storage. With retention, old screenshots will be auto-deleted after {values.tracker_retention_days ?? 30} days (via daily cron) — for both storage and privacy.
+              </p>
+
+              <div className="flex items-center justify-between rounded-lg border border-gray-200 p-3">
+                <div>
+                  <p className="text-sm font-medium text-gray-900">Office Hours Only</p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    When on, capturing will only happen within the Attendance tab's Office Start/End Time ({pretty(values.office_start_time || '10:00')}–{pretty(values.office_end_time || '18:30')}).
+                  </p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer flex-shrink-0 ml-3">
+                  <input type="checkbox" className="sr-only peer" checked={!!values.tracker_office_hours_only}
+                    onChange={e => set('tracker_office_hours_only', e.target.checked)} />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-5" />
+                </label>
+              </div>
+
+              <div className="rounded-lg bg-blue-50 border border-blue-100 p-3 text-xs text-blue-800">
+                To exempt an individual employee (no screenshots for them), do it from their <b>Employee profile</b> page — this is only the global default.
+              </div>
+            </>
+          )}
+
+          {tab === 'notifications' && (
+            <>
+              <div className="flex items-center justify-between rounded-lg border border-gray-200 p-3">
+                <div>
+                  <p className="text-sm font-medium text-gray-900">Email Sending</p>
+                  <p className="text-xs text-gray-500 mt-0.5">When off, no emails (invoice, OTP, welcome, reminders) will be sent — takes effect immediately (~1 min cache).</p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer flex-shrink-0 ml-3">
+                  <input type="checkbox" className="sr-only peer" checked={!!values.email_enabled}
+                    onChange={e => set('email_enabled', e.target.checked)} />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-5" />
+                </label>
+              </div>
+
+              <div className="flex items-center justify-between rounded-lg border border-gray-200 p-3">
+                <div>
+                  <p className="text-sm font-medium text-gray-900">WhatsApp Sending</p>
+                  <p className="text-xs text-gray-500 mt-0.5">When off, no WhatsApp template messages will be sent — takes effect immediately (~1 min cache).</p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer flex-shrink-0 ml-3">
+                  <input type="checkbox" className="sr-only peer" checked={!!values.whatsapp_enabled}
+                    onChange={e => set('whatsapp_enabled', e.target.checked)} />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-5" />
+                </label>
+              </div>
+
+              <p className="text-xs text-gray-500">
+                Skipped emails/WhatsApp messages are still saved in the Logs with a <code>SKIPPED</code> status, so it's clear later that they weren't sent because the feature was disabled — not due to some other failure.
+              </p>
             </>
           )}
         </div>

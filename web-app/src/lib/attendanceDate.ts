@@ -51,3 +51,20 @@ export function computeLate(
   const isLate = after > graceMinutes
   return { isLate, lateBy: isLate ? after : 0 }
 }
+
+// Is `at` within [officeStart, officeEnd) on the same local day? Used to
+// gate desktop-tracker screenshot capture to office hours only.
+export function isWithinOfficeWindow(
+  at: Date,
+  officeStart = '10:00',
+  officeEnd = '18:30',
+  tzOffsetMin = 330,
+): boolean {
+  const [sh, sm] = officeStart.split(':').map(Number)
+  const [eh, em] = officeEnd.split(':').map(Number)
+  const utcMin = at.getUTCHours() * 60 + at.getUTCMinutes()
+  const localMin = (((utcMin + tzOffsetMin) % 1440) + 1440) % 1440
+  const startMin = sh * 60 + sm
+  const endMin = eh * 60 + em
+  return localMin >= startMin && localMin < endMin
+}

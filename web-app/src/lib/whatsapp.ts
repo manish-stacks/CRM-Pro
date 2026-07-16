@@ -5,6 +5,7 @@
 //     ?user=X&pass=Y&sender=Z&phone=N&text=TEMPLATE_NAME
 //     &priority=wa&stype=normal&Params=p1,p2,p3
 import { prisma } from './prisma'
+import { getSetting } from './settings'
 
 // ============ Approved Template Registry ============
 // These template names MUST be created + approved on BUZWAP dashboard.
@@ -79,6 +80,17 @@ export async function sendWhatsapp(opts: SendWhatsappOptions): Promise<SendWhats
       referenceId: opts.referenceId,
     },
   })
+
+  // Admin kill-switch — Settings > Notifications > "WhatsApp Sending". Checked
+  // per-send (not cached long) so toggling off stops messages immediately.
+  const whatsappEnabled = await getSetting<boolean>('whatsapp_enabled', true)
+  if (!whatsappEnabled) {
+    await prisma.whatsappLog.update({
+      where: { id: log.id },
+      data: { status: 'SKIPPED', errorMessage: 'WhatsApp sending disabled by admin' },
+    })
+    return { success: false, error: 'WhatsApp sending is disabled by admin', logId: log.id }
+  }
 
   try {
     if (!process.env.WHATSAPP_API_URL || !process.env.WHATSAPP_USER) {

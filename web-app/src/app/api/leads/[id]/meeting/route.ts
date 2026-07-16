@@ -40,8 +40,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const md = new Date(meetingDate)
 
-  // Meeting location ko ek baar geocode kar ke store karo — app me ETA/distance
-  // ("aap yahan se 8 km, ~24 min") isi lat/lng se calculate hota hai.
+  // Geocode the meeting location once and store it — ETA/distance in the app ("you're 8 km, ~24 min from here") is calculated from this lat/lng.
   const geoSource = meetingLocation || [lead.address, lead.city, lead.state].filter(Boolean).join(', ')
   const locationChanged = (meetingLocation || null) !== (lead.meetingLocation || null)
   let geo: { lat: number; lng: number } | null = null
@@ -112,8 +111,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     session.userId
   )
 
-  // In-app + FCM/Expo push. MUST be awaited — fire-and-forget production me
-  // request teardown se pehle bhej hi nahi paata tha.
+  // In-app + FCM/Expo push. MUST be awaited — fire-and-forget production will not work because the request is torn down before the push is sent. (The notification is sent in a separate thread, so it can outlive the request.)
+
   const whenTxt = `${md.toLocaleDateString('en-IN')}${meetingSlot ? ` (${meetingSlot})` : meetingTime ? ` (${meetingTime})` : ''}`
   try {
     await Notifications.meetingScheduled(marketingExecId, lead.clientName, whenTxt, id)

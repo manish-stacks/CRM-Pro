@@ -101,7 +101,7 @@ export default function MeetingDetailScreen({ route, navigation }) {
       setShowConvert(false);
       Alert.alert(
         '🎉 Deal Done!',
-        'Client has been created. Ab aap client ke services / proposal / invoice add kar sakte ho.',
+        'Client has been created. You can now add services / proposal / invoice for this client.',
         [
           clientId
             ? { text: 'Open Client', onPress: () => navigation.replace('ClientDetail', { client: { id: clientId } }) }

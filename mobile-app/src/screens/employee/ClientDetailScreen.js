@@ -113,8 +113,8 @@ export default function ClientDetailScreen({ route, navigation }) {
   // Open a payment's receipt in the browser — public, no-login link
   // (Payment.receiptToken), same pattern as the invoice link above.
   const openReceiptLink = async (payment) => {
-    // /mobile/payments ab har payment ke saath receipt_url bhejta hai — us case
-    // me seedha khol do, warna purane tarike se link maang lo.
+    // mobile/payments now sends a receipt_url with every payment — in that
+    // open it directly, otherwise fall back to requesting the link the old way.
     if (payment?.receipt_url) {
       Linking.openURL(payment.receipt_url).catch(() => Alert.alert('Error', 'Could not open receipt'));
       return;
@@ -323,8 +323,8 @@ export default function ClientDetailScreen({ route, navigation }) {
       fetchPayments();
       fetchInvoices();
 
-      // Receipt turant — PARTIAL payment ka bhi. Yahi link client ko uske app/
-      // portal me aur admin ko Daily Collection me dikhta hai.
+      // Receipt is instant — even for a PARTIAL payment. This same link is visible
+      // to the client in their app/portal, and to admin in Daily Collection.
       Alert.alert(
         'Payment Collected',
         `₹${d.amount || payAmount} recorded.` +

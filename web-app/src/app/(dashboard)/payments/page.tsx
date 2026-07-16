@@ -300,7 +300,7 @@ export default function PaymentsPage() {
           />
           {dueInvoices.length === 0 && (
             <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800">
-              Koi <b>pending invoice</b> nahi mila (sirf balance-due wale dikhte hain). Part payment ke liye pehle full amount ka invoice banao.
+              No pending invoice found (only invoices with balance due are shown). Create a full-amount invoice first to make a part payment.
               <button type="button" onClick={() => { setShowPmtModal(false); setInvForm({ clientId: '', dueDate: '', notes: '', items: [{ description: '', quantity: 1, unitPrice: '', total: 0 }] }); setShowInvModal(true) }}
                 className="mt-2 block w-full text-center bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2 text-sm font-medium">
                 + New Invoice banao

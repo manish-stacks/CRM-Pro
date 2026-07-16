@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from './src/context/AuthContext';
-import { ThemeProvider } from './src/context/ThemeContext';
+import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import AppNavigator from './src/navigation/AppNavigator';
 import { StatusBar } from 'expo-status-bar';
 import * as Notifications from 'expo-notifications';
@@ -9,6 +9,15 @@ import * as Notifications from 'expo-notifications';
 // (expo-task-manager requires the task to be defined in the global scope on start.)
 import './src/services/LocationTracker';
 import { setupAndroidChannel } from './src/services/push';
+
+// Status bar icon color must follow the app's own manual dark-mode toggle
+// (ThemeContext), NOT the OS color scheme — "auto" was reading the device's
+// system theme, so on screens with no per-screen <StatusBar>, the icons/time
+// rendered in the wrong color and became invisible against a dark background.
+function AppStatusBar() {
+  const { isDark } = useTheme();
+  return <StatusBar style={isDark ? 'light' : 'dark'} />;
+}
 
 export default function App() {
   const navRef = useRef(null);
@@ -66,7 +75,7 @@ export default function App() {
     <SafeAreaProvider>
       <ThemeProvider>
         <AuthProvider>
-          <StatusBar style="auto" />
+          <AppStatusBar />
           <AppNavigator navRef={navRef} />
         </AuthProvider>
       </ThemeProvider>

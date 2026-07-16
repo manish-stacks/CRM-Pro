@@ -223,7 +223,7 @@ export default function TrackingPage() {
                       <p className="text-sm text-gray-500">Failed to load map</p>
                       <p className="text-xs text-gray-400">
                         {!GOOGLE_MAPS_KEY
-                          ? '.env me NEXT_PUBLIC_GOOGLE_MAPS_API_KEY set karo (Maps JavaScript API enable + key restrict).'
+                          ? 'Set NEXT_PUBLIC_GOOGLE_MAPS_API_KEY in .env (enable Maps JavaScript API + restrict the key).'
                           : mapsError}
                       </p>
                     </>

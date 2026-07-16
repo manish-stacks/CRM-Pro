@@ -73,4 +73,17 @@ export const Settings = {
   invoicePrefix:       () => getSetting<string>('invoice_prefix', 'INV-'),
   paymentMethods:      () => getSetting<string[]>('payment_methods', ['UPI', 'CASH', 'BANK_TRANSFER', 'CHEQUE', 'CARD']),
   timezone:            () => getSetting<string>('timezone', 'Asia/Kolkata'),
+
+  // Notification kill-switches (desktop app section) — admin can stop
+  // outgoing messages instantly without touching SMTP/WhatsApp credentials.
+  emailEnabled:        () => getSetting<boolean>('email_enabled', true),
+  whatsappEnabled:     () => getSetting<boolean>('whatsapp_enabled', true),
+
+  // Desktop tracker (screenshot monitoring) settings
+  trackerEnabled:          () => getSetting<boolean>('tracker_enabled', true),
+  trackerScreenshotsPerDay:() => getSetting<number>('tracker_screenshots_per_day', 4),
+  trackerIdleThresholdSec: () => getSetting<number>('tracker_idle_threshold_seconds', 300),
+  trackerScreenshotQuality:() => getSetting<number>('tracker_screenshot_quality', 70), // JPEG quality 1-100
+  trackerOfficeHoursOnly:  () => getSetting<boolean>('tracker_office_hours_only', true),
+  trackerRetentionDays:    () => getSetting<number>('tracker_retention_days', 30),
 }

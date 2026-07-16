@@ -1,9 +1,8 @@
 // src/lib/distance.ts
 // Zomato-style "kitni door / kitne time me pahunchoge" helper.
-//
-// Google Distance Matrix se real driving distance + traffic-aware ETA aata hai.
+// Gets real driving distance + traffic-aware ETA from Google Distance Matrix..
 // Key na ho ya API fail ho jaye to haversine (seedhi line) * 1.35 road-factor se
-// approximate nikal ke fallback deta hai — screen kabhi khaali nahi dikhti.
+// Falls back to an approximate value — the screen is never left empty.
 const GOOGLE_KEY = process.env.GOOGLE_MAPS_API_KEY || process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''
 
 export interface LatLng { lat: number; lng: number }
@@ -68,8 +67,8 @@ export async function geocodeAddress(address: string): Promise<LatLng | null> {
 
 /**
  * One origin -> many destinations. `destinations` me har item ka `key` wapas
- * milta hai taki client side pe map kar sako.
- * Google Distance Matrix ki limit 25 destinations/request hai — chunk kar diya hai.
+ * is returned so it can be mapped on the client side
+ * Google Distance Matrix has a limit of 25 destinations/request — so it's chunked.
  */
 export async function getEtas(
   origin: LatLng,
@@ -125,7 +124,7 @@ export async function getEtas(
       batch.forEach((d, idx) => {
         const el = elements[idx]
         if (!el || el.status !== 'OK') { out.push(fallback(d)); return }
-        // duration_in_traffic tab aata hai jab departure_time=now diya ho
+        // duration_in_traffic is only returned when departure_time=now is passed
         const dur = el.duration_in_traffic || el.duration
         out.push({
           key: d.key,

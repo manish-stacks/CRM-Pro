@@ -1,6 +1,6 @@
 // src/app/api/client-portal/invoices/route.ts
 // Client ke invoices + har invoice ka public PDF link (Invoice.shareToken).
-// App/web bas link kholte hain — koi client-side file generation nahi.
+// The app/web just opens the link — no client-side file generation.
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getClientSession } from '@/lib/clientAuth'
@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
     orderBy: { createdAt: 'desc' },
   })
 
-  // Jinke paas shareToken nahi hai unka bana do
+  // Generate one for those who don't have a shareToken
   await Promise.all(
     invoices.filter(i => !i.shareToken).map(async i => {
       const token = randomToken(32)

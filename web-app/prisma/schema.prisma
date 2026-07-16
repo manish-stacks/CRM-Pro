@@ -209,6 +209,10 @@ model Employee {
   ifscCode          String?
   accountHolderName String?
 
+  // Desktop tracker — admin can exempt individual employees from screenshot
+  // monitoring (e.g. leadership, or roles that don't use the desktop app).
+  trackerExempt     Boolean   @default(false)
+
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
@@ -222,6 +226,7 @@ model Employee {
   payslips          Payslip[]
   leaveBalance      LeaveBalance?
   letters           Letter[]
+  trackerSessions   TrackerSession[]
 
   @@index([employeeId])
   @@index([departmentId])
@@ -246,6 +251,43 @@ model Letter {
   @@index([employeeId])
   @@index([type])
   @@map("letters")
+}
+
+// ============================================================
+// DESKTOP TRACKER — Check-in/out session + periodic screenshots
+// captured by the standalone Electron desktop app.
+// ============================================================
+
+model TrackerSession {
+  id            String    @id @default(cuid())
+  employeeId    String
+  checkInAt     DateTime  @default(now())
+  checkOutAt    DateTime?
+  idleSeconds   Int       @default(0)   // accumulated idle time this session
+  status        String    @default("ACTIVE") // ACTIVE, CLOSED
+  createdAt     DateTime  @default(now())
+
+  employee      Employee            @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  screenshots   TrackerScreenshot[]
+
+  @@index([employeeId, checkInAt])
+  @@index([status])
+  @@map("tracker_sessions")
+}
+
+model TrackerScreenshot {
+  id          String   @id @default(cuid())
+  sessionId   String
+  employeeId  String   // denormalized for fast per-employee queries/cleanup
+  url         String   @db.Text
+  publicId    String?  // Cloudinary public_id, needed to delete on retention cleanup
+  capturedAt  DateTime @default(now())
+
+  session     TrackerSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([employeeId, capturedAt])
+  @@map("tracker_screenshots")
 }
 
 model Attendance {

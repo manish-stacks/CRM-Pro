@@ -165,9 +165,7 @@ export default function SupportScreen({ navigation }) {
         animationType="slide"
         onRequestClose={() => setModalVisible(false)}
       >
-        {/* KeyboardAvoidingView + scrollable body — pehle keyboard khulte hi
-            Submit button neeche chhup jaata tha. Ab modal upar shift ho jaata
-            hai aur andar scroll bhi ho jaata hai. */}
+        {/* KeyboardAvoidingView + scrollable body — without this, the keyboard opens right on top of the input and inner scrolling also breaks. */}
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={{ flex: 1 }}

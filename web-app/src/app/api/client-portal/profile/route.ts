@@ -28,8 +28,7 @@ export async function GET(req: NextRequest) {
       },
     }),
     // Account Manager = client ka MARKETING_EXECUTIVE (default: Hover).
-    // Mobile app apna dashboard isi endpoint se banata hai, isliye yahin bhej
-    // rahe hain — koi extra call nahi.
+    // The mobile app builds its dashboard from this same endpoint, so we're sending it here — no extra call needed.
     getAccountManager(session.clientId),
   ])
 

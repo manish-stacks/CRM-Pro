@@ -10,7 +10,7 @@ import { EmployeeAPI } from '../../services/employee.api';
 import ScreenWrapper from '../../components/ScreenWrapper';
 import { CalendarModal, toISO, prettyDate } from '../../components/DatePickerField';
 
-// Server-side filters — date-wise dekhna ab accurate hai (sirf loaded page pe nahi)
+// Server-side filters — date-wise view is now accurate (not just on the loaded page)
 const TABS = [
   { key: 'all', label: 'All', params: {} },
   { key: 'today', label: 'Today', params: { range: 'today' } },

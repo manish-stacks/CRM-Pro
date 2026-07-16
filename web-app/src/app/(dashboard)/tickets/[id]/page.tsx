@@ -219,7 +219,7 @@ export default function TicketDetailPage() {
                 <Button onClick={saveRoute} loading={routing} className="w-full">
                   <Send size={13} /> Route Ticket
                 </Button>
-                <p className="text-[11px] text-gray-400">Department select karke assignee blank chhodo → us dept ka head auto-assign ho jayega.</p>
+                <p className="text-[11px] text-gray-400">Select a department and leave assignee blank → that department's head will be auto-assigned.</p>
               </div>
             </div>
           )}

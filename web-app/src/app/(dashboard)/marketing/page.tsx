@@ -178,7 +178,7 @@ export default function MarketingDashboardPage() {
             <span className="badge bg-purple-100 text-purple-700">{data.filteredMeetings?.length || 0}</span>
           </div>
           {!data.filteredMeetings?.length ? (
-            <p className="text-sm text-gray-500 text-center py-6">Is filter pe koi meeting nahi mili.</p>
+            <p className="text-sm text-gray-500 text-center py-6">No meetings found for this filter.</p>
           ) : (
             <div className="space-y-2">
               {data.filteredMeetings.map((l: any) => (

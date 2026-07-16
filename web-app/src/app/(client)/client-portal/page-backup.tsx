@@ -471,8 +471,7 @@ export default function ClientPortalPage() {
                       {inv.dueAmount > 0 && <button onClick={() => openPay(inv)} className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium">Pay</button>}
                     </div>
 
-                    {/* Har collected payment ka receipt — PARTIAL bhi. Wahi
-                        public link admin + marketing executive ko dikhta hai. */}
+                    {/* Visible to admin + marketing executive via the public link.*/}
                     {inv.payments?.length > 0 && (
                       <div className="w-full border-t border-gray-100 pt-3 mt-1 space-y-1.5">
                         <p className="text-[10px] font-semibold text-gray-400 tracking-wide">PAYMENT RECEIPTS</p>

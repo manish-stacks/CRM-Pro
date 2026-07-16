@@ -104,7 +104,7 @@ export async function GET(req: NextRequest) {
       include: {
         telecaller: { select: { id: true, name: true } },
         marketingPerson: { select: { id: true, name: true } },
-        // Expiry column ke liye — sabse pehle expire hone wali service upar
+        // For the expiry column — service expiring soonest goes on top
         services: {
           select: { id: true, serviceName: true, status: true, expiryDate: true, amount: true },
           orderBy: { expiryDate: 'asc' },

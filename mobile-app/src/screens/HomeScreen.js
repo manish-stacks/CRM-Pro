@@ -67,8 +67,7 @@ export default function HomeScreen({ navigation }) {
       const services = (servicesRes.data?.data || []).map(shapeService);
       const invoices = invoicesRes.data?.data || [];
 
-      // Account Manager = client ka MARKETING_EXECUTIVE (jisne meeting kar ke
-      // client add kiya). Koi assign na ho to backend "Hover" bhejta hai.
+      // Account Manager = Marketing Executive who conducted the meeting and onboarded the client. If no executive is assigned, the backend returns "Hover".
       // const am = profileRes.data?.accountManager || client.accountManager || null;
       let am =
         profileRes.data?.accountManager ||

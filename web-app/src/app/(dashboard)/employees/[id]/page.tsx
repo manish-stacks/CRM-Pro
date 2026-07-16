@@ -4,7 +4,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
 import { Button, Badge, Modal, Input, Select, Textarea } from '@/components/ui'
 import { formatDate, formatCurrency, getInitials } from '@/lib/utils'
-import { ArrowLeft, User, Briefcase, CreditCard, FileText, Phone, Mail, Building2, Calendar, MapPin, Shield, Droplets, HeartPulse, KeyRound } from 'lucide-react'
+import { ArrowLeft, User, Briefcase, CreditCard, FileText, Phone, Mail, Building2, Calendar, MapPin, Shield, Droplets, HeartPulse, KeyRound, Camera } from 'lucide-react'
 import Link from 'next/link'
 import api from '@/lib/axios'
 import toast from 'react-hot-toast'
@@ -93,6 +93,19 @@ export default function EmployeeDetailPage() {
     } finally { setSaving(false) }
   }
 
+  const [trackerSaving, setTrackerSaving] = useState(false)
+  const toggleTrackerExempt = async () => {
+    setTrackerSaving(true)
+    try {
+      const next = !emp.trackerExempt
+      await api.post(`/employees/${id}/toggle-tracker`, { trackerExempt: next })
+      toast.success(next ? 'Desktop tracker se exempt kar diya' : 'Desktop tracker phir se enabled')
+      fetchEmp()
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Failed to update')
+    } finally { setTrackerSaving(false) }
+  }
+
   const genPassword = () => {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789@#$'
     let p = ''
@@ -145,12 +158,16 @@ export default function EmployeeDetailPage() {
                 <span className="text-sm text-gray-500">{emp.position || emp.user.role.replace(/_/g, ' ')}</span>
                 {emp.department && <span className="text-xs text-gray-400">· {emp.department.name}</span>}
                 <Badge status={emp.user.isActive ? 'ACTIVE' : 'INACTIVE'} />
+                {emp.trackerExempt && <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-medium">Tracker Exempt</span>}
               </div>
             </div>
           </div>
         </div>
         {isAtLeast('ADMIN') && (
           <div className="flex gap-2">
+            <Button variant="ghost" size="sm" onClick={toggleTrackerExempt} loading={trackerSaving}>
+              <Camera size={14} />{emp.trackerExempt ? 'Enable Tracker' : 'Exempt from Tracker'}
+            </Button>
             <Button variant="ghost" size="sm" onClick={() => setPwdOpen(true)}><KeyRound size={14} />Change Password</Button>
             <Button variant="primary" size="sm" onClick={openEdit}>Edit</Button>
           </div>

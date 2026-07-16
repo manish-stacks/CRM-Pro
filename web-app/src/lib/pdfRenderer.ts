@@ -8,8 +8,7 @@ export const runtime = 'nodejs'
 
 const PAGE_W_MM = 210
 
-/** Production pe puppeteer ka bundled Chromium aksar missing hota hai.
- *  ENV se ya system se resolve karo. */
+/**In production, puppeteer's bundled Chromium is often missing. Resolve it from ENV or the system. */
 function resolveExecutablePath(): string | undefined {
   const envPath =
     process.env.PUPPETEER_EXECUTABLE_PATH ||
@@ -28,14 +27,14 @@ function resolveExecutablePath(): string | undefined {
     'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
   ]
   for (const c of candidates) {
-    try { if (fs.existsSync(c)) return c } catch {}
+    try { if (fs.existsSync(c)) return c } catch { }
   }
 
-  // puppeteer ka apna download (agar hai to)
+  // puppeteer's own download (if present)
   try {
     const p = puppeteer.executablePath()
     if (p && fs.existsSync(p)) return p
-  } catch {}
+  } catch { }
 
   return undefined
 }
@@ -59,8 +58,7 @@ async function launchBrowser(): Promise<Browser> {
   const executablePath = resolveExecutablePath()
   if (!executablePath) {
     throw new Error(
-      'Chromium not found. Server pe install karo (apt install -y chromium OR npx puppeteer browsers install chrome) ' +
-      'aur PUPPETEER_EXECUTABLE_PATH env set karo.'
+      'Chromium not found. Install it on the server (apt install -y chromium OR npx puppeteer browsers install chrome) and set the PUPPETEER_EXECUTABLE_PATH env variable.'
     )
   }
   return puppeteer.launch({
@@ -196,9 +194,9 @@ async function pdfOnce(bodyHtml: string, title: string, bodyStyles: string, opts
   const page = await browser.newPage()
   try {
     page.setDefaultNavigationTimeout(60_000)
-    // networkidle0 par local pe hang hota hai jab koi external asset ho -> domcontentloaded + fonts wait
+    // networkidle0 hangs locally when there's an external asset -> use domcontentloaded + fonts wait instead
     await page.setContent(fullHtml, { waitUntil: 'domcontentloaded', timeout: 60_000 })
-    await page.evaluate(() => (document as any).fonts?.ready).catch(() => {})
+    await page.evaluate(() => (document as any).fonts?.ready).catch(() => { })
 
     if (opts.useLetterheadImages) {
       const { header, footer } = await getLetterheadImages()
@@ -236,7 +234,7 @@ async function pdfOnce(bodyHtml: string, title: string, bodyStyles: string, opts
     })
     return Buffer.from(pdf)
   } finally {
-    await page.close().catch(() => {})
+    await page.close().catch(() => { })
   }
 }
 
@@ -245,7 +243,7 @@ async function renderHtmlToPdf(bodyHtml: string, title: string, bodyStyles: stri
     return await pdfOnce(bodyHtml, title, bodyStyles, opts)
   } catch (err) {
     // stale/crashed browser — ek baar reset kar ke retry
-    try { const b = await browserPromise; await b?.close() } catch {}
+    try { const b = await browserPromise; await b?.close() } catch { }
     browserPromise = null
     return await pdfOnce(bodyHtml, title, bodyStyles, opts)
   }

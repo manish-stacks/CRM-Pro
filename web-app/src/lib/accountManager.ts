@@ -1,5 +1,5 @@
 // src/lib/accountManager.ts
-// Client ka "Account Manager" ek hi jagah se resolve hota hai taki web portal,
+// The client's "Account Manager" is resolved from a single place so the web portal,
 // mobile app aur emails — sab me same naam dikhe.
 //
 // Priority:
@@ -17,7 +17,7 @@ export interface AccountManager {
   email: string | null
   phone: string | null
   role: string          // 'MARKETING_EXECUTIVE' | ... | 'COMPANY'
-  isDefault: boolean    // true = company fallback, koi person assigned nahi
+  isDefault: boolean    // true = company fallback, no person assigned
 }
 
 const PERSON_SELECT = { id: true, name: true, email: true, phone: true, role: true } as const
@@ -38,7 +38,7 @@ async function companyDefault(): Promise<AccountManager> {
   ])
   return {
     id: null,
-    // Company ka pura naam lamba hai — pehla word ("Hover") kaafi hai
+    // The company's full name is long — the first word ("Hover") is enough
     name: (name || 'Hover').split(' ')[0] || 'Hover',
     email: email || null,
     phone: phone || null,
@@ -47,7 +47,7 @@ async function companyDefault(): Promise<AccountManager> {
   }
 }
 
-/** Already-included client object se resolve karo (extra DB hit nahi) */
+/** Resolve from an already-included client object (no extra DB hit) */
 export async function resolveAccountManager(client: any): Promise<AccountManager> {
   const p =
     client?.marketingPerson ||
@@ -69,7 +69,7 @@ export async function resolveAccountManager(client: any): Promise<AccountManager
   return companyDefault()
 }
 
-/** clientId se seedha resolve karo */
+/** Resolve directly from clientId */
 export async function getAccountManager(clientId: string): Promise<AccountManager> {
   const client = await prisma.client.findUnique({
     where: { id: clientId },

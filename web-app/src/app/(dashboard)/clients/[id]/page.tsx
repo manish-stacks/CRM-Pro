@@ -578,7 +578,7 @@ export default function ClientDetailPage() {
                   </Button>
                 </div>
                 <p className="text-xs text-gray-500 mt-1">
-                  Lead convert ke baad client ka portal password yahan se set/update karo. Ye email/WhatsApp nahi bhejta — password khud client ko de dena.
+                  Set/update the client's portal password here after converting a lead. This doesn't send an email/WhatsApp — share the password with the client yourself.
                 </p>
               </div>
             </div>
@@ -610,7 +610,7 @@ function PaymentsSection({ clientId }: { clientId: string }) {
     setModal(true)
   }
   const submit = async () => {
-    if (!form.invoiceId) { toast.error('Invoice select karo'); return }
+    if (!form.invoiceId) { toast.error('Select an invoice'); return }
     if (!Number(form.amount)) { toast.error('Amount daalo'); return }
     setSaving(true)
     try {
@@ -625,12 +625,12 @@ function PaymentsSection({ clientId }: { clientId: string }) {
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <h3 className="font-semibold text-gray-900">Payments</h3>
-        <button onClick={openCollect} disabled={!dueInvoices.length} className="btn-primary btn-sm disabled:opacity-50" title={dueInvoices.length ? '' : 'Koi due invoice nahi'}>
+        <button onClick={openCollect} disabled={!dueInvoices.length} className="btn-primary btn-sm disabled:opacity-50" title={dueInvoices.length ? '' : 'No due invoice'}>
           <Plus size={13} /> Collect Payment
         </button>
       </div>
 
-      {!dueInvoices.length && <p className="text-xs text-gray-400">Koi pending (due) invoice nahi — collect ke liye pehle invoice banao.</p>}
+      {!dueInvoices.length && <p className="text-xs text-gray-400">No pending (due) invoice — create an invoice first to collect payment.</p>}
 
       {loading ? (
         <p className="text-sm text-gray-400 text-center py-4"><Loader2 className="animate-spin inline" /></p>
@@ -942,13 +942,13 @@ function TeamSection({ clientId, services, canEdit, user, onChanged }: {
       <div className="flex items-center justify-between mb-4">
         <div>
           <h3 className="font-semibold text-gray-900">Project Team</h3>
-          <p className="text-xs text-gray-500">Har service ka dept head assign karo — head apne team members ya khud ko add karega</p>
+          <p className="text-xs text-gray-500">Assign a department head for each service — the head can add their own team members or themselves</p>
         </div>
         <Link href={`/projects`} className="text-xs text-blue-600 hover:underline">All assignments →</Link>
       </div>
 
       {services.length === 0 ? (
-        <EmptyState icon={<Package size={20} />} title="No services" description="Pehle client ko service add karo, phir team assign hoga" />
+        <EmptyState icon={<Package size={20} />} title="No services" description="Add a service to the client first, then team assignment will happen" />
       ) : (
         <div className="space-y-3">
           {services.map((svc: any) => {
@@ -1055,7 +1055,7 @@ function TeamSection({ clientId, services, canEdit, user, onChanged }: {
                 <label className="label">Select members {modal.service.department ? `(${modal.service.department.name})` : ''}</label>
                 <div className="max-h-60 overflow-y-auto border rounded-lg divide-y divide-gray-100">
                   {memberCandidates(modal.service).length === 0 ? (
-                    <p className="text-xs text-gray-400 p-3">Is department me koi staff nahi mila</p>
+                    <p className="text-xs text-gray-400 p-3">No staff found in this department</p>
                   ) : memberCandidates(modal.service).map((u: any) => (
                     <label key={u.id} className="flex items-center gap-2 p-2 hover:bg-gray-50 cursor-pointer text-sm">
                       <input type="checkbox" checked={form.memberIds.includes(u.id)} onChange={() => toggle(u.id)} />
@@ -1069,7 +1069,7 @@ function TeamSection({ clientId, services, canEdit, user, onChanged }: {
                     </label>
                   ))}
                 </div>
-                <p className="text-xs text-gray-500 mt-1">{form.memberIds.length} selected · khud ko bhi add kar sakte ho</p>
+                <p className="text-xs text-gray-500 mt-1">{form.memberIds.length} selected · you can add yourself too</p>
               </div>
             )}
 

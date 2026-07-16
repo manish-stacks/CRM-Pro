@@ -132,7 +132,7 @@ export async function GET(req: NextRequest) {
     todayMeetings,
     upcomingMeetings,
     pastMeetings,
-    filteredMeetings,          // null = koi filter nahi laga
+    filteredMeetings,          // null = no filter applied
     filterActive,
     stats: {
       totalAssigned, converted, closed, notInterested, meetingScheduled,

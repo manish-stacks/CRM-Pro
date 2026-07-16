@@ -45,8 +45,8 @@ export default function PaymentsScreen() {
     try {
       const [res, payRes] = await Promise.all([
         AxiosInstance.get('/client-portal/invoices'),
-        // Har collected payment ka receipt link — PARTIAL payments bhi.
-        // Wahi link admin aur marketing executive ko bhi dikhta hai.
+        // Get all payments (including partial) to show in "Payments Received"
+        // The same link is also visible to admin and marketing executive.
         AxiosInstance.get('/client-portal/payments?type=payments').catch(() => ({ data: { data: [] } })),
       ]);
       const raw = res?.data?.data || [];
@@ -125,8 +125,8 @@ export default function PaymentsScreen() {
   // Web downloads a PDF generated client-side from full invoice + company info
   // (see src/lib/invoicePdf.ts). There's no server-side invoice file, so we
   // build an equivalent receipt here and let the user save/share it.
-  // Server-side PDF (wahi jo web download karta hai). Payment Receipts ki tarah
-  // seedha link khol dete hain — koi local file generation nahi.
+  // Server-side PDF (the same one the web downloads). Like Payment Receipts,
+  // we open the link directly — no local file generation.
   const downloadReceipt = async (inv) => {
     if (inv.pdf_url) {
       try {
@@ -138,8 +138,8 @@ export default function PaymentsScreen() {
     }
 
     // Fallback: purana local HTML. NOTE: Expo SDK 54+ me expo-file-system ka
-    // classic API 'expo-file-system/legacy' me chala gaya hai — isliye upar
-    // import legacy se hona chahiye, warna documentDirectory undefined hota hai.
+    // the classic API has moved to 'expo-file-system/legacy' — so these APIs
+    // import above should be from legacy, otherwise documentDirectory is undefined.
     setDownloadingId(inv.id);
     try {
       const [invRes, companyRes] = await Promise.all([

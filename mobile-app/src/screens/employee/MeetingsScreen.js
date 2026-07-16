@@ -152,7 +152,7 @@ export default function MeetingsScreen({ route, navigation }) {
   const [search, setSearch] = useState('');
   const [showSearch, setShowSearch] = useState(false);
 
-  // Current location — ETA calculate karne ke liye backend ko bhejte hain
+  // Current location — sent to the backend to calculate ETA
   const [coords, setCoords] = useState(null);
 
   useEffect(() => {

@@ -234,7 +234,7 @@ export default function CollectionPage() {
         {txnLoading ? (
           <div className="flex justify-center py-10"><Loader2 className="animate-spin text-gray-400" /></div>
         ) : !txns.length ? (
-          <EmptyState icon={<Receipt size={40} />} title="No transactions" description="Is period me koi payment record nahi hai." />
+          <EmptyState icon={<Receipt size={40} />} title="No transactions" description="No payment record for this period." />
         ) : (
           <>
             <div className="overflow-x-auto">

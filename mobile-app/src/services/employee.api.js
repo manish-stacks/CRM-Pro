@@ -1,6 +1,6 @@
 import { AxiosInstance } from '../lib/Axios.instance';
 
-// Helper: object -> query string (khaali values drop kar deta hai)
+// Helper: object -> query string (drops empty values)
 const qs = (params) => {
   const p = new URLSearchParams();
   Object.entries(params || {}).forEach(([k, v]) => {
@@ -52,7 +52,7 @@ export const EmployeeAPI = {
 
   // Meetings assigned to this marketing executive
   // params: { range, date, dateFrom, dateTo, status, search, lat, lng }
-  // lat/lng bhejo to har meeting pe distance + ETA milega
+  // Send lat/lng to get distance + ETA for each meeting
   getMeetings: (params) => AxiosInstance.get(`/mobile/meetings${qs(params)}`),
   getMeetingById: (id) => AxiosInstance.get(`/mobile/meetings/${id}`),
   logMeetingActivity: (id, data) => AxiosInstance.post(`/mobile/meetings/${id}/activity`, data),

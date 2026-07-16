@@ -2,6 +2,7 @@
 // Nodemailer SMTP wrapper + EmailLog persistence
 import nodemailer, { Transporter } from 'nodemailer'
 import { prisma } from './prisma'
+import { getSetting } from './settings'
 
 let transporter: Transporter | null = null
 
@@ -57,6 +58,17 @@ export async function sendMail(opts: SendMailOptions): Promise<SendMailResult> {
       referenceId: opts.referenceId,
     },
   })
+
+  // Admin kill-switch — Settings > Notifications > "Email Sending". Checked
+  // per-send (not cached long) so toggling off stops messages immediately.
+  const emailEnabled = await getSetting<boolean>('email_enabled', true)
+  if (!emailEnabled) {
+    await prisma.emailLog.update({
+      where: { id: log.id },
+      data: { status: 'SKIPPED', errorMessage: 'Email sending disabled by admin' },
+    })
+    return { success: false, error: 'Email sending is disabled by admin', logId: log.id }
+  }
 
   try {
     if (!process.env.SMTP_HOST || !process.env.SMTP_USER) {

@@ -75,7 +75,7 @@ export default function ChatPage() {
         await loadGroups()
         setActiveId(gid)
         toast.success('Wish bhej diya 🎉')
-      } catch { toast.error('Wish send nahi hua') }
+      } catch { toast.error('Failed to send wish') }
       finally { window.history.replaceState({}, '', '/chat') }
     })()
   }, [loadGroups])
