@@ -17,6 +17,10 @@ export async function GET(req: NextRequest) {
   }
 
   const retentionDays = await Settings.trackerRetentionDays()
+  
+  if (retentionDays === undefined) {
+    throw new Error('Tracker retention days is not configured.')
+  }
   const cutoff = new Date()
   cutoff.setDate(cutoff.getDate() - retentionDays)
 
@@ -28,7 +32,7 @@ export async function GET(req: NextRequest) {
   let deleted = 0
   for (const shot of old) {
     if (shot.publicId) {
-      await deleteFile(shot.publicId, 'image').catch(() => {})
+      await deleteFile(shot.publicId, 'image').catch(() => { })
     }
     deleted++
   }
