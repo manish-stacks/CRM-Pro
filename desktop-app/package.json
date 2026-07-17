@@ -20,8 +20,7 @@
     "appId": "com.hoverbusinessservices.crm",
     "productName": "HBS CRM",
     "files": [
-      "dist/**/*",
-      "src/renderer/**/*"
+      "dist/**/*"
     ],
     "publish": [
       {

@@ -4,42 +4,59 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 // desktop-app/src/main.ts
+//
+// The window loads the real web dashboard (same one you open in a browser) —
+// so login, logout, and every other page work exactly the same way, using
+// the same session cookie.
+//
+// The screenshot tracker no longer has its own login/check-in widget. It
+// runs quietly in the background: every SYNC_INTERVAL_MS it asks the server
+// "is this employee checked in right now?" (GET /api/mobile/attendance/status)
+// and starts/stops capture to match. Whether capture actually happens is
+// still fully controlled server-side by the admin Settings master switch and
+// per-employee "tracker exempt" flag (see /api/tracker/checkin + /api/tracker/screenshot
+// in the web app) — this file never decides that on its own.
 const electron_1 = require("electron");
-const path_1 = __importDefault(require("path"));
 const electron_store_1 = __importDefault(require("electron-store"));
 const electron_updater_1 = require("electron-updater");
 // TODO: replace with your real backend URL, or set the API_BASE_URL env var
-// when launching the app (e.g. `API_BASE_URL=https://api.yourcompany.com npm start`)
+// when launching the app (e.g. `API_BASE_URL=https://crm.yourcompany.com npm start`)
 const API_BASE = process.env.API_BASE_URL || 'http://localhost:3000';
+const PARTITION = 'persist:hbs-crm'; // keeps the login session across app restarts, like a browser profile
+const SYNC_INTERVAL_MS = 60000;
 const store = new electron_store_1.default();
 let mainWindow = null;
 let captureTimers = [];
 let midnightTimer = null;
 let idlePollTimer = null;
+let syncTimer = null;
 let accumulatedIdleSeconds = 0;
+let isTracking = false;
 let currentSettings = null;
 function createWindow() {
     mainWindow = new electron_1.BrowserWindow({
-        width: 380,
-        height: 480,
-        minWidth: 320,
-        minHeight: 420,
-        resizable: true,
+        width: 1280,
+        height: 800,
+        minWidth: 900,
+        minHeight: 600,
         webPreferences: {
-            preload: path_1.default.join(__dirname, 'preload.js'),
-            contextIsolation: true,
+            partition: PARTITION,
         },
     });
-    mainWindow.loadFile(path_1.default.join(__dirname, '../src/renderer/index.html'));
+    mainWindow.loadURL(API_BASE);
 }
 electron_1.app.whenReady().then(() => {
     createWindow();
+    startSyncLoop();
     if (electron_1.app.isPackaged) {
         electron_updater_1.autoUpdater.checkForUpdatesAndNotify();
     }
 });
-electron_1.app.on('window-all-closed', () => { if (process.platform !== 'darwin')
-    electron_1.app.quit(); });
+electron_1.app.on('window-all-closed', () => {
+    stopSyncLoop();
+    if (process.platform !== 'darwin')
+        electron_1.app.quit();
+});
 electron_updater_1.autoUpdater.on("update-available", () => {
     console.log("Update Available");
 });
@@ -57,61 +74,85 @@ electron_updater_1.autoUpdater.on("update-downloaded", () => {
     });
 });
 // ---------------------------------------------------------------------------
-// Auth
+// Auth — reuse the same 'auth-token' cookie the web dashboard sets on login.
+// requireAuth() on the server accepts this same JWT either as a cookie (web
+// pages) or as an `Authorization: Bearer` header (mobile/desktop API calls),
+// so we just read it out of the window's cookie jar for our own fetches.
 // ---------------------------------------------------------------------------
-// IMPORTANT: this MUST be the mobile/token endpoint, not /api/auth/login.
-// /api/auth/login is the web dashboard's cookie-based session login and
-// never returns a `token` field — that's why login was silently failing
-// before. /api/mobile/auth/login returns { success, token, data }.
-electron_1.ipcMain.handle('auth:login', async (_e, { email, password }) => {
-    const res = await fetch(`${API_BASE}/api/mobile/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-    });
-    const data = await res.json().catch(() => ({}));
-    console.log('Login response from server:', data);
-    if (!res.ok || !data.success) {
-        return { ok: false, error: data.message || 'Invalid credentials' };
+async function getAuthToken() {
+    const electronSession = electron_1.session.fromPartition(PARTITION);
+    const cookies = await electronSession.cookies.get({ url: API_BASE, name: 'auth-token' });
+    return cookies[0]?.value ?? null;
+}
+// ---------------------------------------------------------------------------
+// Background sync — no manual check-in/check-out button anymore. This polls
+// "am I checked in today?" and starts/stops the capture loop to match.
+// ---------------------------------------------------------------------------
+function startSyncLoop() {
+    syncTrackingState();
+    syncTimer = setInterval(syncTrackingState, SYNC_INTERVAL_MS);
+}
+function stopSyncLoop() {
+    if (syncTimer)
+        clearInterval(syncTimer);
+    syncTimer = null;
+}
+async function syncTrackingState() {
+    const token = await getAuthToken();
+    if (!token) {
+        if (isTracking)
+            await stopTracking();
+        return;
     }
-    if (!data.token) {
-        return { ok: false, error: 'Server did not return a token — check response shape' };
+    try {
+        const res = await fetch(`${API_BASE}/api/mobile/attendance/status`, {
+            headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok)
+            return;
+        const json = await res.json().catch(() => null);
+        if (!json?.success)
+            return;
+        const shouldTrack = !!json.data.trackingEnabled;
+        if (shouldTrack && !isTracking) {
+            await startTracking(token);
+        }
+        else if (!shouldTrack && isTracking) {
+            await stopTracking(token);
+        }
     }
-    store.set('token', data.token);
-    return { ok: true };
-});
-// ---------------------------------------------------------------------------
-// Check-in / Check-out
-// ---------------------------------------------------------------------------
-electron_1.ipcMain.handle('tracker:checkin', async () => {
-    const token = store.get('token');
+    catch (err) {
+        console.error('Tracking status sync failed:', err);
+    }
+}
+async function startTracking(token) {
     const res = await fetch(`${API_BASE}/api/tracker/checkin`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
     });
-    if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        return { ok: false, error: err.error || 'Check-in failed' };
-    }
-    const { data } = await res.json();
-    if (!data.tracking) {
-        store.delete('sessionId');
-        return { ok: true, tracking: false, reason: data.reason };
-    }
+    if (!res.ok)
+        return;
+    const json = await res.json().catch(() => null);
+    const data = json?.data;
+    if (!data)
+        return;
+    // DISABLED_BY_ADMIN or EMPLOYEE_EXEMPT: attendance is tracked server-side
+    // regardless, but there's nothing for this app to capture — do nothing.
+    if (!data.tracking)
+        return;
     store.set('sessionId', data.session.id);
     currentSettings = data.settings;
     accumulatedIdleSeconds = 0;
+    isTracking = true;
     scheduleTodaysCaptures();
     scheduleMidnightReschedule();
     startIdlePolling();
-    return { ok: true, tracking: true };
-});
-electron_1.ipcMain.handle('tracker:checkout', async () => {
-    const token = store.get('token');
-    const sessionId = store.get('sessionId');
+}
+async function stopTracking(token) {
     stopCaptureLoop();
     stopIdlePolling();
-    if (sessionId) {
+    const sessionId = store.get('sessionId');
+    if (sessionId && token) {
         await fetch(`${API_BASE}/api/tracker/checkout`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -120,8 +161,8 @@ electron_1.ipcMain.handle('tracker:checkout', async () => {
     }
     store.delete('sessionId');
     currentSettings = null;
-    return { ok: true };
-});
+    isTracking = false;
+}
 // ---------------------------------------------------------------------------
 // Screenshot capture
 // ---------------------------------------------------------------------------
@@ -181,13 +222,14 @@ function scheduleMidnightReschedule() {
 }
 async function captureAndUpload() {
     const sessionId = store.get('sessionId');
-    const token = store.get('token');
-    if (!sessionId || !currentSettings)
+    const token = await getAuthToken();
+    if (!sessionId || !currentSettings || !token)
         return;
     if (electron_1.powerMonitor.getSystemIdleTime() > currentSettings.idleThresholdSeconds)
         return;
     const primaryDisplay = electron_1.screen.getPrimaryDisplay();
-    const sources = await electron_1.desktopCapturer.getSources({
+    const { desktopCapturer } = require('electron');
+    const sources = await desktopCapturer.getSources({
         types: ['screen'],
         thumbnailSize: primaryDisplay.size,
     });

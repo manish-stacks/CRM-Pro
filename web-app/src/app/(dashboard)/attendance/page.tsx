@@ -147,23 +147,22 @@ export default function AttendancePage() {
     const loadingToast = toast.loading('Getting your location...')
 
     try {
-      // Get browser geo + reverse geocode
+      // Get browser geo + reverse geocode. If it fails (common on desktop PCs
+      // without GPS/WiFi), don't block the punch — just go in without location.
       const geo = await getCurrentGeo({ reverseGeocode: true, timeoutMs: 8000 })
-      if (geo.error) {
-        toast.dismiss(loadingToast)
-        toast.error(geo.error)
-        setPunching(false)
-        return
-      }
+      const hasLocation = !geo.error
 
       toast.dismiss(loadingToast)
+      if (!hasLocation) {
+        toast(`Punching ${action === 'punch_in' ? 'in' : 'out'} without location — ${geo.error}`, { icon: '📍' })
+      }
       toast.loading(action === 'punch_in' ? 'Punching in...' : 'Punching out...')
       const r = await api.post('/attendance', {
         action,
         workMode,
-        latitude: geo.latitude,
-        longitude: geo.longitude,
-        address: geo.address,
+        latitude: hasLocation ? geo.latitude : null,
+        longitude: hasLocation ? geo.longitude : null,
+        address: hasLocation ? geo.address : null,
       })
       toast.dismiss()
       setToday(r.data.data)
