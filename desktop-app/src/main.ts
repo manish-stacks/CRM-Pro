@@ -4,9 +4,8 @@ import path from 'path'
 import Store from 'electron-store'
 import { autoUpdater } from "electron-updater";
 
-// TODO: replace with your real backend URL, or set the API_BASE_URL env var
-// when launching the app (e.g. `API_BASE_URL=https://api.yourcompany.com npm start`)
-const API_BASE = process.env.API_BASE_URL || 'http://192.168.1.14:3000'
+
+const API_BASE = 'http://localhost:3000'
 
 const store = new Store<{ token?: string; sessionId?: string }>()
 
@@ -16,19 +15,13 @@ let midnightTimer: NodeJS.Timeout | null = null
 let idlePollTimer: NodeJS.Timeout | null = null
 let accumulatedIdleSeconds = 0
 
-// Settings the server hands back on check-in (Settings > Desktop Tracker in
-// the web admin panel). We re-fetch these on every check-in so a change the
-// admin makes takes effect for the employee's next check-in — no desktop
-// app update needed. The server also re-validates all of this on every
-// screenshot upload, so this is about honoring the schedule, not the only
-// enforcement point.
 interface TrackerSettings {
   screenshotsPerDay: number
   idleThresholdSeconds: number
   qualityPercent: number
   officeHoursOnly: boolean
-  officeStart: string // "HH:mm" 24h, local/office timezone
-  officeEnd: string   // "HH:mm" 24h
+  officeStart: string
+  officeEnd: string
   timezone: string
 }
 let currentSettings: TrackerSettings | null = null
@@ -50,10 +43,6 @@ function createWindow() {
 
 app.whenReady().then(() => {
   createWindow();
-
-  // Only check for updates when the app is actually packaged/installed.
-  // In dev (npm start) this is skipped — running unpacked always fails
-  // the update check and just spams the console otherwise.
   if (app.isPackaged) {
     autoUpdater.checkForUpdatesAndNotify();
   }
@@ -82,15 +71,21 @@ autoUpdater.on("update-downloaded", () => {
 // ---------------------------------------------------------------------------
 // Auth
 // ---------------------------------------------------------------------------
+// IMPORTANT: this MUST be the mobile/token endpoint, not /api/auth/login.
+// /api/auth/login is the web dashboard's cookie-based session login and
+// never returns a `token` field — that's why login was silently failing
+// before. /api/mobile/auth/login returns { success, token, data }.
 ipcMain.handle('auth:login', async (_e, { email, password }) => {
-  const res = await fetch(`${API_BASE}/api/auth/login`, {
+  const res = await fetch(`${API_BASE}/api/mobile/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
   })
-  if (!res.ok) return { ok: false, error: 'Invalid credentials' }
-  const data = await res.json()
+  const data = await res.json().catch(() => ({}))
   console.log('Login response from server:', data)
+  if (!res.ok || !data.success) {
+    return { ok: false, error: data.message || 'Invalid credentials' }
+  }
   if (!data.token) {
     return { ok: false, error: 'Server did not return a token — check response shape' }
   }
@@ -113,9 +108,6 @@ ipcMain.handle('tracker:checkin', async () => {
   }
   const { data } = await res.json()
 
-  // Tracking off (admin master switch OFF, or this employee is exempted).
-  // Still a successful check-in from the employee's point of view — we just
-  // don't run any screenshot capture.
   if (!data.tracking) {
     store.delete('sessionId')
     return { ok: true, tracking: false, reason: data.reason }
@@ -148,10 +140,7 @@ ipcMain.handle('tracker:checkout', async () => {
 })
 
 // ---------------------------------------------------------------------------
-// Screenshot capture — admin sets an exact count per day (Settings > Desktop
-// Tracker > "Screenshots Per Day", default 4). We pick that many random
-// moments spread across the remaining work window and schedule one capture
-// at each, instead of firing on a short fixed interval all day.
+// Screenshot capture
 // ---------------------------------------------------------------------------
 function parseHHMM(hhmm: string): { h: number; m: number } {
   const [h, m] = (hhmm || '00:00').split(':').map(Number)
@@ -177,9 +166,8 @@ function scheduleTodaysCaptures() {
     const end = parseHHMM(currentSettings.officeEnd)
     windowEnd = new Date(now)
     windowEnd.setHours(end.h, end.m, 0, 0)
-    if (windowEnd <= now) return // office hours already over for today
+    if (windowEnd <= now) return
   } else {
-    // No office-hours restriction — spread across the rest of the calendar day.
     windowEnd = new Date(now)
     windowEnd.setHours(23, 59, 0, 0)
   }
@@ -188,7 +176,6 @@ function scheduleTodaysCaptures() {
   const spanMs = windowEnd.getTime() - windowStart.getTime()
   if (spanMs <= 0) return
 
-  // N random moments within the window, sorted ascending.
   const offsets = Array.from({ length: count }, () => Math.random() * spanMs).sort((a, b) => a - b)
 
   for (const offset of offsets) {
@@ -199,13 +186,11 @@ function scheduleTodaysCaptures() {
   }
 }
 
-// If a check-in stays open across local midnight, re-roll a fresh set of N
-// captures for the new day.
 function scheduleMidnightReschedule() {
   if (midnightTimer) clearTimeout(midnightTimer)
   const now = new Date()
   const nextMidnight = new Date(now)
-  nextMidnight.setHours(24, 0, 5, 0) // a few seconds past midnight
+  nextMidnight.setHours(24, 0, 5, 0)
   midnightTimer = setTimeout(() => {
     scheduleTodaysCaptures()
     scheduleMidnightReschedule()
@@ -217,7 +202,6 @@ async function captureAndUpload() {
   const token = store.get('token')
   if (!sessionId || !currentSettings) return
 
-  // Skip capturing while the user is idle (admin-configurable threshold).
   if (powerMonitor.getSystemIdleTime() > currentSettings.idleThresholdSeconds) return
 
   const primaryDisplay = screen.getPrimaryDisplay()
@@ -228,10 +212,6 @@ async function captureAndUpload() {
   const jpegBuffer = sources[0].thumbnail.toJPEG(currentSettings.qualityPercent)
   const dataUrl = `data:image/jpeg;base64,${jpegBuffer.toString('base64')}`
 
-  // Single-request upload — the server stores directly to Cloudinary (this
-  // deployment's storage provider) and re-checks the admin's tracker
-  // settings (enabled, employee not exempt, office-hours window) before
-  // accepting it.
   const res = await fetch(`${API_BASE}/api/tracker/screenshot`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
