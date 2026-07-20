@@ -92,7 +92,28 @@ TaskManager.defineTask(BG_TASK, async ({ data, error }) => {
   await sendPings(pings);
 });
 
+// ── Check current permission status WITHOUT prompting ──
+// Used to decide whether the prominent in-app disclosure needs to be shown
+// before triggering the OS permission dialog.
+export async function getPermissionStatus() {
+  try {
+    const fg = await Location.getForegroundPermissionsAsync();
+    const bg = await Location.getBackgroundPermissionsAsync();
+    return {
+      foregroundGranted: fg.status === 'granted',
+      backgroundGranted: bg.status === 'granted',
+      needsDisclosure: fg.status !== 'granted' || bg.status !== 'granted',
+    };
+  } catch {
+    return { foregroundGranted: false, backgroundGranted: false, needsDisclosure: true };
+  }
+}
+
 // ── Request permissions ──
+// IMPORTANT: Only call this AFTER the user has seen the in-app prominent
+// disclosure and explicitly tapped "Allow". Never call this directly from
+// a button press without the disclosure step — Google Play policy requires
+// the disclosure to be shown before the system permission dialog appears.
 export async function requestPermissions() {
   const fg = await Location.requestForegroundPermissionsAsync();
   if (fg.status !== 'granted') return { granted: false, background: false };
@@ -105,7 +126,7 @@ export async function requestPermissions() {
   return { granted: true, background: bgGranted };
 }
 
-// ── Start tracking (called after check-in) ──
+// ── Start tracking (called after check-in, once disclosure/consent is handled by the UI) ──
 export async function startTracking() {
   await AsyncStorage.setItem('isCheckedIn', 'true');
 

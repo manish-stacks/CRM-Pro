@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, RefreshControl,
   ScrollView, ActivityIndicator, Alert,
@@ -12,8 +12,9 @@ import ScreenWrapper from '../../components/ScreenWrapper';
 import CelebrationCard from '../../components/CelebrationCard';
 import { EmployeeAPI } from '../../services/employee.api';
 import {
-  startTracking, stopTracking, getCurrentLocation, reverseGeocode, flushQueue,
+  startTracking, stopTracking, getCurrentLocation, reverseGeocode, flushQueue, getPermissionStatus,
 } from '../../services/LocationTracker';
+import LocationDisclosureModal from '../../components/LocationDisclosureModal';
 
 const StatCard = ({ icon, label, value, color, bg }) => {
   const { colors } = useTheme();
@@ -46,6 +47,36 @@ export default function DashboardScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [checkedIn, setCheckedIn] = useState(false);
   const [checking, setChecking] = useState(false);
+  const [showDisclosure, setShowDisclosure] = useState(false);
+  const disclosureResolver = useRef(null);
+
+  // Prominent Disclosure gate (Google Play requirement): before requesting
+  // foreground/background location permission for the first time, show an
+  // in-app explanation and require an explicit "Allow" tap. If permission is
+  // already granted, no dialog is triggered so we skip straight through.
+  const startTrackingWithDisclosure = async () => {
+    const status = await getPermissionStatus();
+    if (!status.needsDisclosure) {
+      return startTracking();
+    }
+    return new Promise((resolve) => {
+      disclosureResolver.current = resolve;
+      setShowDisclosure(true);
+    });
+  };
+
+  const handleDisclosureAllow = async () => {
+    setShowDisclosure(false);
+    const result = await startTracking();
+    disclosureResolver.current?.(result);
+    disclosureResolver.current = null;
+  };
+
+  const handleDisclosureDeny = () => {
+    setShowDisclosure(false);
+    disclosureResolver.current?.({ ok: false, reason: 'disclosure-declined' });
+    disclosureResolver.current = null;
+  };
 
   const fetchDashboard = async () => {
     try {
@@ -66,7 +97,7 @@ export default function DashboardScreen({ navigation }) {
       setCheckedIn(!!st.isCheckedIn);
       // If checked in but tracking not running (e.g. app restarted), resume it
       if (st.isCheckedIn) {
-        startTracking().catch(() => { });
+        startTrackingWithDisclosure().catch(() => { });
         flushQueue().catch(() => { });
       }
     } catch { }
@@ -95,7 +126,7 @@ export default function DashboardScreen({ navigation }) {
         // CHECK IN → start tracking
         const res = await EmployeeAPI.checkIn(payload);
         await AsyncStorage.setItem('attendanceId', res.data?.data?.attendanceId || '');
-        const track = await startTracking();
+        const track = await startTrackingWithDisclosure();
         setCheckedIn(true);
         if (track.ok && !track.background) {
           Alert.alert(
@@ -104,6 +135,8 @@ export default function DashboardScreen({ navigation }) {
           );
         } else if (track.ok) {
           Alert.alert('Checked In', 'You are now on duty. Location sharing is active.');
+        } else if (track.reason === 'disclosure-declined') {
+          Alert.alert('Checked In', 'You are checked in, but location sharing is off since it was not allowed.');
         } else {
           Alert.alert('Checked In', 'Note: location permission was denied, so route tracking is off.');
         }
@@ -134,6 +167,11 @@ export default function DashboardScreen({ navigation }) {
 
   return (
     <ScreenWrapper isScrollable={false}>
+      <LocationDisclosureModal
+        visible={showDisclosure}
+        onAllow={handleDisclosureAllow}
+        onDeny={handleDisclosureDeny}
+      />
       <ScrollView
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}

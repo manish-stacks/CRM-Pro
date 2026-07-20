@@ -89,8 +89,12 @@ async function getAuthToken() {
 // "am I checked in today?" and starts/stops the capture loop to match.
 // ---------------------------------------------------------------------------
 function startSyncLoop() {
-    syncTrackingState();
-    syncTimer = setInterval(syncTrackingState, SYNC_INTERVAL_MS);
+    runSyncTick();
+    syncTimer = setInterval(runSyncTick, SYNC_INTERVAL_MS);
+}
+async function runSyncTick() {
+    await syncTrackingState();
+    await checkPendingScreenshotRequest();
 }
 function stopSyncLoop() {
     if (syncTimer)
@@ -220,6 +224,16 @@ function scheduleMidnightReschedule() {
         scheduleMidnightReschedule();
     }, nextMidnight.getTime() - now.getTime());
 }
+async function captureScreenshotDataUrl(qualityPercent) {
+    const primaryDisplay = electron_1.screen.getPrimaryDisplay();
+    const { desktopCapturer } = require('electron');
+    const sources = await desktopCapturer.getSources({
+        types: ['screen'],
+        thumbnailSize: primaryDisplay.size,
+    });
+    const jpegBuffer = sources[0].thumbnail.toJPEG(qualityPercent);
+    return `data:image/jpeg;base64,${jpegBuffer.toString('base64')}`;
+}
 async function captureAndUpload() {
     const sessionId = store.get('sessionId');
     const token = await getAuthToken();
@@ -227,14 +241,7 @@ async function captureAndUpload() {
         return;
     if (electron_1.powerMonitor.getSystemIdleTime() > currentSettings.idleThresholdSeconds)
         return;
-    const primaryDisplay = electron_1.screen.getPrimaryDisplay();
-    const { desktopCapturer } = require('electron');
-    const sources = await desktopCapturer.getSources({
-        types: ['screen'],
-        thumbnailSize: primaryDisplay.size,
-    });
-    const jpegBuffer = sources[0].thumbnail.toJPEG(currentSettings.qualityPercent);
-    const dataUrl = `data:image/jpeg;base64,${jpegBuffer.toString('base64')}`;
+    const dataUrl = await captureScreenshotDataUrl(currentSettings.qualityPercent);
     const res = await fetch(`${API_BASE}/api/tracker/screenshot`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -243,6 +250,46 @@ async function captureAndUpload() {
     if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         console.warn('Screenshot rejected by server:', err.error || res.status);
+    }
+}
+// ---------------------------------------------------------------------------
+// On-demand screenshot — admin clicked "Take screenshot now". Runs
+// regardless of tracker-enabled / employee-exempt / office-hours / check-in
+// state, since it's an explicit admin action, not routine monitoring.
+// ---------------------------------------------------------------------------
+const DEFAULT_ADHOC_QUALITY = 80;
+async function checkPendingScreenshotRequest() {
+    const token = await getAuthToken();
+    if (!token)
+        return;
+    try {
+        const res = await fetch(`${API_BASE}/api/tracker/screenshot-request`, {
+            headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok)
+            return;
+        const json = await res.json().catch(() => null);
+        const pending = json?.data?.pending;
+        if (!pending?.id)
+            return;
+        try {
+            const dataUrl = await captureScreenshotDataUrl(currentSettings?.qualityPercent ?? DEFAULT_ADHOC_QUALITY);
+            await fetch(`${API_BASE}/api/tracker/screenshot-request/${pending.id}`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ imageBase64: dataUrl }),
+            });
+        }
+        catch (captureErr) {
+            await fetch(`${API_BASE}/api/tracker/screenshot-request/${pending.id}`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ error: captureErr?.message || 'Capture failed' }),
+            }).catch(() => { });
+        }
+    }
+    catch (err) {
+        console.error('Screenshot-request sync failed:', err);
     }
 }
 // ---------------------------------------------------------------------------
