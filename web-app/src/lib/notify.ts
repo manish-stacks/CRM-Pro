@@ -68,6 +68,18 @@ export const Notifications = {
       metadata: { screen: 'MeetingDetail', leadId, meetingId: leadId },
     }),
 
+  // Marketing exec marked the meeting done — telecaller (or whoever owns the
+  // lead) needs to know so they can send the proposal / follow up on the deal.
+  meetingDone: (userId: string, clientName: string, leadId: string) =>
+    notify({
+      userIds: userId,
+      title: 'Meeting Done',
+      message: `Meeting with ${clientName} is done — send a proposal / follow up`,
+      type: 'meeting',
+      link: `/leads/${leadId}`,
+      metadata: { screen: 'LeadDetail', leadId },
+    }),
+
   // ---- Field visits ----
   visitAssigned: (userId: string, clientName: string, date: string, visitId: string) =>
     notify({

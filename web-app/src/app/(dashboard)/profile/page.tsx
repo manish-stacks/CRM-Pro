@@ -13,6 +13,7 @@ import toast from 'react-hot-toast'
 const GENDER = ['Male', 'Female', 'Other']
 const MARITAL = ['Single', 'Married', 'Divorced', 'Widowed']
 const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']
+const ID_PROOF_TYPES = ['AADHAR', 'PAN', 'PASSPORT', 'DRIVING_LICENSE', 'VOTER_ID']
 
 function Section({ icon: Icon, title, description, children }: any) {
   return (
@@ -51,6 +52,10 @@ export default function ProfilePage() {
   const [avatarUploading, setAvatarUploading] = useState(false)
   const [aadharFrontUploading, setAadharFrontUploading] = useState(false)
   const [aadharBackUploading, setAadharBackUploading] = useState(false)
+  const [emailOtpSent, setEmailOtpSent] = useState(false)
+  const [emailOtpValue, setEmailOtpValue] = useState('')
+  const [sendingOtp, setSendingOtp] = useState(false)
+  const [verifyingOtp, setVerifyingOtp] = useState(false)
   const avatarRef = useRef<HTMLInputElement>(null)
   const aadharFrontRef = useRef<HTMLInputElement>(null)
   const aadharBackRef = useRef<HTMLInputElement>(null)
@@ -85,6 +90,8 @@ export default function ProfilePage() {
         aadharNumber: emp.aadharNumber || '',
         aadharFrontUrl: emp.aadharFrontUrl || '',
         aadharBackUrl: emp.aadharBackUrl || '',
+        idProofType: emp.idProofType || '',
+        idProofNumber: emp.idProofNumber || '',
         bankName: emp.bankName || '',
         accountNumber: emp.accountNumber || '',
         ifscCode: emp.ifscCode || '',
@@ -130,6 +137,32 @@ export default function ProfilePage() {
 
   const emp = profile?.employee
 
+  const sendEmailOtp = async () => {
+    setSendingOtp(true)
+    try {
+      await api.post('/auth/send-email-otp')
+      toast.success('Verification code sent to your email')
+      setEmailOtpSent(true)
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Failed to send code')
+    } finally { setSendingOtp(false) }
+  }
+
+  const verifyEmailOtp = async () => {
+    if (!emailOtpValue.trim()) { toast.error('Enter the code'); return }
+    setVerifyingOtp(true)
+    try {
+      await api.post('/auth/verify-email-otp', { otp: emailOtpValue.trim() })
+      toast.success('Email verified! ✅')
+      setEmailOtpSent(false)
+      setEmailOtpValue('')
+      await fetchProfile()
+      await refreshUser()
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Verification failed')
+    } finally { setVerifyingOtp(false) }
+  }
+
   if (loading) return <div className="p-8 text-center text-gray-400"><Loader2 className="animate-spin mx-auto" /></div>
 
   return (
@@ -157,7 +190,40 @@ export default function ProfilePage() {
         </div>
         <div className="flex-1">
           <h2 className="text-lg font-bold text-gray-900">{profile?.name}</h2>
-          <p className="text-sm text-gray-500">{profile?.email}</p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-sm text-gray-500">{profile?.email}</p>
+            {profile?.role !== 'ADMIN' && profile?.role !== 'SUPER_ADMIN' && (
+              profile?.emailVerified ? (
+                <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5">
+                  <Check size={11} /> Verified
+                </span>
+              ) : !emailOtpSent ? (
+                <button onClick={sendEmailOtp} disabled={sendingOtp}
+                  className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5 hover:bg-amber-100 disabled:opacity-50">
+                  {sendingOtp ? <Loader2 size={11} className="animate-spin" /> : <Mail size={11} />}
+                  Verify Email
+                </button>
+              ) : null
+            )}
+          </div>
+          {profile?.role !== 'ADMIN' && profile?.role !== 'SUPER_ADMIN' && !profile?.emailVerified && emailOtpSent && (
+            <div className="flex items-center gap-2 mt-2">
+              <input
+                value={emailOtpValue}
+                onChange={e => setEmailOtpValue(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                placeholder="6-digit code"
+                className="input !w-32 !py-1.5 text-sm tracking-widest"
+                maxLength={6}
+              />
+              <button onClick={verifyEmailOtp} disabled={verifyingOtp}
+                className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold disabled:opacity-50">
+                {verifyingOtp ? <Loader2 size={12} className="animate-spin" /> : 'Verify'}
+              </button>
+              <button onClick={sendEmailOtp} disabled={sendingOtp} className="text-xs text-blue-600 hover:underline">
+                Resend
+              </button>
+            </div>
+          )}
           <div className="flex flex-wrap items-center gap-2 mt-2">
             <span className="badge bg-blue-100 text-blue-700">{profile?.role?.replace(/_/g, ' ')}</span>
             {emp?.employeeId && <span className="badge bg-slate-100 text-slate-700">{emp.employeeId}</span>}
@@ -183,9 +249,35 @@ export default function ProfilePage() {
       <Section icon={User} title="Personal Information" description="Edit any of these fields">
         <Input label="Full Name" value={form.name} onChange={e => upd('name', e.target.value)} />
         <Input label="Date of Birth" type="date" value={form.dateOfBirth} onChange={e => upd('dateOfBirth', e.target.value)} />
-        <Select label="Gender" value={form.gender} onChange={e => upd('gender', e.target.value)} options={GENDER.map(g => ({ value: g, label: g }))} />
-        <Select label="Marital Status" value={form.maritalStatus} onChange={e => upd('maritalStatus', e.target.value)} options={MARITAL.map(m => ({ value: m, label: m }))} />
-        <Select label="Blood Group" value={form.bloodGroup} onChange={e => upd('bloodGroup', e.target.value)} options={BLOOD_GROUPS.map(b => ({ value: b, label: b }))} />
+        <Select
+          label="Gender"
+          value={form.gender}
+          onChange={e => upd('gender', e.target.value)}
+          options={[
+            { value: "", label: "Choose Gender" },
+            ...GENDER.map(g => ({ value: g, label: g }))
+          ]}
+        />
+
+        <Select
+          label="Marital Status"
+          value={form.maritalStatus}
+          onChange={e => upd('maritalStatus', e.target.value)}
+          options={[
+            { value: "", label: "Choose Marital Status" },
+            ...MARITAL.map(m => ({ value: m, label: m }))
+          ]}
+        />
+
+        <Select
+          label="Blood Group"
+          value={form.bloodGroup}
+          onChange={e => upd('bloodGroup', e.target.value)}
+          options={[
+            { value: "", label: "Choose Blood Group" },
+            ...BLOOD_GROUPS.map(b => ({ value: b, label: b }))
+          ]}
+        />
         <Input label="Father's Name" value={form.fatherName} onChange={e => upd('fatherName', e.target.value)} />
         <Input label="Mother's Name" value={form.motherName} onChange={e => upd('motherName', e.target.value)} />
       </Section>
@@ -208,13 +300,26 @@ export default function ProfilePage() {
 
       {/* ID Proofs */}
       <Section icon={FileText} title="ID Proofs">
+        <Select
+          label="ID Proof Type"
+          value={form.idProofType}
+          onChange={e => upd('idProofType', e.target.value)}
+          options={[
+            { value: "", label: "Choose ID Proof Type" },
+            ...ID_PROOF_TYPES.map(t => ({
+              value: t,
+              label: t.replace(/_/g, " "),
+            })),
+          ]}
+        />
+        <Input label="ID Proof Number" value={form.idProofNumber} onChange={e => upd('idProofNumber', e.target.value)} />
         <Input label="PAN Number" value={form.panNumber} onChange={e => upd('panNumber', e.target.value.toUpperCase())} placeholder="ABCDE1234F" />
         <Input label="Aadhar Number" value={form.aadharNumber} onChange={e => upd('aadharNumber', e.target.value)} placeholder="XXXX XXXX XXXX" />
         <div>
           <label className="label">Aadhar Front</label>
           <div className="flex items-center gap-2">
             {form.aadharFrontUrl ? (
-              <a href={form.aadharFrontUrl} target="_blank" className="flex-1 input bg-green-50 border-green-200 text-green-700 flex items-center gap-1"><Check size={13} /> Uploaded</a>
+              <a href={form.aadharFrontUrl} target="_blank" className="flex-1 input bg-green-50 border-green-200 text-green-700 flex items-center gap-1 underline"><Check size={13} /> Click to View / Upload</a>
             ) : (
               <div className="flex-1 input text-gray-400">Not uploaded</div>
             )}
@@ -234,7 +339,7 @@ export default function ProfilePage() {
           <label className="label">Aadhar Back</label>
           <div className="flex items-center gap-2">
             {form.aadharBackUrl ? (
-              <a href={form.aadharBackUrl} target="_blank" className="flex-1 input bg-green-50 border-green-200 text-green-700 flex items-center gap-1"><Check size={13} /> Uploaded</a>
+              <a href={form.aadharBackUrl} target="_blank" className="flex-1 input bg-green-50 border-green-200 text-green-700 flex items-center gap-1 underline"><Check size={13} /> Click to View / Upload</a>
             ) : (
               <div className="flex-1 input text-gray-400">Not uploaded</div>
             )}

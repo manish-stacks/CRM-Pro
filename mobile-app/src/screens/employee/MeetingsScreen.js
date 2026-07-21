@@ -46,9 +46,10 @@ function MeetingCard({ item, colors, onPress }) {
   const todayISO = toISO(new Date());
   const isToday = item.meeting_date === todayISO;
   const isPast = item.meeting_date && item.meeting_date < todayISO && item.status === 'meeting_scheduled';
+  const isMeetingDone = item.status === 'meeting_done';
 
   return (
-    <TouchableOpacity activeOpacity={0.8} onPress={onPress} style={[s.card, { backgroundColor: colors.card, borderColor: isPast ? 'rgba(229,9,20,0.35)' : colors.border }]}>
+    <TouchableOpacity activeOpacity={0.8} onPress={onPress} style={[s.card, { backgroundColor: colors.card, borderColor: isPast ? 'rgba(229,9,20,0.35)' : isMeetingDone ? 'rgba(20,184,166,0.4)' : colors.border }]}>
       <View style={s.top}>
         <View style={{ flex: 1 }}>
           <Text style={[s.client, { color: colors.text }]} numberOfLines={1}>
@@ -58,10 +59,10 @@ function MeetingCard({ item, colors, onPress }) {
             <Text style={[s.company, { color: colors.text2 }]} numberOfLines={1}>{item.company}</Text>
           ) : null}
         </View>
-        <View style={[s.badge, { backgroundColor: isToday ? 'rgba(34,197,94,0.14)' : isPast ? 'rgba(229,9,20,0.12)' : 'rgba(59,130,246,0.12)' }]}>
-          <Ionicons name="calendar-outline" size={12} color={isToday ? '#16A34A' : isPast ? colors.primary : colors.blueText} />
-          <Text style={[s.badgeTxt, { color: isToday ? '#16A34A' : isPast ? colors.primary : colors.blueText }]}>
-            {isToday ? 'Today' : isPast ? 'Missed' : 'Meeting'}
+        <View style={[s.badge, { backgroundColor: isMeetingDone ? 'rgba(20,184,166,0.14)' : isToday ? 'rgba(34,197,94,0.14)' : isPast ? 'rgba(229,9,20,0.12)' : 'rgba(59,130,246,0.12)' }]}>
+          <Ionicons name={isMeetingDone ? 'checkmark-done-outline' : 'calendar-outline'} size={12} color={isMeetingDone ? '#14B8A6' : isToday ? '#16A34A' : isPast ? colors.primary : colors.blueText} />
+          <Text style={[s.badgeTxt, { color: isMeetingDone ? '#14B8A6' : isToday ? '#16A34A' : isPast ? colors.primary : colors.blueText }]}>
+            {isMeetingDone ? 'Decide Deal' : isToday ? 'Today' : isPast ? 'Missed' : 'Meeting'}
           </Text>
         </View>
       </View>

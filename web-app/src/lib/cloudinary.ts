@@ -29,7 +29,6 @@ export type UploadFolder =
   | 'proposals'
   | 'invoices'
   | 'general'
-  | 'tracker-screenshots'
 
 /**
  * Upload a base64 data URL or remote URL to Cloudinary

@@ -41,7 +41,14 @@ export const EmployeeAPI = {
   assignService: (data) => AxiosInstance.post('/mobile/assign-service', data),
 
   // Proposals & Invoices (client deal paperwork)
-  getProposals: (clientId) => AxiosInstance.get(`/mobile/proposals${clientId ? `?clientId=${clientId}` : ''}`),
+  getProposals: (idOrParams) => {
+    const q = typeof idOrParams === 'string'
+      ? `?clientId=${idOrParams}`
+      : idOrParams?.leadId ? `?leadId=${idOrParams.leadId}`
+      : idOrParams?.clientId ? `?clientId=${idOrParams.clientId}`
+      : ''
+    return AxiosInstance.get(`/mobile/proposals${q}`)
+  },
   createProposal: (data) => AxiosInstance.post('/mobile/proposals', data),
   getInvoices: (clientId) => AxiosInstance.get(`/mobile/invoices${clientId ? `?clientId=${clientId}` : ''}`),
   createInvoice: (data) => AxiosInstance.post('/mobile/invoices', data),
@@ -56,6 +63,7 @@ export const EmployeeAPI = {
   getMeetings: (params) => AxiosInstance.get(`/mobile/meetings${qs(params)}`),
   getMeetingById: (id) => AxiosInstance.get(`/mobile/meetings/${id}`),
   logMeetingActivity: (id, data) => AxiosInstance.post(`/mobile/meetings/${id}/activity`, data),
+  markMeetingDone: (id, data) => AxiosInstance.post(`/mobile/meetings/${id}/done`, data),
   closeMeeting: (id, data) => AxiosInstance.post(`/mobile/meetings/${id}/close`, data),
 
   // Visits

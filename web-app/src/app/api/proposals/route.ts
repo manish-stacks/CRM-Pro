@@ -45,19 +45,35 @@ export async function GET(req: NextRequest) {
   if (status) where.status = status
   if (clientId) where.clientId = clientId
   if (leadId) where.leadId = leadId
+
+  const andClauses: any[] = []
   if (search) {
-    where.OR = [
-      { proposalNumber: { contains: search } },
-      { title: { contains: search } },
-    ]
+    andClauses.push({
+      OR: [
+        { proposalNumber: { contains: search } },
+        { title: { contains: search } },
+      ],
+    })
   }
 
-  // Role visibility
+  // Role visibility — Telecaller (creates proposals for their leads) and
+  // Marketing Executive (needs to see the proposal for context on the deal
+  // they're closing) can both see: proposals they created themselves, OR
+  // proposals tied to a lead/client they're assigned to.
   if (session.role === 'TELECALLER' || session.role === 'MARKETING_EXECUTIVE') {
-    where.createdById = session.userId
+    andClauses.push({
+      OR: [
+        { createdById: session.userId },
+        { lead: { is: { assignedToId: session.userId } } },
+        { lead: { is: { meetingAssignedToId: session.userId } } },
+        { client: { is: { telecallerId: session.userId } } },
+        { client: { is: { marketingPersonId: session.userId } } },
+      ],
+    })
   } else if (session.role === 'EMPLOYEE') {
     return successResponse([], 0)
   }
+  if (andClauses.length) where.AND = andClauses
 
   const [proposals, total] = await Promise.all([
     prisma.proposal.findMany({
@@ -78,7 +94,7 @@ export async function POST(req: NextRequest) {
   const session = await getRequestSession(req)
   if (!session) return unauthorizedResponse()
 
-  if (!['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'MARKETING_EXECUTIVE'].includes(session.role)) {
+  if (!['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'MARKETING_EXECUTIVE', 'TELECALLER'].includes(session.role)) {
     return errorResponse('Forbidden', 403)
   }
 

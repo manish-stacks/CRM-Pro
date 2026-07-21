@@ -41,9 +41,9 @@ export async function GET(req: NextRequest) {
   const where: any = { meetingAssignedToId: session.userId }
 
   if (status && status !== 'all') where.status = status.toUpperCase()
-  else if (range === 'past') where.status = { in: ['CONVERTED', 'CLOSED', 'NOT_INTERESTED', 'MEETING_SCHEDULED'] }
-  else if (!range && scope !== 'all') where.status = 'MEETING_SCHEDULED'
-  else if (range && range !== 'all') where.status = 'MEETING_SCHEDULED'
+  else if (range === 'past') where.status = { in: ['CONVERTED', 'CLOSED', 'NOT_INTERESTED', 'MEETING_SCHEDULED', 'MEETING_DONE'] }
+  else if (!range && scope !== 'all') where.status = { in: ['MEETING_SCHEDULED', 'MEETING_DONE'] }
+  else if (range && range !== 'all') where.status = { in: ['MEETING_SCHEDULED', 'MEETING_DONE'] }
 
   if (search) {
     where.OR = [
@@ -86,7 +86,7 @@ export async function GET(req: NextRequest) {
     meetingLocation: true, meetingLat: true, meetingLng: true, meetingNotes: true,
   }
 
-  const base = { meetingAssignedToId: session.userId, status: 'MEETING_SCHEDULED' }
+  const base = { meetingAssignedToId: session.userId, status: { in: ['MEETING_SCHEDULED', 'MEETING_DONE'] } }
   const [leads, counts] = await Promise.all([
     prisma.lead.findMany({
       where,

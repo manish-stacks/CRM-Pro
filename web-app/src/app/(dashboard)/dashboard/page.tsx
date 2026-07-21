@@ -3,11 +3,12 @@ import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '@/hooks/useAuth'
 import { StatCard } from '@/components/ui'
 import { CelebrationWidget } from '@/components/dashboard/CelebrationWidget'
-import { Users, Target, FileText, DollarSign, Clock, UserCheck, LogIn, LogOut, Wifi, CalendarCheck } from 'lucide-react'
+import { Users, Target, FileText, DollarSign, Clock, UserCheck, LogIn, LogOut, Wifi, CalendarCheck, AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import api from '@/lib/axios'
 import { getCurrentGeo } from '@/lib/geolocation'
+import { FIELD_LABELS } from '@/lib/profileCompletion'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
 
@@ -22,6 +23,7 @@ export default function DashboardPage() {
   const [punching, setPunching] = useState(false)
   const [myProjects, setMyProjects] = useState<any[]>([])
   const [leaveBalance, setLeaveBalance] = useState<any>(null)
+  const [profileCompletion, setProfileCompletion] = useState<{ percent: number; missingFields: string[] } | null>(null)
 
   // Live clock
   useEffect(() => {
@@ -44,6 +46,9 @@ export default function DashboardPage() {
   useEffect(() => { fetchDashboard() }, [fetchDashboard])
   useEffect(() => {
     api.get('/leaves/balance').then(r => setLeaveBalance(r.data.data)).catch(() => {})
+  }, [])
+  useEffect(() => {
+    api.get('/auth/profile').then(r => setProfileCompletion(r.data.data?.profileCompletion || null)).catch(() => {})
   }, [])
 
   // Assigned projects — for heads (MANAGER) and team members (EMPLOYEE)
@@ -109,6 +114,49 @@ export default function DashboardPage() {
           <p className="text-3xl font-bold text-gray-900 tabular-nums">{time.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</p>
         </div>
       </div>
+
+      {/* Profile completion — nudge/block until required details are filled */}
+      {profileCompletion && profileCompletion.percent < 100 && (
+        <div className={`card p-5 border-l-4 ${profileCompletion.percent < 90 ? 'border-l-red-500 bg-red-50/40' : 'border-l-amber-400 bg-amber-50/40'}`}>
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div className="flex items-start gap-4">
+              <div className={`relative w-14 h-14 flex-shrink-0 rounded-full grid place-items-center ${profileCompletion.percent < 90 ? 'bg-red-100' : 'bg-amber-100'}`}
+                style={{
+                  background: `conic-gradient(${profileCompletion.percent < 90 ? '#ef4444' : '#f59e0b'} ${profileCompletion.percent * 3.6}deg, ${profileCompletion.percent < 90 ? '#fee2e2' : '#fef3c7'} 0deg)`,
+                }}>
+                <div className="w-11 h-11 rounded-full bg-white grid place-items-center">
+                  <span className={`text-xs font-bold ${profileCompletion.percent < 90 ? 'text-red-600' : 'text-amber-600'}`}>{profileCompletion.percent}%</span>
+                </div>
+              </div>
+              <div>
+                <div className="flex items-center gap-1.5">
+                  {profileCompletion.percent < 90
+                    ? <AlertTriangle size={16} className="text-red-500" />
+                    : <CheckCircle2 size={16} className="text-amber-500" />}
+                  <p className="font-semibold text-gray-900">
+                    {profileCompletion.percent < 90 ? 'Complete your profile to check in' : 'Almost there — finish your profile'}
+                  </p>
+                </div>
+                <p className="text-sm text-gray-500 mt-0.5">
+                  {profileCompletion.percent < 90
+                    ? `Your profile is only ${profileCompletion.percent}% complete. You need at least 90% to punch in.`
+                    : `Your profile is ${profileCompletion.percent}% complete. Fill the rest for full records.`}
+                </p>
+                {profileCompletion.missingFields.length > 0 && (
+                  <p className="text-xs text-gray-400 mt-1.5">
+                    Missing: {profileCompletion.missingFields.slice(0, 4).map(f => FIELD_LABELS[f] || f).join(', ')}
+                    {profileCompletion.missingFields.length > 4 ? ` +${profileCompletion.missingFields.length - 4} more` : ''}
+                  </p>
+                )}
+              </div>
+            </div>
+            <Link href="/profile"
+              className={`flex-shrink-0 px-4 py-2 rounded-lg text-sm font-semibold text-white transition-colors ${profileCompletion.percent < 90 ? 'bg-red-600 hover:bg-red-700' : 'bg-amber-500 hover:bg-amber-600'}`}>
+              Complete Now →
+            </Link>
+          </div>
+        </div>
+      )}
 
       {/* Attendance punch card */}
       <div className="card p-5 flex items-center justify-between gap-4 flex-wrap">

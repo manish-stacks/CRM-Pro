@@ -23,6 +23,7 @@ function callPhone(phone) { if (phone) Linking.openURL(`tel:${phone}`).catch(() 
 
 const STATUS_COLORS = {
   MEETING_SCHEDULED: { bg: 'rgba(168,85,247,0.12)', text: '#A855F7' },
+  MEETING_DONE: { bg: 'rgba(20,184,166,0.12)', text: '#14B8A6' },
   CONVERTED: { bg: 'rgba(34,197,94,0.12)', text: '#22C55E' },
   CLOSED: { bg: 'rgba(100,116,139,0.12)', text: '#64748B' },
   NOT_INTERESTED: { bg: 'rgba(239,68,68,0.12)', text: '#EF4444' },
@@ -53,6 +54,13 @@ export default function MeetingDetailScreen({ route, navigation }) {
   const [showLost, setShowLost] = useState(false);
   const [lostReason, setLostReason] = useState('');
 
+  // Proposals (telecaller creates, marketing person can view for context)
+  const [proposals, setProposals] = useState([]);
+  const [showProposal, setShowProposal] = useState(false);
+  const [propTitle, setPropTitle] = useState('');
+  const [propItems, setPropItems] = useState([{ service_name: '', quantity: '1', unit_price: '' }]);
+  const [savingProposal, setSavingProposal] = useState(false);
+
   const fetchDetail = useCallback(async () => {
     try {
       const res = await EmployeeAPI.getMeetingById(meetingId);
@@ -64,7 +72,16 @@ export default function MeetingDetailScreen({ route, navigation }) {
     }
   }, [meetingId]);
 
-  useEffect(() => { fetchDetail(); }, [fetchDetail]);
+  const fetchProposals = useCallback(async () => {
+    try {
+      const res = await EmployeeAPI.getProposals({ leadId: meetingId });
+      setProposals(res.data?.data || []);
+    } catch (e) {
+      setProposals([]);
+    }
+  }, [meetingId]);
+
+  useEffect(() => { fetchDetail(); fetchProposals(); }, [fetchDetail, fetchProposals]);
 
   const s = styles(colors);
 
@@ -80,6 +97,42 @@ export default function MeetingDetailScreen({ route, navigation }) {
 
   const statusStyle = STATUS_COLORS[data.status] || STATUS_COLORS.MEETING_SCHEDULED;
 
+  const openProposalModal = () => {
+    setPropTitle(`Proposal for ${data.client_name}`);
+    setPropItems([{ service_name: '', quantity: '1', unit_price: '' }]);
+    setShowProposal(true);
+  };
+  const updatePropItem = (idx, field, val) => {
+    setPropItems(propItems.map((it, i) => i === idx ? { ...it, [field]: val } : it));
+  };
+  const addPropItem = () => setPropItems([...propItems, { service_name: '', quantity: '1', unit_price: '' }]);
+  const removePropItem = (idx) => setPropItems(propItems.filter((_, i) => i !== idx));
+  const propTotal = propItems.reduce((sum, it) => sum + (Number(it.quantity) || 0) * (Number(it.unit_price) || 0), 0);
+
+  const submitProposal = async () => {
+    const valid = propItems.filter(it => it.service_name.trim() && Number(it.unit_price) > 0);
+    if (!propTitle.trim()) { Alert.alert('Error', 'Title is required'); return; }
+    if (valid.length === 0) { Alert.alert('Error', 'Add at least one item with a name and price'); return; }
+    setSavingProposal(true);
+    try {
+      const res = await EmployeeAPI.createProposal({
+        leadId: meetingId,
+        title: propTitle,
+        items: valid.map(it => ({
+          serviceName: it.service_name,
+          description: it.service_name,
+          quantity: Number(it.quantity) || 1,
+          unitPrice: Number(it.unit_price) || 0,
+        })),
+      });
+      setShowProposal(false);
+      Alert.alert('Proposal Created', `${res.data?.data?.proposal_number || ''} saved successfully.`);
+      fetchProposals();
+    } catch (e) {
+      Alert.alert('Error', e.message || 'Failed to create proposal');
+    } finally { setSavingProposal(false); }
+  };
+
   const submitActivity = async () => {
     if (!actTitle.trim()) { Alert.alert('Error', 'Title is required'); return; }
     setSaving(true);
@@ -90,6 +143,17 @@ export default function MeetingDetailScreen({ route, navigation }) {
       fetchDetail();
     } catch (e) {
       Alert.alert('Error', e.message || 'Failed to log activity');
+    } finally { setSaving(false); }
+  };
+
+  const submitMeetingDone = async () => {
+    setSaving(true);
+    try {
+      await EmployeeAPI.markMeetingDone(meetingId);
+      Alert.alert('Meeting Done', 'Now you can close the deal — Deal Done or Lost.');
+      fetchDetail();
+    } catch (e) {
+      Alert.alert('Error', e.message || 'Failed to update');
     } finally { setSaving(false); }
   };
 
@@ -196,6 +260,29 @@ export default function MeetingDetailScreen({ route, navigation }) {
             </View>
           </View>
 
+          {/* Proposals — telecaller creates, marketing person can view for context */}
+          {!data.is_closed && (
+            <View style={[s.card, { borderColor: colors.border }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                <Text style={[s.cardTitle, { color: colors.text, marginBottom: 0 }]}>Proposals ({proposals.length})</Text>
+                <TouchableOpacity onPress={openProposalModal}>
+                  <Ionicons name="add-circle" size={26} color={colors.primary} />
+                </TouchableOpacity>
+              </View>
+              {proposals.length === 0 ? (
+                <Text style={{ color: colors.text3, fontSize: 13, textAlign: 'center', paddingVertical: 12 }}>No proposals yet</Text>
+              ) : proposals.map(p => (
+                <View key={p.id} style={[s.actRow, { borderColor: colors.border }]}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                    <Text style={[s.actTitle, { color: colors.text }]}>{p.title}</Text>
+                    <Text style={[s.actTitle, { color: colors.text }]}>₹{Number(p.final_amount || 0).toLocaleString('en-IN')}</Text>
+                  </View>
+                  <Text style={[s.actMeta, { color: colors.text3 }]}>{p.proposal_number} · {p.status}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+
           {/* Deal actions */}
           {!data.is_closed && (
             <View style={[s.card, { borderColor: colors.border }]}>
@@ -205,10 +292,17 @@ export default function MeetingDetailScreen({ route, navigation }) {
                 <Text style={[s.actionRowTxt, { color: colors.text }]}>Log Call / Remark</Text>
                 <Ionicons name="chevron-forward" size={16} color={colors.text3} />
               </TouchableOpacity>
-              <TouchableOpacity style={[s.dealBtn, { backgroundColor: '#22C55E' }]} onPress={() => setShowConvert(true)}>
-                <Ionicons name="checkmark-circle-outline" size={18} color="#fff" />
-                <Text style={s.dealBtnTxt}>Deal Done — Convert to Client</Text>
-              </TouchableOpacity>
+              {data.status === 'MEETING_SCHEDULED' && (
+                <TouchableOpacity style={[s.dealBtn, { backgroundColor: '#14B8A6' }]} onPress={submitMeetingDone} disabled={saving}>
+                  {saving ? <ActivityIndicator color="#fff" /> : <><Ionicons name="checkmark-done-outline" size={18} color="#fff" /><Text style={s.dealBtnTxt}>Mark Meeting Done</Text></>}
+                </TouchableOpacity>
+              )}
+              {data.status === 'MEETING_DONE' && (
+                <TouchableOpacity style={[s.dealBtn, { backgroundColor: '#22C55E' }]} onPress={() => setShowConvert(true)}>
+                  <Ionicons name="checkmark-circle-outline" size={18} color="#fff" />
+                  <Text style={s.dealBtnTxt}>Deal Done — Convert to Client</Text>
+                </TouchableOpacity>
+              )}
               <TouchableOpacity style={[s.lostBtn, { borderColor: '#EF4444' }]} onPress={() => setShowLost(true)}>
                 <Ionicons name="close-circle-outline" size={17} color="#EF4444" />
                 <Text style={[s.lostBtnTxt, { color: '#EF4444' }]}>Mark Lost / Not Interested</Text>
@@ -347,6 +441,85 @@ export default function MeetingDetailScreen({ route, navigation }) {
                 {saving ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>Close as Lost</Text>}
               </TouchableOpacity>
             </View>
+          </ScrollView>
+        </View>
+      </Modal>
+      {/* New Proposal Modal */}
+      <Modal visible={showProposal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowProposal(false)}>
+        <View style={[s.modal, { backgroundColor: colors.bg, paddingTop: 40 }]}>
+          <View style={s.modalHeader}>
+            <Text style={[s.modalTitle, { color: colors.text }]}>New Proposal</Text>
+            <TouchableOpacity onPress={() => setShowProposal(false)}>
+              <Ionicons name="close" size={24} color={colors.text2} />
+            </TouchableOpacity>
+          </View>
+          <ScrollView style={{ padding: 20 }} keyboardShouldPersistTaps="handled">
+            <Text style={s.fieldLabel}>TITLE *</Text>
+            <View style={[s.fieldWrap, { backgroundColor: colors.bg2, borderColor: colors.border }]}>
+              <TextInput
+                style={{ flex: 1, fontSize: 15, paddingVertical: 12, color: colors.text }}
+                value={propTitle}
+                onChangeText={setPropTitle}
+                placeholderTextColor={colors.text3}
+              />
+            </View>
+
+            <Text style={[s.fieldLabel, { marginTop: 16 }]}>ITEMS *</Text>
+            {propItems.map((it, idx) => (
+              <View key={idx} style={{ marginBottom: 10, borderWidth: 1.5, borderColor: colors.border, borderRadius: 10, padding: 10 }}>
+                <View style={[s.fieldWrap, { backgroundColor: colors.bg2, borderColor: colors.border, marginBottom: 8 }]}>
+                  <TextInput
+                    style={{ flex: 1, fontSize: 14, paddingVertical: 10, color: colors.text }}
+                    placeholder="Service / item name"
+                    placeholderTextColor={colors.text3}
+                    value={it.service_name}
+                    onChangeText={v => updatePropItem(idx, 'service_name', v)}
+                  />
+                </View>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <View style={[s.fieldWrap, { flex: 1, backgroundColor: colors.bg2, borderColor: colors.border }]}>
+                    <TextInput
+                      style={{ flex: 1, fontSize: 14, paddingVertical: 10, color: colors.text }}
+                      placeholder="Qty"
+                      placeholderTextColor={colors.text3}
+                      keyboardType="numeric"
+                      value={it.quantity}
+                      onChangeText={v => updatePropItem(idx, 'quantity', v)}
+                    />
+                  </View>
+                  <View style={[s.fieldWrap, { flex: 2, backgroundColor: colors.bg2, borderColor: colors.border }]}>
+                    <TextInput
+                      style={{ flex: 1, fontSize: 14, paddingVertical: 10, color: colors.text }}
+                      placeholder="Unit Price ₹"
+                      placeholderTextColor={colors.text3}
+                      keyboardType="numeric"
+                      value={it.unit_price}
+                      onChangeText={v => updatePropItem(idx, 'unit_price', v)}
+                    />
+                  </View>
+                  {propItems.length > 1 && (
+                    <TouchableOpacity onPress={() => removePropItem(idx)} style={{ justifyContent: 'center', paddingHorizontal: 4 }}>
+                      <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+            ))}
+            <TouchableOpacity onPress={addPropItem} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8 }}>
+              <Ionicons name="add-circle-outline" size={18} color={colors.primary} />
+              <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 13 }}>Add another item</Text>
+            </TouchableOpacity>
+
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.border }}>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text2 }}>Total</Text>
+              <Text style={{ fontSize: 16, fontWeight: '800', color: colors.text }}>₹{propTotal.toLocaleString('en-IN')}</Text>
+            </View>
+
+            <TouchableOpacity onPress={submitProposal} disabled={savingProposal} style={{ marginTop: 20 }}>
+              <LinearGradient colors={[colors.gradStart, colors.gradEnd]} style={s.submitBtn} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+                {savingProposal ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 }}>Save Proposal</Text>}
+              </LinearGradient>
+            </TouchableOpacity>
           </ScrollView>
         </View>
       </Modal>

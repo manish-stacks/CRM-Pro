@@ -123,8 +123,8 @@ export async function POST(req: NextRequest) {
   const session = await getRequestSession(req)
   if (!session) return unauthorizedResponse()
 
-  // MARKETING_EXECUTIVE + MANAGER + ADMIN can create clients
-  if (!['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'MARKETING_EXECUTIVE'].includes(session.role)) {
+  // Admin/Manager, Marketing Executive, and Telecaller can all create clients manually
+  if (!['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'MARKETING_EXECUTIVE', 'TELECALLER'].includes(session.role)) {
     return errorResponse('Forbidden', 403)
   }
 
@@ -161,7 +161,8 @@ export async function POST(req: NextRequest) {
         assignedToId: assignedToId || null,
         marketingPersonId: marketingPersonId || salesPersonId ||
           (session.role === 'MARKETING_EXECUTIVE' ? session.userId : null),
-        telecallerId: telecallerId || telesalesId || null,
+        telecallerId: telecallerId || telesalesId ||
+          (session.role === 'TELECALLER' ? session.userId : null),
         reportingPersonId: reportingPersonId || null,
         leadId: leadId || null,
         createdById: session.userId,

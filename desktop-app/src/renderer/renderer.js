@@ -31,8 +31,8 @@ checkinBtn.addEventListener('click', async () => {
       checkoutBtn.classList.remove('hidden')
       if (result.tracking === false) {
         const reason = result.reason === 'EMPLOYEE_EXEMPT'
-          ? 'Checked in — screenshot monitoring not required for you'
-          : 'Checked in — screenshot monitoring is currently off (admin)'
+          ? 'Checked in — tracking not required for you'
+          : 'Checked in — tracking is currently off (admin)'
         status.textContent = reason
       } else {
         status.textContent = 'Checked in — tracking active'

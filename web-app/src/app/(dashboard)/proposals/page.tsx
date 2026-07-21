@@ -12,7 +12,7 @@ const STATUSES = ['DRAFT', 'SENT', 'VIEWED', 'ACCEPTED', 'REJECTED', 'EXPIRED']
 
 export default function ProposalsPage() {
   const { user, isAtLeast } = useAuth()
-  const canCreate = ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'MARKETING_EXECUTIVE'].includes(user?.role || '')
+  const canCreate = ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'MARKETING_EXECUTIVE', 'TELECALLER'].includes(user?.role || '')
 
   const [proposals, setProposals] = useState<any[]>([])
   const [total, setTotal] = useState(0)

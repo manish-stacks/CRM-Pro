@@ -43,10 +43,6 @@ export default function EmployeeDetailPage() {
   const [pwdOpen, setPwdOpen] = useState(false)
   const [pwdSaving, setPwdSaving] = useState(false)
   const [pwdForm, setPwdForm] = useState({ password: '', confirm: '', notify: true })
-  const [screenshots, setScreenshots] = useState<any[]>([])
-  const [screenshotsLoading, setScreenshotsLoading] = useState(false)
-  const [screenshotDate, setScreenshotDate] = useState('')
-  const [lightbox, setLightbox] = useState<string | null>(null)
 
   const fetchEmp = () => {
     setLoading(true)
@@ -64,24 +60,6 @@ export default function EmployeeDetailPage() {
     api.get('/departments').then(r => setDepartments(r.data.data || [])).catch(() => { })
     api.get('/employees?role=MANAGER&limit=200').then(r => setAllEmployees(r.data.data || [])).catch(() => { })
   }, [])
-
-  const loadScreenshots = async () => {
-    setScreenshotsLoading(true)
-    try {
-      const r = await api.get(`/employees/${id}/screenshots`, {
-        params: { limit: 60, ...(screenshotDate ? { date: screenshotDate } : {}) },
-      })
-      setScreenshots(r.data.data || [])
-    } catch (e: any) {
-      toast.error(e.response?.data?.error || 'Failed to load screenshots')
-    } finally {
-      setScreenshotsLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    if (tab === 'screenshots') loadScreenshots()
-  }, [tab, screenshotDate, id])
 
   const toInputDate = (d: any) => d ? new Date(d).toISOString().split('T')[0] : ''
 
@@ -152,7 +130,7 @@ export default function EmployeeDetailPage() {
   if (loading) return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" /></div>
   if (!emp) return null
 
-  const TABS = [...['overview', 'personal', 'documents', 'bank', 'attendance'], ...(isAtLeast('ADMIN') ? ['screenshots'] : [])]
+  const TABS = ['overview', 'personal', 'documents', 'bank', 'attendance']
 
   const InfoRow = ({ label, value }: { label: string; value?: string | null }) => (
     <div className="flex items-start justify-between py-2.5 border-b border-gray-50 last:border-0">
@@ -171,7 +149,7 @@ export default function EmployeeDetailPage() {
         <div className="flex-1">
           <div className="flex items-center gap-4">
             <div className="w-16 h-16 rounded-2xl bg-blue-600 flex items-center justify-center text-white text-2xl font-bold">
-              {getInitials(emp.user.name)}
+              {emp.user.avatar ? <img src={emp.user.avatar} className="w-full h-full object-cover rounded-md" /> : getInitials(emp.user.name)}
             </div>
             <div>
               <h1 className="text-2xl font-bold text-gray-900">{emp.user.name}</h1>
@@ -276,6 +254,36 @@ export default function EmployeeDetailPage() {
           <InfoRow label="ID Type" value={emp.idProofType} />
           <InfoRow label="ID Number" value={emp.idProofNumber} />
           <InfoRow label="PAN Number" value={emp.panNumber} />
+          <InfoRow label="Aadhar Number" value={emp.aadharNumber} />
+
+          <div className="grid grid-cols-2 gap-3 mt-4">
+            <div>
+              <p className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-1.5">Aadhar Front</p>
+              {emp.aadharFrontUrl ? (
+                <a href={emp.aadharFrontUrl} target="_blank" rel="noopener noreferrer" className="block">
+                  <img src={emp.aadharFrontUrl} alt="Aadhar Front" className="w-full aspect-video object-cover rounded-lg border border-gray-200 hover:opacity-90 transition-opacity" />
+                </a>
+              ) : (
+                <div className="w-full aspect-video rounded-lg border border-dashed border-gray-200 grid place-items-center text-xs text-gray-400">Not uploaded</div>
+              )}
+            </div>
+            <div>
+              <p className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-1.5">Aadhar Back</p>
+              {emp.aadharBackUrl ? (
+                <a href={emp.aadharBackUrl} target="_blank" rel="noopener noreferrer" className="block">
+                  <img src={emp.aadharBackUrl} alt="Aadhar Back" className="w-full aspect-video object-cover rounded-lg border border-gray-200 hover:opacity-90 transition-opacity" />
+                </a>
+              ) : (
+                <div className="w-full aspect-video rounded-lg border border-dashed border-gray-200 grid place-items-center text-xs text-gray-400">Not uploaded</div>
+              )}
+            </div>
+          </div>
+          {emp.idProofUrl && (
+            <div className="mt-4">
+              <p className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-1.5">Other ID Proof</p>
+              <a href={emp.idProofUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline">View file →</a>
+            </div>
+          )}
         </div>
       )}
 
@@ -310,44 +318,6 @@ export default function EmployeeDetailPage() {
               )}
             </tbody>
           </table>
-        </div>
-      )}
-
-      {/* Screenshots (ADMIN / SUPER_ADMIN only) */}
-      {tab === 'screenshots' && isAtLeast('ADMIN') && (
-        <div className="card p-5">
-          <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
-            <div className="flex items-center gap-2"><Camera size={16} className="text-purple-600" /><h3 className="font-semibold text-gray-900">Tracker Screenshots</h3></div>
-            <Input type="date" value={screenshotDate} onChange={e => setScreenshotDate(e.target.value)} />
-          </div>
-
-          {screenshotsLoading && (
-            <div className="flex items-center justify-center py-16"><div className="w-6 h-6 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" /></div>
-          )}
-
-          {!screenshotsLoading && screenshots.length === 0 && (
-            <div className="text-center py-16 text-gray-400 text-sm">No screenshots captured{screenshotDate ? ' on this date' : ''}.</div>
-          )}
-
-          {!screenshotsLoading && screenshots.length > 0 && (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-              {screenshots.map((s: any) => (
-                <button key={s.id} onClick={() => setLightbox(s.url)} className="group text-left">
-                  <div className="aspect-video rounded-lg overflow-hidden border border-gray-200 bg-gray-50">
-                    <img src={s.url} alt="Screenshot" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                  </div>
-                  <p className="text-[11px] text-gray-500 mt-1">{new Date(s.capturedAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</p>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Screenshot lightbox */}
-      {lightbox && (
-        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-6" onClick={() => setLightbox(null)}>
-          <img src={lightbox} alt="Screenshot full view" className="max-w-full max-h-full rounded-lg shadow-2xl" />
         </div>
       )}
 

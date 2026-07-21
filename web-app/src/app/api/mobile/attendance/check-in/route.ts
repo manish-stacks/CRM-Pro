@@ -7,12 +7,18 @@ import { deviceFromRequest } from '@/lib/device'
 import { logFromRequest } from '@/lib/audit'
 import { todayDateOnly, computeLate } from '@/lib/attendanceDate'
 import { Settings } from '@/lib/settings'
+import { getProfileCompletion, PROFILE_COMPLETION_THRESHOLD } from '@/lib/profileCompletion'
 
 export async function POST(req: NextRequest) {
   const res = await requireMobileEmployee(req)
   if (res instanceof Response) return res
   const { session, employee } = res as any
   if (!employee) return fail('Employee profile not found', 404)
+
+  const { percent } = getProfileCompletion(employee)
+  if (percent < PROFILE_COMPLETION_THRESHOLD) {
+    return fail(`Please complete your profile first (${percent}% done, ${PROFILE_COMPLETION_THRESHOLD}% required to check in)`, 403)
+  }
 
   let body: any = {}
   try { body = await req.json() } catch {}

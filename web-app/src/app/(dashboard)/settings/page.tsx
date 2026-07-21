@@ -35,13 +35,9 @@ const DEFAULTS: Record<string, any> = {
   // Leave accrual + carry-forward
   leave_monthly_accrual: 1,
   leave_max_carryforward: 6,
-  // Desktop Tracker (screenshot monitoring)
+  // Desktop Tracker (check-in/out + idle time)
   tracker_enabled: true,
-  tracker_screenshots_per_day: 4,
   tracker_idle_threshold_seconds: 300,
-  tracker_screenshot_quality: 70,
-  tracker_office_hours_only: true,
-  tracker_retention_days: 30,
   // Notifications kill-switches
   email_enabled: true,
   whatsapp_enabled: true,
@@ -108,7 +104,7 @@ export default function SettingsPage() {
         finance: ['currency', 'currency_symbol', 'gst_default_rate', 'gst_enabled_by_default', 'invoice_due_days', 'invoice_prefix', 'payment_methods'],
         hrm: ['weekly_off_days', 'working_hours_per_day', 'half_day_threshold_hours'],
         attendance: ['office_start_time', 'office_end_time', 'late_grace_minutes', 'leave_monthly_accrual', 'leave_max_carryforward'],
-        tracker: ['tracker_enabled', 'tracker_screenshots_per_day', 'tracker_idle_threshold_seconds', 'tracker_screenshot_quality', 'tracker_office_hours_only', 'tracker_retention_days'],
+        tracker: ['tracker_enabled', 'tracker_idle_threshold_seconds'],
         notifications: ['email_enabled', 'whatsapp_enabled'],
       }
       const settings: Record<string, { value: any; category: string }> = {}
@@ -319,8 +315,8 @@ export default function SettingsPage() {
             <>
               <div className="flex items-center justify-between rounded-lg border border-gray-200 p-3">
                 <div>
-                  <p className="text-sm font-medium text-gray-900">Screenshot Monitoring</p>
-                  <p className="text-xs text-gray-500 mt-0.5">Master switch — when off, no employee's desktop app will take screenshots; only check-in/out will still run.</p>
+                  <p className="text-sm font-medium text-gray-900">Desktop Tracker</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Master switch — when off, the desktop app won't run background tracking; only check-in/out will still run.</p>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer flex-shrink-0 ml-3">
                   <input type="checkbox" className="sr-only peer" checked={!!values.tracker_enabled}
@@ -330,46 +326,16 @@ export default function SettingsPage() {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Input label="Screenshots Per Day" type="number" min="1" max="50"
-                  value={values.tracker_screenshots_per_day ?? 4}
-                  onChange={e => set('tracker_screenshots_per_day', Number(e.target.value))} />
                 <Input label="Idle Threshold (minutes)" type="number" min="1"
                   value={Math.round((values.tracker_idle_threshold_seconds ?? 300) / 60)}
                   onChange={e => set('tracker_idle_threshold_seconds', Number(e.target.value) * 60)} />
               </div>
               <p className="text-xs text-gray-500">
-                It will take <b>{values.tracker_screenshots_per_day ?? 4}</b> random screenshots throughout the day (spread within office hours).
-                If an employee stays inactive for <b>{Math.round((values.tracker_idle_threshold_seconds ?? 300) / 60)} minutes</b>, capturing will pause.
+                If an employee stays inactive for <b>{Math.round((values.tracker_idle_threshold_seconds ?? 300) / 60)} minutes</b>, that time is counted as idle in their session.
               </p>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Input label="Screenshot Quality (1-100)" type="number" min="10" max="100"
-                  value={values.tracker_screenshot_quality ?? 70}
-                  onChange={e => set('tracker_screenshot_quality', Number(e.target.value))} />
-                <Input label="Auto-delete After (days)" type="number" min="1"
-                  value={values.tracker_retention_days ?? 30}
-                  onChange={e => set('tracker_retention_days', Number(e.target.value))} />
-              </div>
-              <p className="text-xs text-gray-500">
-                Higher quality = clearer screenshots but more storage. With retention, old screenshots will be auto-deleted after {values.tracker_retention_days ?? 30} days (via daily cron) — for both storage and privacy.
-              </p>
-
-              <div className="flex items-center justify-between rounded-lg border border-gray-200 p-3">
-                <div>
-                  <p className="text-sm font-medium text-gray-900">Office Hours Only</p>
-                  <p className="text-xs text-gray-500 mt-0.5">
-                    When on, capturing will only happen within the Attendance tab's Office Start/End Time ({pretty(values.office_start_time || '10:00')}–{pretty(values.office_end_time || '18:30')}).
-                  </p>
-                </div>
-                <label className="relative inline-flex items-center cursor-pointer flex-shrink-0 ml-3">
-                  <input type="checkbox" className="sr-only peer" checked={!!values.tracker_office_hours_only}
-                    onChange={e => set('tracker_office_hours_only', e.target.checked)} />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-5" />
-                </label>
-              </div>
 
               <div className="rounded-lg bg-blue-50 border border-blue-100 p-3 text-xs text-blue-800">
-                To exempt an individual employee (no screenshots for them), do it from their <b>Employee profile</b> page — this is only the global default.
+                To exempt an individual employee from tracking, do it from their <b>Employee profile</b> page — this is only the global default.
               </div>
             </>
           )}

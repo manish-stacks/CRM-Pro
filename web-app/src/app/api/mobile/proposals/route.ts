@@ -29,13 +29,28 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url)
   const clientId = searchParams.get('clientId')
+  const leadId = searchParams.get('leadId')
 
-  // When viewing a specific client's proposals (client detail screen), show
-  // ALL proposals for that client — same as the web CRM's client page — so
-  // the count/list matches regardless of which staff member created them.
-  // Without a clientId (a hypothetical "my proposals" list) we still scope
-  // to the logged-in employee's own proposals.
-  const where: any = clientId ? { clientId } : { createdById: session.userId }
+  // When viewing a specific client's or lead's proposals (client/meeting
+  // detail screen), show ALL proposals for that client/lead — same as the
+  // web CRM — so the count/list matches regardless of which staff member
+  // created them. Without either id ("my proposals" list) show proposals
+  // the employee created themselves, OR proposals tied to a lead/client
+  // they're assigned to (e.g. a marketing person needs to see a proposal
+  // the telecaller made for the deal they're closing).
+  const where: any = clientId
+    ? { clientId }
+    : leadId
+    ? { leadId }
+    : {
+        OR: [
+          { createdById: session.userId },
+          { lead: { is: { assignedToId: session.userId } } },
+          { lead: { is: { meetingAssignedToId: session.userId } } },
+          { client: { is: { telecallerId: session.userId } } },
+          { client: { is: { marketingPersonId: session.userId } } },
+        ],
+      }
 
   const proposals = await prisma.proposal.findMany({
     where,
@@ -66,18 +81,24 @@ export async function POST(req: NextRequest) {
   let body: any = {}
   try { body = await req.json() } catch { return fail('Invalid body') }
   const {
-    clientId, title, notes, validUntil,
+    clientId, leadId, title, notes, validUntil,
     discount = 0, discountType = 'FIXED',
     gstApplicable = false, gstRate = 18,
     items = [],
   } = body
 
-  if (!clientId) return fail('clientId required')
+  if (!clientId && !leadId) return fail('clientId or leadId required')
   if (!title?.trim()) return fail('Title required')
   if (!items.length) return fail('At least one line item required')
 
-  const client = await prisma.client.findUnique({ where: { id: clientId } })
-  if (!client) return fail('Client not found', 404)
+  if (clientId) {
+    const client = await prisma.client.findUnique({ where: { id: clientId } })
+    if (!client) return fail('Client not found', 404)
+  }
+  if (leadId) {
+    const lead = await prisma.lead.findUnique({ where: { id: leadId } })
+    if (!lead) return fail('Lead not found', 404)
+  }
 
   const cleanItems: ItemInput[] = items.map((it: any) => ({
     serviceId: it.serviceId || null,
@@ -92,7 +113,8 @@ export async function POST(req: NextRequest) {
     const proposal = await prisma.proposal.create({
       data: {
         proposalNumber: await generateProposalNumber(),
-        clientId,
+        clientId: clientId || null,
+        leadId: leadId || null,
         title: title.trim(),
         notes: notes || null,
         discount: Number(discount) || 0,

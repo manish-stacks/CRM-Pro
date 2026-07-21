@@ -10,6 +10,7 @@ import { logFromRequest } from '@/lib/audit'
 import { todayDateOnly, dateOnly, computeLate } from '@/lib/attendanceDate'
 import { Settings } from '@/lib/settings'
 import { getTeamScope } from '@/lib/teamScope'
+import { getProfileCompletion, PROFILE_COMPLETION_THRESHOLD } from '@/lib/profileCompletion'
 
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req)
@@ -148,6 +149,11 @@ export async function POST(req: NextRequest) {
     const dev = deviceFromRequest(req)
 
     if (action === 'punch_in') {
+      const { percent } = getProfileCompletion(employee)
+      if (percent < PROFILE_COMPLETION_THRESHOLD) {
+        return errorResponse(`Please complete your profile first (${percent}% done, ${PROFILE_COMPLETION_THRESHOLD}% required to check in)`, 403)
+      }
+
       const existing = await prisma.attendance.findUnique({
         where: { employeeId_date: { employeeId: employee.id, date: today } },
       })

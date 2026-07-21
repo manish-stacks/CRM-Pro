@@ -10,7 +10,7 @@ import {
   ArrowLeft, Phone, Mail, MapPin, Globe, Calendar, User,
   Loader2, MessageSquare, PhoneCall, CalendarClock, ArrowRightLeft,
   CheckCircle2, XCircle, Ban, Video, Building2, FileText, ExternalLink,
-  History, Send, RotateCcw
+  History, Send, RotateCcw, Plus, IndianRupee
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Swal from "sweetalert2";
@@ -21,6 +21,7 @@ const STATUS_COLORS: Record<string, string> = {
   FOLLOW_UP: 'bg-yellow-100 text-yellow-700',
   CALLBACK: 'bg-cyan-100 text-cyan-700',
   MEETING_SCHEDULED: 'bg-purple-100 text-purple-700',
+  MEETING_DONE: 'bg-teal-100 text-teal-700',
   CONVERTED: 'bg-emerald-100 text-emerald-700',
   CLOSED: 'bg-slate-100 text-slate-700',
   NOT_INTERESTED: 'bg-red-100 text-red-700',
@@ -166,6 +167,17 @@ export default function LeadDetailPage() {
 
 
 
+  const markMeetingDone = async () => {
+    setSaving(true)
+    try {
+      await api.post(`/leads/${id}/meeting/done`)
+      toast.success('Meeting marked done')
+      fetchLead()
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Failed')
+    } finally { setSaving(false) }
+  }
+
   const closeAction = async (action: string) => {
     setSaving(true);
 
@@ -272,13 +284,21 @@ export default function LeadDetailPage() {
               </button>
             ))}
             <div className="flex-1" />
-            <button onClick={() => setModal('convert')} disabled={saving}
-              className="badge bg-emerald-600 text-white hover:bg-emerald-700">
-              <CheckCircle2 size={11} /> Deal Done
-            </button>
+            {lead.status === 'MEETING_SCHEDULED' && (canAdmin || lead.meetingAssignedToId === user?.id) && (
+              <button onClick={markMeetingDone} disabled={saving}
+                className="badge bg-teal-600 text-white hover:bg-teal-700">
+                <CheckCircle2 size={11} /> Mark Meeting Done
+              </button>
+            )}
+            {lead.status === 'MEETING_DONE' && (
+              <button onClick={() => setModal('convert')} disabled={saving}
+                className="badge bg-emerald-600 text-white hover:bg-emerald-700">
+                <CheckCircle2 size={11} /> Deal Done
+              </button>
+            )}
             <button onClick={() => setModal('lost')} disabled={saving}
               className="badge bg-slate-600 text-white hover:bg-slate-700">
-              <XCircle size={11} /> Lost
+              <XCircle size={11} /> {lead.status === 'MEETING_DONE' ? 'Reject' : 'Lost'}
             </button>
           </div>
         )}
@@ -324,6 +344,41 @@ export default function LeadDetailPage() {
                 </div>
               )}
             </div>
+          </div>
+
+          {/* Proposals card — telecaller creates, marketing person can view for context */}
+          <div className="card p-5">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold text-gray-900 text-sm flex items-center gap-2">
+                <FileText size={14} className="text-indigo-600" /> Proposals
+              </h3>
+              {!isClosed && (
+                <Link href={`/proposals/new?leadId=${lead.id}`} className="btn-secondary btn-sm">
+                  <Plus size={12} /> New
+                </Link>
+              )}
+            </div>
+            {(!lead.proposals || lead.proposals.length === 0) ? (
+              <p className="text-xs text-gray-400 text-center py-4">No proposals yet</p>
+            ) : (
+              <div className="space-y-2">
+                {lead.proposals.map((p: any) => (
+                  <Link key={p.id} href={`/proposals/${p.id}`}
+                    className="block rounded-lg border border-gray-100 hover:border-indigo-200 hover:bg-indigo-50/50 p-2.5 transition-colors">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">{p.title}</p>
+                        <p className="text-xs text-gray-400 font-mono">{p.proposalNumber}</p>
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <p className="text-sm font-semibold text-gray-900 flex items-center gap-0.5"><IndianRupee size={11} />{p.finalAmount?.toLocaleString('en-IN')}</p>
+                        <span className="badge text-[10px]">{p.status}</span>
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Meeting details card */}

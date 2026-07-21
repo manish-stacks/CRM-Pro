@@ -2,8 +2,7 @@
 // Desktop app calls this on "Check In". Creates a TrackerSession and hands
 // back the *current* admin-controlled tracker settings, so the desktop app
 // doesn't need a separate settings call and always behaves the way admin
-// has configured it right now (screenshots/day, idle threshold, quality,
-// office-hours-only window).
+// has configured it right now (idle threshold, office-hours window).
 import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/auth'
@@ -19,16 +18,15 @@ export async function POST(req: NextRequest) {
   if (!employee) return errorResponse('No employee record for this account', 404)
 
   const [
-    trackerEnabled, screenshotsPerDay, idleThresholdSec, quality,
-    officeHoursOnly, officeStart, officeEnd, timezone,
+    trackerEnabled, idleThresholdSec,
+    officeStart, officeEnd, timezone,
   ] = await Promise.all([
-    Settings.trackerEnabled(), Settings.trackerScreenshotsPerDay(), Settings.trackerIdleThresholdSec(),
-    Settings.trackerScreenshotQuality(), Settings.trackerOfficeHoursOnly(),
+    Settings.trackerEnabled(), Settings.trackerIdleThresholdSec(),
     Settings.officeStartTime(), Settings.officeEndTime(), Settings.timezone(),
   ])
 
   // Global off-switch or this specific employee exempted by admin — let the
-  // desktop app check in for time purposes but don't run screenshot capture.
+  // desktop app check in for time purposes but don't run background tracking.
   if (!trackerEnabled || employee.trackerExempt) {
     return successResponse({
       tracking: false,
@@ -44,10 +42,7 @@ export async function POST(req: NextRequest) {
     tracking: true,
     session: { id: trackerSession.id },
     settings: {
-      screenshotsPerDay,
       idleThresholdSeconds: idleThresholdSec,
-      qualityPercent: quality,
-      officeHoursOnly,
       officeStart,   // "HH:mm" 24h
       officeEnd,     // "HH:mm" 24h
       timezone,

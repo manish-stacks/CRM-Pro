@@ -1,6 +1,6 @@
 // src/app/api/employees/[id]/toggle-tracker/route.ts
-// Admin can exempt an individual employee from desktop-tracker screenshot
-// monitoring (e.g. leadership, or someone who doesn't use the desktop app),
+// Admin can exempt an individual employee from desktop-tracker check-in/out
+// tracking (e.g. leadership, or someone who doesn't use the desktop app),
 // without turning tracking off for everyone.
 import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'

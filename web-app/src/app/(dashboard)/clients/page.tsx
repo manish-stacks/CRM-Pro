@@ -17,7 +17,7 @@ const STATUSES = ['ACTIVE', 'INACTIVE', 'CHURNED']
 
 export default function ClientsPage() {
   const { user, isAtLeast } = useAuth()
-  const canCreate = ['SUPER_ADMIN', 'ADMIN', 'MARKETING_EXECUTIVE'].includes(user?.role || '')
+  const canCreate = ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'MARKETING_EXECUTIVE', 'TELECALLER'].includes(user?.role || '')
 
   const [clients, setClients] = useState<any[]>([])
   const [total, setTotal] = useState(0)

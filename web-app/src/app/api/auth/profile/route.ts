@@ -7,6 +7,7 @@ import { prisma } from '@/lib/prisma'
 import { getRequestSession } from '@/lib/auth'
 import { successResponse, errorResponse, unauthorizedResponse } from '@/lib/api'
 import { logFromRequest } from '@/lib/audit'
+import { getProfileCompletion } from '@/lib/profileCompletion'
 
 // Fields the user can edit themselves
 const USER_SELF_EDITABLE = new Set([
@@ -38,14 +39,15 @@ export async function GET(req: NextRequest) {
     select: {
       id: true, name: true, email: true, phone: true, altPhone: true,
       role: true, avatar: true, dateOfBirth: true, isActive: true,
-      lastLoginAt: true, createdAt: true,
+      lastLoginAt: true, createdAt: true, emailVerified: true,
       employee: {
         include: { department: { select: { id: true, name: true } } },
       },
     },
   })
   if (!user) return errorResponse('User not found', 404)
-  return successResponse({ ...user, readOnlyFields: READ_ONLY_FOR_USER })
+  const profileCompletion = user.employee ? getProfileCompletion(user.employee) : null
+  return successResponse({ ...user, readOnlyFields: READ_ONLY_FOR_USER, profileCompletion })
 }
 
 export async function PUT(req: NextRequest) {

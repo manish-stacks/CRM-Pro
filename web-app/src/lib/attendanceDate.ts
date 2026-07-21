@@ -52,8 +52,7 @@ export function computeLate(
   return { isLate, lateBy: isLate ? after : 0 }
 }
 
-// Is `at` within [officeStart, officeEnd) on the same local day? Used to
-// gate desktop-tracker screenshot capture to office hours only.
+// Is `at` within [officeStart, officeEnd) on the same local day?
 export function isWithinOfficeWindow(
   at: Date,
   officeStart = '10:00',

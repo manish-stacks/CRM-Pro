@@ -43,6 +43,13 @@ model User {
   loginOtpExpiry   DateTime?
   loginOtpAttempts Int       @default(0)
 
+  // Email verification — required for EMPLOYEE role only, so we know their
+  // email is real and reachable (payslips, letters, notifications etc.)
+  emailVerified          Boolean   @default(false)
+  emailVerifyOtp         String?   // Hashed OTP
+  emailVerifyOtpExpiry   DateTime?
+  emailVerifyOtpAttempts Int       @default(0)
+
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -209,8 +216,8 @@ model Employee {
   ifscCode          String?
   accountHolderName String?
 
-  // Desktop tracker — admin can exempt individual employees from screenshot
-  // monitoring (e.g. leadership, or roles that don't use the desktop app).
+  // Desktop tracker — admin can exempt individual employees from
+  // check-in/check-out tracking (e.g. leadership, or roles that don't use the desktop app).
   trackerExempt     Boolean   @default(false)
 
   createdAt         DateTime  @default(now())
@@ -254,8 +261,8 @@ model Letter {
 }
 
 // ============================================================
-// DESKTOP TRACKER — Check-in/out session + periodic screenshots
-// captured by the standalone Electron desktop app.
+// DESKTOP TRACKER — Check-in/out session tracked by the standalone
+// Electron desktop app.
 // ============================================================
 
 model TrackerSession {
@@ -267,27 +274,11 @@ model TrackerSession {
   status        String    @default("ACTIVE") // ACTIVE, CLOSED
   createdAt     DateTime  @default(now())
 
-  employee      Employee            @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  screenshots   TrackerScreenshot[]
+  employee      Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
   @@index([employeeId, checkInAt])
   @@index([status])
   @@map("tracker_sessions")
-}
-
-model TrackerScreenshot {
-  id          String   @id @default(cuid())
-  sessionId   String
-  employeeId  String   // denormalized for fast per-employee queries/cleanup
-  url         String   @db.Text
-  publicId    String?  // Cloudinary public_id, needed to delete on retention cleanup
-  capturedAt  DateTime @default(now())
-
-  session     TrackerSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-
-  @@index([sessionId])
-  @@index([employeeId, capturedAt])
-  @@map("tracker_screenshots")
 }
 
 model Attendance {

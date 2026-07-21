@@ -31,6 +31,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   else if (action === 'not_interested') newStatus = 'NOT_INTERESTED'
   else return fail('Invalid action. Use: convert | lost | not_interested')
 
+  if (newStatus === 'CONVERTED' && lead.status !== 'MEETING_DONE') {
+    return fail(`Mark the meeting as done first before closing the deal (currently ${lead.status})`)
+  }
+
   const updated = await prisma.lead.update({
     where: { id },
     data: {
