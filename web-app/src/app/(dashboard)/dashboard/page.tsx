@@ -1,9 +1,9 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useAuth } from '@/hooks/useAuth'
 import { StatCard } from '@/components/ui'
 import { CelebrationWidget } from '@/components/dashboard/CelebrationWidget'
-import { Users, Target, FileText, DollarSign, Clock, UserCheck, LogIn, LogOut, Wifi, CalendarCheck, AlertTriangle, CheckCircle2 } from 'lucide-react'
+import { Users, Target, FileText, DollarSign, Clock, UserCheck, LogIn, LogOut, Wifi, CalendarCheck, AlertTriangle, CheckCircle2, MapPin, Briefcase, Home, Loader2 } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import api from '@/lib/axios'
@@ -13,7 +13,7 @@ import toast from 'react-hot-toast'
 import Link from 'next/link'
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899']
-
+const WORK_MODES = ['WFO', 'WFH', 'FIELD']
 export default function DashboardPage() {
   const { user } = useAuth()
   const [data, setData] = useState<any>(null)
@@ -45,10 +45,10 @@ export default function DashboardPage() {
 
   useEffect(() => { fetchDashboard() }, [fetchDashboard])
   useEffect(() => {
-    api.get('/leaves/balance').then(r => setLeaveBalance(r.data.data)).catch(() => {})
+    api.get('/leaves/balance').then(r => setLeaveBalance(r.data.data)).catch(() => { })
   }, [])
   useEffect(() => {
-    api.get('/auth/profile').then(r => setProfileCompletion(r.data.data?.profileCompletion || null)).catch(() => {})
+    api.get('/auth/profile').then(r => setProfileCompletion(r.data.data?.profileCompletion || null)).catch(() => { })
   }, [])
 
   // Assigned projects — for heads (MANAGER) and team members (EMPLOYEE)
@@ -60,11 +60,10 @@ export default function DashboardPage() {
     }
   }, [user?.role])
 
-  const handlePunch = async () => {
+  const handlePunch = async (workMode: string = 'WFO') => {
     setPunching(true)
     try {
       const action = todayAttendance?.punchIn && !todayAttendance?.punchOut ? 'punch_out' : 'punch_in'
-      // Capture location best-effort — never block the punch if it fails/denied
       let geo: any = {}
       try {
         const g = await getCurrentGeo({ reverseGeocode: true, timeoutMs: 8000 })
@@ -72,7 +71,7 @@ export default function DashboardPage() {
       } catch { /* ignore */ }
       const res = await api.post('/attendance', {
         action,
-        workMode: 'WFO',
+        workMode,
         latitude: geo.latitude,
         longitude: geo.longitude,
         address: geo.address,
@@ -86,6 +85,17 @@ export default function DashboardPage() {
 
   const isPunchedIn = todayAttendance?.punchIn && !todayAttendance?.punchOut
   const isPunchedOut = todayAttendance?.punchIn && todayAttendance?.punchOut
+
+  const workedSecs = useMemo(() => {
+    if (!todayAttendance?.punchIn) return 0
+    const end = todayAttendance.punchOut ? new Date(todayAttendance.punchOut) : time
+    return Math.max(0, Math.floor((end.getTime() - new Date(todayAttendance.punchIn).getTime()) / 1000))
+  }, [todayAttendance, time])
+
+  const fmtDuration = (secs: number) => {
+    const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60), s = secs % 60
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+  }
   // Regular employees don't see business/revenue metrics
   const showBiz = user?.role !== 'EMPLOYEE'
 
@@ -159,41 +169,81 @@ export default function DashboardPage() {
       )}
 
       {/* Attendance punch card */}
-      <div className="card p-5 flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-4">
-          <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${isPunchedIn ? 'bg-green-100' : isPunchedOut ? 'bg-gray-100' : 'bg-blue-100'}`}>
-            <Clock size={22} className={isPunchedIn ? 'text-green-600' : isPunchedOut ? 'text-gray-500' : 'text-blue-600'} />
-          </div>
+      <div className="card p-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
           <div>
-            <p className="font-semibold text-gray-900">Today's Attendance</p>
-            <p className="text-sm text-gray-500">
-              {isPunchedOut ? `✅ Completed · ${todayAttendance.hoursWorked?.toFixed(1)}h worked` :
-                isPunchedIn ? `🟢 Working since ${new Date(todayAttendance.punchIn).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}` :
-                  'Not punched in yet'}
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Today</p>
+            <p className="text-lg font-bold text-gray-900">{formatDate(time)}</p>
+            <p className="text-3xl font-bold text-gray-900 tabular-nums mt-2">
+              {time.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
             </p>
           </div>
-        </div>
-        <div className="flex items-center gap-3">
-          {todayAttendance?.punchIn && (
-            <div className="text-sm text-gray-500">
-              In: <strong>{new Date(todayAttendance.punchIn).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</strong>
-              {todayAttendance.punchOut && (
-                <> · Out: <strong>{new Date(todayAttendance.punchOut).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</strong></>
-              )}
+
+          <div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Status</p>
+            <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-semibold ${isPunchedIn ? 'bg-green-100 text-green-700' :
+                isPunchedOut ? 'bg-gray-100 text-gray-700' :
+                  'bg-slate-100 text-slate-600'
+              }`}>
+              <span className="w-2 h-2 rounded-full bg-current" />
+              {isPunchedIn ? 'Working' : isPunchedOut ? 'Day Ended' : 'Not Punched In'}
             </div>
-          )}
-          {!isPunchedOut && (
-            <button
-              onClick={handlePunch}
-              disabled={punching}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-semibold text-sm transition-all ${isPunchedIn
-                  ? 'bg-red-600 hover:bg-red-700 text-white'
-                  : 'bg-green-600 hover:bg-green-700 text-white'
-                }`}
-            >
-              {isPunchedIn ? <><LogOut size={15} /> Punch Out</> : <><LogIn size={15} /> Punch In</>}
-            </button>
-          )}
+            {todayAttendance?.punchIn && (
+              <p className="text-sm text-gray-600 mt-3 tabular-nums">
+                {isPunchedOut ? `Worked: ${todayAttendance.hoursWorked?.toFixed(2)}h` : `Working: ${fmtDuration(workedSecs)}`}
+              </p>
+            )}
+            {todayAttendance?.punchInAddress && (
+              <p className="text-xs text-gray-500 mt-1 flex items-start gap-1 max-w-xs">
+                <MapPin size={11} className="text-gray-400 flex-shrink-0 mt-0.5" />
+                <span className="truncate">{todayAttendance.punchInAddress}</span>
+              </p>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-2">
+            {!isPunchedOut && (
+              <>
+                {!isPunchedIn && (
+                  <div className="flex gap-2">
+                    {WORK_MODES.map(mode => (
+                      <button
+                        key={mode}
+                        onClick={() => handlePunch(mode)}
+                        disabled={punching}
+                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-white border border-gray-300 hover:border-green-500 hover:bg-green-50 text-xs font-semibold text-gray-700 hover:text-green-700 transition-all disabled:opacity-50"
+                      >
+                        {mode === 'WFO' ? <Briefcase size={13} /> : mode === 'WFH' ? <Home size={13} /> : <MapPin size={13} />}
+                        {mode}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <button
+                  onClick={() => handlePunch()}
+                  disabled={punching}
+                  className={`flex items-center justify-center gap-2 px-5 py-3 rounded-lg font-semibold text-sm transition-all shadow-sm ${isPunchedIn ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-green-600 hover:bg-green-700 text-white'
+                    } disabled:opacity-50`}
+                >
+                  {punching ? <Loader2 size={16} className="animate-spin" /> :
+                    isPunchedIn ? <><LogOut size={15} /> Punch Out</> :
+                      <><LogIn size={15} /> Punch In</>}
+                </button>
+                <p className="text-xs text-gray-500 text-center">
+                  <MapPin size={10} className="inline mr-0.5" />
+                  Location will be recorded
+                </p>
+              </>
+            )}
+            {isPunchedOut && (
+              <div className="text-center">
+                <p className="text-sm text-gray-500">✅ Day complete</p>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {todayAttendance.hoursWorked?.toFixed(2)}h · {todayAttendance.status}
+                </p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -242,24 +292,24 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Revenue chart */}
         {showBiz && (
-        <div className="card p-5 lg:col-span-2">
-          <h3 className="font-semibold text-gray-900 mb-4">Revenue Trend</h3>
-          <ResponsiveContainer width="100%" height={220}>
-            <AreaChart data={data?.revenueChart || []}>
-              <defs>
-                <linearGradient id="rev" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.15} />
-                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="month" tick={{ fill: '#9ca3af', fontSize: 12 }} />
-              <YAxis tick={{ fill: '#9ca3af', fontSize: 11 }} tickFormatter={v => `₹${(v / 1000).toFixed(0)}k`} />
-              <Tooltip formatter={(v: any) => formatCurrency(v)} />
-              <Area type="monotone" dataKey="revenue" stroke="#3b82f6" fill="url(#rev)" strokeWidth={2} dot={false} />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
+          <div className="card p-5 lg:col-span-2">
+            <h3 className="font-semibold text-gray-900 mb-4">Revenue Trend</h3>
+            <ResponsiveContainer width="100%" height={220}>
+              <AreaChart data={data?.revenueChart || []}>
+                <defs>
+                  <linearGradient id="rev" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.15} />
+                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis dataKey="month" tick={{ fill: '#9ca3af', fontSize: 12 }} />
+                <YAxis tick={{ fill: '#9ca3af', fontSize: 11 }} tickFormatter={v => `₹${(v / 1000).toFixed(0)}k`} />
+                <Tooltip formatter={(v: any) => formatCurrency(v)} />
+                <Area type="monotone" dataKey="revenue" stroke="#3b82f6" fill="url(#rev)" strokeWidth={2} dot={false} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
         )}
 
         {/* Celebration widget */}
@@ -269,58 +319,58 @@ export default function DashboardPage() {
       </div>
 
       {showBiz && (
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Lead pipeline */}
-        <div className="card p-5">
-          <h3 className="font-semibold text-gray-900 mb-4">Lead Pipeline</h3>
-          {(data?.leadsByStatus || []).length > 0 ? (
-            <div className="flex items-center gap-4">
-              <ResponsiveContainer width="100%" height={180}>
-                <PieChart>
-                  <Pie data={data?.leadsByStatus || []} cx="50%" cy="50%" innerRadius={50} outerRadius={80} dataKey="count" nameKey="status" paddingAngle={3}>
-                    {(data?.leadsByStatus || []).map((_: any, i: number) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="space-y-1.5 flex-shrink-0">
-                {(data?.leadsByStatus || []).map((s: any, i: number) => (
-                  <div key={s.status} className="flex items-center gap-2 text-sm">
-                    <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
-                    <span className="text-gray-600">{s.status.replace('_', ' ')}</span>
-                    <span className="font-bold text-gray-900 ml-auto">{s.count}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : <div className="py-10 text-center text-gray-400 text-sm">No leads yet</div>}
-        </div>
-
-        {/* Recent leads */}
-        <div className="card overflow-hidden">
-          <div className="card-header flex items-center justify-between">
-            <h3 className="font-semibold text-gray-900">Recent Leads</h3>
-            <Link href="/leads" className="text-xs text-blue-600 hover:underline">View all</Link>
-          </div>
-          <div className="divide-y divide-gray-50">
-            {(data?.recentLeads || []).slice(0, 5).map((lead: any) => (
-              <div key={lead.id} className="flex items-center justify-between px-5 py-3">
-                <div>
-                  <p className="text-sm font-medium text-gray-900">{lead.clientName}</p>
-                  <p className="text-xs text-gray-400">{lead.source} · {lead.createdBy?.name}</p>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Lead pipeline */}
+          <div className="card p-5">
+            <h3 className="font-semibold text-gray-900 mb-4">Lead Pipeline</h3>
+            {(data?.leadsByStatus || []).length > 0 ? (
+              <div className="flex items-center gap-4">
+                <ResponsiveContainer width="100%" height={180}>
+                  <PieChart>
+                    <Pie data={data?.leadsByStatus || []} cx="50%" cy="50%" innerRadius={50} outerRadius={80} dataKey="count" nameKey="status" paddingAngle={3}>
+                      {(data?.leadsByStatus || []).map((_: any, i: number) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="space-y-1.5 flex-shrink-0">
+                  {(data?.leadsByStatus || []).map((s: any, i: number) => (
+                    <div key={s.status} className="flex items-center gap-2 text-sm">
+                      <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
+                      <span className="text-gray-600">{s.status.replace('_', ' ')}</span>
+                      <span className="font-bold text-gray-900 ml-auto">{s.count}</span>
+                    </div>
+                  ))}
                 </div>
-                <span className={`badge ${lead.status === 'NEW' ? 'bg-blue-100 text-blue-700' :
+              </div>
+            ) : <div className="py-10 text-center text-gray-400 text-sm">No leads yet</div>}
+          </div>
+
+          {/* Recent leads */}
+          <div className="card overflow-hidden">
+            <div className="card-header flex items-center justify-between">
+              <h3 className="font-semibold text-gray-900">Recent Leads</h3>
+              <Link href="/leads" className="text-xs text-blue-600 hover:underline">View all</Link>
+            </div>
+            <div className="divide-y divide-gray-50">
+              {(data?.recentLeads || []).slice(0, 5).map((lead: any) => (
+                <div key={lead.id} className="flex items-center justify-between px-5 py-3">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">{lead.clientName}</p>
+                    <p className="text-xs text-gray-400">{lead.source} · {lead.createdBy?.name}</p>
+                  </div>
+                  <span className={`badge ${lead.status === 'NEW' ? 'bg-blue-100 text-blue-700' :
                     lead.status === 'CONVERTED' ? 'bg-green-100 text-green-700' :
                       'bg-yellow-100 text-yellow-700'
-                  }`}>{lead.status}</span>
-              </div>
-            ))}
-            {(!data?.recentLeads || data.recentLeads.length === 0) && (
-              <div className="py-8 text-center text-gray-400 text-sm">No leads yet</div>
-            )}
+                    }`}>{lead.status}</span>
+                </div>
+              ))}
+              {(!data?.recentLeads || data.recentLeads.length === 0) && (
+                <div className="py-8 text-center text-gray-400 text-sm">No leads yet</div>
+              )}
+            </div>
           </div>
         </div>
-      </div>
       )}
 
       {/* My Projects — heads & team members */}

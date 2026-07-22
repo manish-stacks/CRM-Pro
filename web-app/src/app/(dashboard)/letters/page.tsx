@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '@/hooks/useAuth'
-import { Button, Select, Input, Modal, EmptyState, Pagination, SearchInput } from '@/components/ui'
+import { Button, Select, Input, Modal, EmptyState, Pagination, SearchInput, SearchSelect } from '@/components/ui'
 import { FileText, Download, Trash2, Plus, Filter, X, Briefcase, TrendingUp, LogOut as RelieveIcon, Mail } from 'lucide-react'
 import api from '@/lib/axios'
 import toast from 'react-hot-toast'
@@ -39,6 +39,7 @@ export default function LettersPage() {
   const [generating, setGenerating] = useState(false)
   const [activeTab, setActiveTab] = useState<LetterType>('OFFER')
   const [employeeId, setEmployeeId] = useState('')
+  const [employeeLabel, setEmployeeLabel] = useState('')
 
   const [offerForm, setOfferForm] = useState({
     relationPrefix: 'S/o', relativeName: '', address: '',
@@ -73,7 +74,10 @@ export default function LettersPage() {
 
   useEffect(() => { fetchLetters() }, [fetchLetters])
   useEffect(() => {
-    api.get('/employees?limit=500').then(r => setEmployees(r.data.data || [])).catch(() => {})
+    api.get('/employees?limit=500&status=true').then(r => {
+      const all = r.data.data || []
+      setEmployees(all.filter((e: any) => e.user && e.user.role !== 'ADMIN' && e.user.role !== 'SUPER_ADMIN'))
+    }).catch(() => {})
   }, [])
 
   // Auto-fill from the selected employee's existing record so the admin only
@@ -106,6 +110,7 @@ export default function LettersPage() {
 
   const openCreate = () => {
     setEmployeeId('')
+    setEmployeeLabel('')
     setActiveTab('OFFER')
     setOfferForm({ relationPrefix: 'S/o', relativeName: '', address: '', designation: '', department: '', placeOfPosting: '', monthlySalary: '', joiningDate: '', reportingManagerName: '', probationMonths: '6', noticePeriodMonths: '1' })
     setSalaryForm({ effectiveDate: '', previousSalary: '', revisedSalary: '', signatoryName: '', signatoryDesignation: 'HR Manager' })
@@ -175,8 +180,6 @@ export default function LettersPage() {
     }
   }
 
-  const employeeOptions = [{ value: '', label: 'Select employee...' }, ...employees.map(e => ({ value: e.id, label: `${e.user?.name} (${e.employeeId})` }))]
-
   return (
     <div className="space-y-4">
       <div className="page-header">
@@ -245,7 +248,20 @@ export default function LettersPage() {
       {/* Generate Letter modal */}
       <Modal open={showModal} onClose={() => setShowModal(false)} title="Generate HR Letter" className="max-w-2xl">
         <div className="space-y-4">
-          <Select label="Employee" value={employeeId} onChange={e => setEmployeeId(e.target.value)} options={employeeOptions} />
+          <SearchSelect
+            label="Employee"
+            placeholder="Search employee by name or ID..."
+            value={employeeId}
+            valueLabel={employeeLabel}
+            onSelect={(id, label) => { setEmployeeId(id); setEmployeeLabel(label) }}
+            fetchOptions={async (q) => {
+              const query = q.trim().toLowerCase()
+              const list = query
+                ? employees.filter((e: any) => (e.user?.name || '').toLowerCase().includes(query) || (e.employeeId || '').toLowerCase().includes(query))
+                : employees
+              return list.map((e: any) => ({ value: e.id, label: `${e.user?.name} (${e.employeeId})` }))
+            }}
+          />
 
           <div className="flex gap-2 border-b border-gray-100 pb-2 flex-wrap">
             {LETTER_TABS.map(tab => (

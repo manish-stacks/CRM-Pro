@@ -41,6 +41,21 @@ const DEFAULTS: Record<string, any> = {
   // Notifications kill-switches
   email_enabled: true,
   whatsapp_enabled: true,
+  // Payroll component rates (admin-configurable salary breakup)
+  payroll_basic_percent: 50,
+  payroll_hra_percent: 20,
+  payroll_conveyance_amount: 1600,
+  payroll_medical_amount: 1250,
+  payroll_pf_percent: 12,
+  payroll_pf_wage_ceiling: 15000,
+  payroll_esi_percent: 0.75,
+  payroll_esi_gross_ceiling: 21000,
+  payroll_profession_tax: 200,
+  payroll_profession_tax_threshold: 15000,
+  payroll_tds_percent: 5,
+  payroll_tds_annual_threshold: 500000,
+  payroll_tds_monthly_exempt: 41667,
+  hr_email: 'info@hovermedia.in',
 }
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -100,9 +115,13 @@ export default function SettingsPage() {
     try {
       // Bucket the values by category (must include EVERY editable key)
       const CATS: Record<string, string[]> = {
-        company: ['company_name', 'company_address', 'company_phone', 'company_email', 'company_gst', 'company_logo_url', 'timezone'],
+        company: ['company_name', 'company_address', 'company_phone', 'company_email', 'company_gst', 'company_logo_url', 'timezone', 'hr_email'],
         finance: ['currency', 'currency_symbol', 'gst_default_rate', 'gst_enabled_by_default', 'invoice_due_days', 'invoice_prefix', 'payment_methods'],
-        hrm: ['weekly_off_days', 'working_hours_per_day', 'half_day_threshold_hours'],
+        hrm: ['weekly_off_days', 'working_hours_per_day', 'half_day_threshold_hours',
+          'payroll_basic_percent', 'payroll_hra_percent', 'payroll_conveyance_amount', 'payroll_medical_amount',
+          'payroll_pf_percent', 'payroll_pf_wage_ceiling', 'payroll_esi_percent', 'payroll_esi_gross_ceiling',
+          'payroll_profession_tax', 'payroll_profession_tax_threshold',
+          'payroll_tds_percent', 'payroll_tds_annual_threshold', 'payroll_tds_monthly_exempt'],
         attendance: ['office_start_time', 'office_end_time', 'late_grace_minutes', 'leave_monthly_accrual', 'leave_max_carryforward'],
         tracker: ['tracker_enabled', 'tracker_idle_threshold_seconds'],
         notifications: ['email_enabled', 'whatsapp_enabled'],
@@ -162,6 +181,7 @@ export default function SettingsPage() {
                 <Input label="GST Number" value={values.company_gst || ''} onChange={e => set('company_gst', e.target.value.toUpperCase())} placeholder="29ABCDE1234F1Z5" />
                 <Input label="Phone" value={values.company_phone || ''} onChange={e => set('company_phone', e.target.value)} />
                 <Input label="Email" type="email" value={values.company_email || ''} onChange={e => set('company_email', e.target.value)} />
+                <Input label="Hr Email" type="email" value={values.hr_email || ''} onChange={e => set('hr_email', e.target.value)} />
                 <Input label="Logo URL" value={values.company_logo_url || ''} onChange={e => set('company_logo_url', e.target.value)} placeholder="https://..." />
                 <Select label="Timezone" value={values.timezone || 'Asia/Kolkata'} onChange={e => set('timezone', e.target.value)} options={[
                   { value: 'Asia/Kolkata', label: 'Asia/Kolkata (IST)' },
@@ -256,6 +276,42 @@ export default function SettingsPage() {
               <p className="text-xs text-gray-500">
                 A punch-in–punch-out session below the half-day threshold marks attendance as HALF_DAY.
               </p>
+
+              <div className="border-t border-gray-100 pt-4 mt-2">
+                <h3 className="font-semibold text-gray-900 text-sm mb-1">Payroll — Salary Breakup Rates</h3>
+                <p className="text-xs text-gray-500 mb-3">These decide how each employee's monthly salary splits into Basic/HRA/Conveyance/Medical/Special, and the statutory deductions (PF/ESI/Profession Tax/TDS) — applied every time payroll is generated.</p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  <Input label="Basic (% of salary)" type="number" step="0.1" value={values.payroll_basic_percent ?? 50}
+                    onChange={e => set('payroll_basic_percent', Number(e.target.value))} />
+                  <Input label="HRA (% of Basic)" type="number" step="0.1" value={values.payroll_hra_percent ?? 20}
+                    onChange={e => set('payroll_hra_percent', Number(e.target.value))} />
+                  <Input label="Conveyance (₹ cap)" type="number" value={values.payroll_conveyance_amount ?? 1600}
+                    onChange={e => set('payroll_conveyance_amount', Number(e.target.value))} />
+                  <Input label="Medical Allow. (₹ cap)" type="number" value={values.payroll_medical_amount ?? 1250}
+                    onChange={e => set('payroll_medical_amount', Number(e.target.value))} />
+                  <Input label="Provident Fund (% of Basic)" type="number" step="0.1" value={values.payroll_pf_percent ?? 12}
+                    onChange={e => set('payroll_pf_percent', Number(e.target.value))} />
+                  <Input label="PF Wage Ceiling (₹)" type="number" value={values.payroll_pf_wage_ceiling ?? 15000}
+                    onChange={e => set('payroll_pf_wage_ceiling', Number(e.target.value))} />
+                  <Input label="E.S.I. (% of Gross)" type="number" step="0.01" value={values.payroll_esi_percent ?? 0.75}
+                    onChange={e => set('payroll_esi_percent', Number(e.target.value))} />
+                  <Input label="E.S.I. applies if Gross ≤ (₹)" type="number" value={values.payroll_esi_gross_ceiling ?? 21000}
+                    onChange={e => set('payroll_esi_gross_ceiling', Number(e.target.value))} />
+                  <Input label="Profession Tax (₹ fixed)" type="number" value={values.payroll_profession_tax ?? 200}
+                    onChange={e => set('payroll_profession_tax', Number(e.target.value))} />
+                  <Input label="Profession Tax applies if Gross > (₹)" type="number" value={values.payroll_profession_tax_threshold ?? 15000}
+                    onChange={e => set('payroll_profession_tax_threshold', Number(e.target.value))} />
+                  <Input label="TDS/IT (% above exempt slab)" type="number" step="0.1" value={values.payroll_tds_percent ?? 5}
+                    onChange={e => set('payroll_tds_percent', Number(e.target.value))} />
+                  <Input label="TDS applies if Annual Gross > (₹)" type="number" value={values.payroll_tds_annual_threshold ?? 500000}
+                    onChange={e => set('payroll_tds_annual_threshold', Number(e.target.value))} />
+                  <Input label="TDS Monthly Exempt Amount (₹)" type="number" value={values.payroll_tds_monthly_exempt ?? 41667}
+                    onChange={e => set('payroll_tds_monthly_exempt', Number(e.target.value))} />
+                </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  Advance is entered manually per-employee at generation time and isn't a global rate.
+                </p>
+              </div>
             </>
           )}
 

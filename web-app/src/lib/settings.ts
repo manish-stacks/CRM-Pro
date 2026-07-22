@@ -49,37 +49,54 @@ export function invalidateAllSettings() {
 
 // Convenience getters with sensible defaults
 export const Settings = {
-  companyName:         () => getSetting<string>('company_name', 'Hover Business Services'),
-  companyAddress:      () => getSetting<string>('company_address', '916, 9th Floor, Pearls Omaxe Tower, Netaji Subhash Place, Pitampura, New Delhi - 110034'),
-  companyPhone:        () => getSetting<string>('company_phone', '+919899691389'),
-  companyEmail:        () => getSetting<string>('company_email', 'info@hovermedia.in'),
-  companyGst:          () => getSetting<string>('company_gst', '07APGPG3277A1Z9'),
-  companyLogo:         () => getSetting<string>('company_logo_url', 'https://hoverbusinessservices.com/images/hbs-logo.png'),
-  currency:            () => getSetting<string>('currency', 'INR'),
-  currencySymbol:      () => getSetting<string>('currency_symbol', '₹'),
-  gstDefaultRate:      () => getSetting<number>('gst_default_rate', 18),
+  companyName: () => getSetting<string>('company_name', 'Hover Business Services'),
+  companyAddress: () => getSetting<string>('company_address', '916, 9th Floor, Pearls Omaxe Tower, Netaji Subhash Place, Pitampura, New Delhi - 110034'),
+  companyPhone: () => getSetting<string>('company_phone', '+919899691389'),
+  companyEmail: () => getSetting<string>('company_email', 'info@hovermedia.in'),
+  companyGst: () => getSetting<string>('company_gst', '07APGPG3277A1Z9'),
+  companyLogo: () => getSetting<string>('company_logo_url', 'https://hoverbusinessservices.com/images/hbs-logo.png'),
+  currency: () => getSetting<string>('currency', 'INR'),
+  currencySymbol: () => getSetting<string>('currency_symbol', '₹'),
+  gstDefaultRate: () => getSetting<number>('gst_default_rate', 18),
   gstEnabledByDefault: () => getSetting<boolean>('gst_enabled_by_default', false),
-  weeklyOffDays:       () => getSetting<number[]>('weekly_off_days', [0]),
-  workingHoursPerDay:  () => getSetting<number>('working_hours_per_day', 8),
+  weeklyOffDays: () => getSetting<number[]>('weekly_off_days', [0]),
+  workingHoursPerDay: () => getSetting<number>('working_hours_per_day', 8),
   halfDayThresholdHours: () => getSetting<number>('half_day_threshold_hours', 4),
   // Attendance office window + late-mark grace
-  officeStartTime:     () => getSetting<string>('office_start_time', '10:00'),   // 24h HH:mm
-  officeEndTime:       () => getSetting<string>('office_end_time', '18:30'),     // 6:30 PM
-  lateGraceMinutes:    () => getSetting<number>('late_grace_minutes', 10),       // grace till 10:10
+  officeStartTime: () => getSetting<string>('office_start_time', '10:00'),   // 24h HH:mm
+  officeEndTime: () => getSetting<string>('office_end_time', '18:30'),     // 6:30 PM
+  lateGraceMinutes: () => getSetting<number>('late_grace_minutes', 10),       // grace till 10:10
   // Leave accrual + carry-forward
   leaveMonthlyAccrual: () => getSetting<number>('leave_monthly_accrual', 1),     // paid leaves earned per month
-  leaveMaxCarryForward:() => getSetting<number>('leave_max_carryforward', 6),    // max leaves that can accumulate
-  invoiceDueDays:      () => getSetting<number>('invoice_due_days', 15),
-  invoicePrefix:       () => getSetting<string>('invoice_prefix', 'INV-'),
-  paymentMethods:      () => getSetting<string[]>('payment_methods', ['UPI', 'CASH', 'BANK_TRANSFER', 'CHEQUE', 'CARD']),
-  timezone:            () => getSetting<string>('timezone', 'Asia/Kolkata'),
-
+  leaveMaxCarryForward: () => getSetting<number>('leave_max_carryforward', 6),    // max leaves that can accumulate
+  invoiceDueDays: () => getSetting<number>('invoice_due_days', 15),
+  invoicePrefix: () => getSetting<string>('invoice_prefix', 'INV-'),
+  paymentMethods: () => getSetting<string[]>('payment_methods', ['UPI', 'CASH', 'BANK_TRANSFER', 'CHEQUE', 'CARD']),
+  timezone: () => getSetting<string>('timezone', 'Asia/Kolkata'),
+  hrEmail: () => getSetting<string>('hr_email', 'info@hovermedia.in'),
   // Notification kill-switches (desktop app section) — admin can stop
   // outgoing messages instantly without touching SMTP/WhatsApp credentials.
-  emailEnabled:        () => getSetting<boolean>('email_enabled', true),
-  whatsappEnabled:     () => getSetting<boolean>('whatsapp_enabled', true),
+  emailEnabled: () => getSetting<boolean>('email_enabled', true),
+  whatsappEnabled: () => getSetting<boolean>('whatsapp_enabled', true),
 
   // Desktop tracker (check-in/out + idle time) settings
-  trackerEnabled:          () => getSetting<boolean>('tracker_enabled', true),
+  trackerEnabled: () => getSetting<boolean>('tracker_enabled', true),
   trackerIdleThresholdSec: () => getSetting<number>('tracker_idle_threshold_seconds', 300),
+
+  // Payroll component percentages/amounts — admin-configurable so the salary
+  // breakup (Basic/HRA/Conveyance/Medical/PF/ESI/Profession Tax/TDS) isn't
+  // hardcoded in the payroll generator.
+  payrollBasicPercent: () => getSetting<number>('payroll_basic_percent', 50),       // % of monthly salary
+  payrollHraPercent: () => getSetting<number>('payroll_hra_percent', 20),         // % of basic
+  payrollConveyanceAmount: () => getSetting<number>('payroll_conveyance_amount', 1600), // fixed cap ₹
+  payrollMedicalAmount: () => getSetting<number>('payroll_medical_amount', 1250),    // fixed cap ₹
+  payrollPfPercent: () => getSetting<number>('payroll_pf_percent', 12),          // % of basic
+  payrollPfWageCeiling: () => getSetting<number>('payroll_pf_wage_ceiling', 15000),  // ₹ basic ceiling for PF
+  payrollEsiPercent: () => getSetting<number>('payroll_esi_percent', 0.75),       // % of gross
+  payrollEsiGrossCeiling: () => getSetting<number>('payroll_esi_gross_ceiling', 21000),// gross ≤ this → ESI applies
+  payrollProfessionTax: () => getSetting<number>('payroll_profession_tax', 200),     // fixed ₹
+  payrollProfessionTaxThreshold: () => getSetting<number>('payroll_profession_tax_threshold', 15000),
+  payrollTdsPercent: () => getSetting<number>('payroll_tds_percent', 5),          // % above exempt slab
+  payrollTdsAnnualThreshold: () => getSetting<number>('payroll_tds_annual_threshold', 500000),
+  payrollTdsMonthlyExempt: () => getSetting<number>('payroll_tds_monthly_exempt', 41667),
 }

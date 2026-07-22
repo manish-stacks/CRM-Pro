@@ -85,7 +85,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       template: 'hbs_lead_meeting_scheduled',
       params: {
         clientName: lead.clientName,
-        meetingDate: md.toLocaleDateString('en-IN'),
+        meetingDate: md.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' }),
         meetingTime: meetingTime || meetingSlot || 'TBD',
         marketingPersonName: marketingExec.name,
         marketingPhone: marketingExec.phone || '',
@@ -113,7 +113,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   // In-app + FCM/Expo push. MUST be awaited — fire-and-forget production will not work because the request is torn down before the push is sent. (The notification is sent in a separate thread, so it can outlive the request.)
 
-  const whenTxt = `${md.toLocaleDateString('en-IN')}${meetingSlot ? ` (${meetingSlot})` : meetingTime ? ` (${meetingTime})` : ''}`
+  const whenTxt = `${md.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })}${meetingSlot ? ` (${meetingSlot})` : meetingTime ? ` (${meetingTime})` : ''}`
   try {
     await Notifications.meetingScheduled(marketingExecId, lead.clientName, whenTxt, id)
     if (visit) await Notifications.visitAssigned(marketingExecId, lead.clientName, whenTxt, visit.id)

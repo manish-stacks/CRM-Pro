@@ -25,7 +25,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     : { name: '—', contact: '—' }
 
   const settings = await prisma.setting.findMany({
-    where: { key: { in: ['company_name', 'company_email', 'company_phone', 'company_address'] } },
+    where: { key: { in: ['company_name', 'company_email', 'company_phone', 'company_address', 'company_logo_url'] } },
   })
   const settingsMap: Record<string, string> = {}
   settings.forEach((s: { key: string; value: string }) => { settingsMap[s.key] = s.value })
@@ -35,6 +35,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     companyAddress: settingsMap.company_address || undefined,
     companyPhone: settingsMap.company_phone || undefined,
     companyEmail: settingsMap.company_email || undefined,
+    companyLogoUrl: settingsMap.company_logo_url || undefined,
   }
 
   const bodyHtml = buildProposalBody({

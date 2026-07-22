@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { notify } from '@/lib/notify'
 import { sendWhatsapp } from '@/lib/whatsapp'
+import { todayDateOnly } from '@/lib/attendanceDate'
 
 const AHEAD_DAYS = [3, 1, 0] // remind 3 days before, 1 day before, and on the due date
 
@@ -23,8 +24,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const now = new Date()
-  now.setHours(0, 0, 0, 0)
+  const now = todayDateOnly() // IST "today" as a UTC-midnight instant, matches @db.Date storage
 
   let notified = 0
   let markedOverdue = 0
@@ -61,7 +61,7 @@ export async function GET(req: NextRequest) {
             clientName: inv.client.clientName,
             amount: inr(inv.dueAmount),
             invoiceNumber: inv.invoiceNumber,
-            dueDate: inv.dueDate ? new Date(inv.dueDate).toLocaleDateString('en-IN') : '',
+            dueDate: inv.dueDate ? new Date(inv.dueDate).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' }) : '',
           },
           referenceType: 'INVOICE',
           referenceId: inv.id,
@@ -83,9 +83,9 @@ export async function GET(req: NextRequest) {
   // 1) Advance + due-day reminders (only invoices with a balance)
   for (const daysAhead of AHEAD_DAYS) {
     const target = new Date(now)
-    target.setDate(target.getDate() + daysAhead)
+    target.setUTCDate(target.getUTCDate() + daysAhead)
     const nextDay = new Date(target)
-    nextDay.setDate(nextDay.getDate() + 1)
+    nextDay.setUTCDate(nextDay.getUTCDate() + 1)
 
     const invoices = await prisma.invoice.findMany({
       where: {

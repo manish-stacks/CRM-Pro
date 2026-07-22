@@ -19,6 +19,7 @@ import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/auth'
 import { successResponse, errorResponse } from '@/lib/api'
 import { logFromRequest } from '@/lib/audit'
+import { Settings } from '@/lib/settings'
 
 function daysInMonth(y: number, m: number) { return new Date(y, m, 0).getDate() }
 
@@ -43,6 +44,21 @@ export async function POST(req: NextRequest) {
     const offRow = await prisma.setting.findUnique({ where: { key: 'weekly_off_days' } })
     let offDays = [0]
     try { offDays = JSON.parse(offRow?.value || '[0]') } catch { }
+
+    // Admin-configurable payroll component rates (Settings page → HRM & Payroll)
+    const [
+      basicPercent, hraPercent, conveyanceAmount, medicalAmount,
+      pfPercent, pfWageCeiling, esiPercent, esiGrossCeiling,
+      professionTax, professionTaxThreshold,
+      tdsPercent, tdsAnnualThreshold, tdsMonthlyExempt,
+    ] = await Promise.all([
+      Settings.payrollBasicPercent(), Settings.payrollHraPercent(),
+      Settings.payrollConveyanceAmount(), Settings.payrollMedicalAmount(),
+      Settings.payrollPfPercent(), Settings.payrollPfWageCeiling(),
+      Settings.payrollEsiPercent(), Settings.payrollEsiGrossCeiling(),
+      Settings.payrollProfessionTax(), Settings.payrollProfessionTaxThreshold(),
+      Settings.payrollTdsPercent(), Settings.payrollTdsAnnualThreshold(), Settings.payrollTdsMonthlyExempt(),
+    ])
 
     // Compute working days for the month
     const total = daysInMonth(year, month)
@@ -79,10 +95,10 @@ export async function POST(req: NextRequest) {
       const lopDays = Math.max(0, workingDays - (presentDays + halfDays + leaveDays))
 
       const monthlySalary = emp.salary
-      const basicSalary = Math.round(monthlySalary * 0.5)
-      const hra = Math.round(basicSalary * 0.20)
-      const conveyance = Math.min(1600, Math.round(monthlySalary * 0.05))
-      const medical = Math.min(1250, Math.round(monthlySalary * 0.05))
+      const basicSalary = Math.round(monthlySalary * (basicPercent / 100))
+      const hra = Math.round(basicSalary * (hraPercent / 100))
+      const conveyance = Math.min(conveyanceAmount, Math.round(monthlySalary * 0.05))
+      const medical = Math.min(medicalAmount, Math.round(monthlySalary * 0.05))
       const specialAllow = Math.max(0, monthlySalary - (basicSalary + hra + conveyance + medical))
       const grossSalary = basicSalary + hra + conveyance + medical + specialAllow
 
@@ -92,16 +108,16 @@ export async function POST(req: NextRequest) {
 
       // Statutory deductions
       // PF must be based on the actual PAYABLE (attendance-prorated) basic, not the
-      // full monthly basic — otherwise everyone above the ₹15,000 PF-wage ceiling gets
-      // an identical ₹1,800 PF deduction even with near-zero attendance/net salary.
+      // full monthly basic — otherwise everyone above the PF-wage ceiling gets
+      // an identical PF deduction even with near-zero attendance/net salary.
       const proratedBasic = Math.round(basicSalary * attRatio)
-      const pfBasic = Math.min(proratedBasic, 15000)
-      const pf = Math.round(pfBasic * 0.12)
-      const esi = grossSalary <= 21000 ? Math.round(payableGross * 0.0075) : 0
+      const pfBasic = Math.min(proratedBasic, pfWageCeiling)
+      const pf = Math.round(pfBasic * (pfPercent / 100))
+      const esi = grossSalary <= esiGrossCeiling ? Math.round(payableGross * (esiPercent / 100)) : 0
       const grossAnnual = grossSalary * 12
-      const tds = grossAnnual > 500000 ? Math.round(Math.max(0, (payableGross - 41667)) * 0.05) : 0
-      const professionTax = payableGross > 15000 ? 200 : 0
-      const totalDeduct = pf + esi + tds + professionTax
+      const tds = grossAnnual > tdsAnnualThreshold ? Math.round(Math.max(0, (payableGross - tdsMonthlyExempt)) * (tdsPercent / 100)) : 0
+      const professionTaxAmt = payableGross > professionTaxThreshold ? professionTax : 0
+      const totalDeduct = pf + esi + tds + professionTaxAmt
 
       const netSalary = Math.max(0, payableGross - totalDeduct)
 
@@ -110,7 +126,7 @@ export async function POST(req: NextRequest) {
         update: {
           basicSalary, hra, conveyance, medical, specialAllow,
           grossSalary: payableGross,
-          pf, esi, tds, professionTax, totalDeduct,
+          pf, esi, tds, professionTax: professionTaxAmt, totalDeduct,
           netSalary,
           workingDays, presentDays, halfDays, leaveDays, lopDays,
         },
@@ -118,7 +134,7 @@ export async function POST(req: NextRequest) {
           employeeId: emp.id, month, year,
           basicSalary, hra, conveyance, medical, specialAllow,
           grossSalary: payableGross,
-          pf, esi, tds, professionTax, totalDeduct,
+          pf, esi, tds, professionTax: professionTaxAmt, totalDeduct,
           netSalary,
           workingDays, presentDays, halfDays, leaveDays, lopDays,
           status: 'PENDING',

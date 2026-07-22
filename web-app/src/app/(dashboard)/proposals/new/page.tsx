@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import api from '@/lib/axios'
-import { Button, Input, Select, Textarea } from '@/components/ui'
+import { Button, Input, Select, SearchSelect, Textarea } from '@/components/ui'
 import { formatCurrency } from '@/lib/utils'
 import { ArrowLeft, Plus, Trash2, Save, Loader2, Package, FileText } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -21,19 +21,14 @@ interface Item {
 function BuilderPageInner() {
   const router = useRouter()
   const params = useSearchParams()
-  const preClientId = params.get('clientId')
   const preLeadId = params.get('leadId')
 
-  const [clients, setClients] = useState<any[]>([])
-  const [leads, setLeads] = useState<any[]>([])
+  const [leadLabel, setLeadLabel] = useState('')
   const [catalog, setCatalog] = useState<any[]>([])
-  const [clientServices, setClientServices] = useState<any[]>([])
-  const [loadingClientServices, setLoadingClientServices] = useState(false)
   const [saving, setSaving] = useState(false)
 
   const [form, setForm] = useState({
     title: '',
-    clientId: preClientId || '',
     leadId: preLeadId || '',
     notes: '',
     terms: 'Payment due within 15 days of acceptance. All prices in INR.',
@@ -48,48 +43,20 @@ function BuilderPageInner() {
     id: crypto.randomUUID(), serviceName: '', description: '', quantity: 1, unitPrice: 0,
   }])
   // Once the user manually touches items (edits/adds/removes), stop auto-filling
-  // them so we never silently overwrite their work when the client changes again.
+  // them so we never silently overwrite their work when the lead changes again.
   const itemsEditedByUserRef = useRef(false)
 
   useEffect(() => {
-    api.get('/clients?limit=200').then(r => setClients(r.data.data || [])).catch(() => { })
     api.get('/services').then(r => setCatalog(r.data.data || [])).catch(() => { })
+    // Resolve the label for a pre-filled lead (came via ?leadId= from the
+    // Lead detail page's "New Proposal" button) — search API is used for
+    // everything else, so we don't load the whole leads list here.
     if (preLeadId) {
-      api.get(`/leads?limit=200`).then(r => setLeads(r.data.data || [])).catch(() => { })
+      api.get(`/leads/${preLeadId}`)
+        .then(r => setLeadLabel(`${r.data.data.leadNumber} · ${r.data.data.clientName}`))
+        .catch(() => { })
     }
   }, [preLeadId])
-
-  // Fetch the selected client's already-assigned services so they can be
-  // picked directly in line items (auto-fills name/price from what's on the client).
-  useEffect(() => {
-    if (!form.clientId) { setClientServices([]); return }
-    setLoadingClientServices(true)
-    api.get(`/clients/${form.clientId}/services`)
-      .then(r => setClientServices(r.data.data || []))
-      .catch(() => setClientServices([]))
-      .finally(() => setLoadingClientServices(false))
-  }, [form.clientId])
-
-  // Auto-fill the whole Line Items section from the client's active services
-  // as soon as they're loaded — only if the user hasn't started editing items
-  // themselves, so we never stomp on manual work.
-  useEffect(() => {
-    if (!form.clientId || loadingClientServices) return
-    if (itemsEditedByUserRef.current) return
-
-    const active = clientServices.filter((cs: any) => cs.status === 'ACTIVE')
-    if (active.length > 0) {
-      setItems(active.map((cs: any) => ({
-        id: crypto.randomUUID(),
-        serviceId: cs.serviceCatalogId || undefined,
-        serviceKey: `client:${cs.id}`,
-        serviceName: cs.serviceName,
-        description: cs.description || cs.serviceName,
-        quantity: 1,
-        unitPrice: Number(cs.amount) || 0,
-      })))
-    }
-  }, [clientServices, loadingClientServices, form.clientId])
 
   const totals = useMemo(() => {
     const subtotal = items.reduce((s, i) => s + (i.quantity * i.unitPrice), 0)
@@ -117,7 +84,7 @@ function BuilderPageInner() {
     setItems(prev => prev.map(i => i.id === id ? { ...i, ...patch } : i))
   }
 
-  // value is "" (custom), "client:<clientServiceId>" or "catalog:<serviceCatalogId>"
+  // value is "" (custom) or "catalog:<serviceCatalogId>"
   const pickService = (id: string, value: string) => {
     if (!value) {
       // switched to "Custom item" — keep whatever name is there, just let them type it
@@ -125,18 +92,7 @@ function BuilderPageInner() {
       return
     }
     const [type, refId] = value.split(':')
-    if (type === 'client') {
-      const cs = clientServices.find((x: any) => x.id === refId)
-      if (cs) {
-        updateItem(id, {
-          serviceKey: value,
-          serviceId: cs.serviceCatalogId || undefined,
-          serviceName: cs.serviceName,
-          description: cs.description || cs.serviceName,
-          unitPrice: Number(cs.amount) || 0,
-        })
-      }
-    } else if (type === 'catalog') {
+    if (type === 'catalog') {
       const c = catalog.find((x: any) => x.id === refId)
       if (c) {
         updateItem(id, {
@@ -152,7 +108,7 @@ function BuilderPageInner() {
 
   const save = async (sendAfter = false) => {
     if (!form.title.trim()) { toast.error('Title required'); return }
-    if (!form.clientId && !form.leadId) { toast.error('Select client or lead'); return }
+    if (!form.leadId) { toast.error('Select a lead'); return }
     if (items.some(i => !i.description.trim() || i.quantity <= 0 || i.unitPrice < 0)) {
       toast.error('Complete all items — description, quantity, price'); return
     }
@@ -161,8 +117,7 @@ function BuilderPageInner() {
     try {
       const r = await api.post('/proposals', {
         title: form.title,
-        clientId: form.clientId || null,
-        leadId: form.leadId || null,
+        leadId: form.leadId,
         notes: form.notes,
         terms: form.terms,
         validUntil: form.validUntil || null,
@@ -217,20 +172,20 @@ function BuilderPageInner() {
             <div className="space-y-3">
               <Input label="Title *" value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))} placeholder="Website + SEO Package Q1 2026" />
               <div className="grid grid-cols-2 gap-3">
-                <Select label="Client" value={form.clientId} onChange={e => setForm(p => ({ ...p, clientId: e.target.value, leadId: '' }))}
-                  options={[
-                    { value: "", label: "Select client..." },
-                    ...clients.map((c: any) => ({
-                      value: c.id,
-                      label: `${c.clientName} — ${c.companyName}`,
-                    })),
-                  ]} />
+                <SearchSelect
+                  label="Lead *"
+                  placeholder="Search lead by name, company, phone, lead#..."
+                  value={form.leadId}
+                  valueLabel={leadLabel}
+                  onSelect={(id, label) => { setForm(p => ({ ...p, leadId: id })); setLeadLabel(label) }}
+                  fetchOptions={async (q) => {
+                    const r = await api.get(`/leads?search=${encodeURIComponent(q)}&limit=20`)
+                    return (r.data.data || []).map((l: any) => ({ value: l.id, label: `${l.leadNumber} · ${l.clientName}` }))
+                  }}
+                />
 
                 <Input label="Valid Until" type="date" value={form.validUntil} onChange={e => setForm(p => ({ ...p, validUntil: e.target.value }))} />
               </div>
-              {!form.clientId && leads.length > 0 && (
-                <Select label="Or link to Lead" value={form.leadId} onChange={e => setForm(p => ({ ...p, leadId: e.target.value }))} options={leads.map(l => ({ value: l.id, label: `${l.leadNumber} · ${l.clientName}` }))} />
-              )}
             </div>
           </div>
 
@@ -263,29 +218,6 @@ function BuilderPageInner() {
                         className="input"
                       >
                         <option value="">— Custom item —</option>
-
-                        {form.clientId && (
-                          <optgroup
-                            label={
-                              loadingClientServices
-                                ? 'Loading client services…'
-                                : "Client's services"
-                            }
-                          >
-                            {clientServices.map((cs: any) => (
-                              <option key={cs.id} value={`client:${cs.id}`}>
-                                {cs.serviceName} — ₹
-                                {Number(cs.amount).toLocaleString('en-IN')} ({cs.status})
-                              </option>
-                            ))}
-
-                            {!loadingClientServices && clientServices.length === 0 && (
-                              <option disabled value="">
-                                No services on this client yet
-                              </option>
-                            )}
-                          </optgroup>
-                        )}
 
                         <optgroup label="Service catalog">
                           {catalog.map((c: any) => (

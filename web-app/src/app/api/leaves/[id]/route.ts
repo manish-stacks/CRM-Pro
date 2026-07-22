@@ -52,7 +52,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     // Fire WhatsApp notification to employee (best-effort)
     if (leave.employee?.user.phone) {
       const template = action === 'approve' ? 'hbs_leave_approved' : 'hbs_leave_rejected'
-      const fmt = (d: Date) => new Date(d).toLocaleDateString('en-IN')
+      const fmt = (d: Date) => new Date(d).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })
       const dateRange = leave.duration === 'SINGLE_DAY'
         ? fmt(leave.startDate)
         : `${fmt(leave.startDate)} to ${fmt(leave.endDate)}`
@@ -81,7 +81,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     // Email employee about the approval/rejection (best-effort)
     if (leave.employee?.user.email) {
-      const fmt = (d: Date) => new Date(d).toLocaleDateString('en-IN')
+      const fmt = (d: Date) => new Date(d).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })
       const dateRange = leave.duration === 'SINGLE_DAY'
         ? fmt(leave.startDate)
         : `${fmt(leave.startDate)} to ${fmt(leave.endDate)}`

@@ -15,11 +15,13 @@ import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireMobileEmployee, ok } from '@/lib/mobileAuth'
 import { getEtas, geocodeAddress } from '@/lib/distance'
+import { istDayRange, getISTDateParts } from '@/lib/attendanceDate'
 
-function dayRange(d: Date) {
-  const start = new Date(d); start.setHours(0, 0, 0, 0)
-  const end = new Date(d); end.setHours(23, 59, 59, 999)
-  return { start, end }
+// meetingDate is a real timestamp (not @db.Date) — bound each day using the
+// true UTC instants of IST midnight, resolved via IST explicitly (not the
+// server process's ambient timezone).
+function dayRange(dateStr?: string | null) {
+  return istDayRange(dateStr)
 }
 
 export async function GET(req: NextRequest) {
@@ -54,13 +56,14 @@ export async function GET(req: NextRequest) {
     ]
   }
 
-  const now = new Date()
-  const today = dayRange(now)
-  const tomorrowDate = new Date(now); tomorrowDate.setDate(now.getDate() + 1)
-  const tomorrow = dayRange(tomorrowDate)
+  const today = dayRange()
+  const { year: ty, month: tm, day: td } = getISTDateParts(new Date())
+  const tmrDate = new Date(Date.UTC(ty, tm, td + 1))
+  const tomorrowStr = tmrDate.toISOString().slice(0, 10)
+  const tomorrow = dayRange(tomorrowStr)
 
   if (date) {
-    const d = dayRange(new Date(date))
+    const d = dayRange(date)
     where.meetingDate = { gte: d.start, lte: d.end }
   } else if (range === 'today') {
     where.meetingDate = { gte: today.start, lte: today.end }
@@ -69,14 +72,14 @@ export async function GET(req: NextRequest) {
   } else if (range === 'upcoming') {
     where.meetingDate = { gt: today.end }
   } else if (range === 'week') {
-    const end = new Date(today.start); end.setDate(end.getDate() + 7); end.setHours(23, 59, 59, 999)
+    const end = new Date(today.start.getTime() + 7 * 86400000 - 1)
     where.meetingDate = { gte: today.start, lte: end }
   } else if (range === 'past') {
     where.meetingDate = { lt: today.start }
   } else if (dateFrom || dateTo) {
     where.meetingDate = {}
-    if (dateFrom) where.meetingDate.gte = new Date(dateFrom)
-    if (dateTo) where.meetingDate.lte = new Date(dateTo + 'T23:59:59')
+    if (dateFrom) where.meetingDate.gte = dayRange(dateFrom).start
+    if (dateTo) where.meetingDate.lte = dayRange(dateTo).end
   }
 
   const select = {

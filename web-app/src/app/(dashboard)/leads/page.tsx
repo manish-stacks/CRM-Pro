@@ -27,6 +27,15 @@ const STATUSES = [
 ]
 const SOURCES = ['WEBSITE', 'REFERRAL', 'SOCIAL_MEDIA', 'COLD_CALL', 'EMAIL', 'WALKIN', 'OTHER']
 
+// Default follow-up: tomorrow, 11:00 AM — sensible default so a new lead
+// never sits without a next-action date; the user can still change it.
+function defaultFollowUp() {
+  const d = new Date()
+  d.setDate(d.getDate() + 1)
+  const followUpDate = d.toISOString().split('T')[0]
+  return { followUpDate, followUpTime: '11:00' }
+}
+
 export default function LeadsPage() {
   const { user, isAtLeast } = useAuth()
   const canSeeAll = isAtLeast('MANAGER')
@@ -37,9 +46,10 @@ export default function LeadsPage() {
   const [loading, setLoading] = useState(true)
   const [showFilter, setShowFilter] = useState(false)
   const [filters, setFilters] = useState({
-    status: '', source: '', assignedToId: '', search: '', dateFrom: '', dateTo: '',
+    status: '', source: '', assignedToId: '', meetingAssignedToId: '', search: '', dateFrom: '', dateTo: '',
   })
   const [telecallers, setTelecallers] = useState<any[]>([])
+  const [marketingPersons, setMarketingPersons] = useState<any[]>([])
 
   const [modal, setModal] = useState<'none' | 'add' | 'import'>('none')
   const [saving, setSaving] = useState(false)
@@ -53,7 +63,7 @@ export default function LeadsPage() {
     companyName: '', clientName: '', clientPhone: '', clientEmail: '',
     alternatePhone: '', link: '', address: '', city: '', state: '',
     source: 'WEBSITE', service: '', price: '',
-    status: 'NEW', remark: '', followUpDate: '', followUpTime: '',
+    status: 'NEW', remark: '', ...defaultFollowUp(),
   })
 
   const fetchLeads = useCallback(async () => {
@@ -74,6 +84,9 @@ export default function LeadsPage() {
       api.get('/users/by-role?roles=TELECALLER')
         .then(r => setTelecallers(r.data.data || []))
         .catch(() => {})
+      api.get('/users/by-role?roles=MARKETING_EXECUTIVE')
+        .then(r => setMarketingPersons(r.data.data || []))
+        .catch(() => {})
     }
   }, [canSeeAll])
 
@@ -82,7 +95,7 @@ export default function LeadsPage() {
       companyName: '', clientName: '', clientPhone: '', clientEmail: '',
       alternatePhone: '', link: '', address: '', city: '', state: '',
       source: 'WEBSITE', service: '', price: '',
-      status: 'NEW', remark: '', followUpDate: '', followUpTime: '',
+      status: 'NEW', remark: '', ...defaultFollowUp(),
     })
     setModal('add')
   }
@@ -226,7 +239,7 @@ export default function LeadsPage() {
         </div>
 
         {showFilter && (
-          <div className="px-5 py-4 bg-gray-50 border-b border-gray-100 grid grid-cols-2 md:grid-cols-5 gap-3">
+          <div className="px-5 py-4 bg-gray-50 border-b border-gray-100 grid grid-cols-2 md:grid-cols-6 gap-3">
             <select value={filters.status} onChange={e => { setFilters(p => ({...p, status: e.target.value})); setPage(1) }} className="input">
               <option value="">Status: All</option>
               {STATUSES.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
@@ -237,8 +250,14 @@ export default function LeadsPage() {
             </select>
             {canSeeAll && (
               <select value={filters.assignedToId} onChange={e => { setFilters(p => ({...p, assignedToId: e.target.value})); setPage(1) }} className="input">
-                <option value="">Assigned To: All</option>
-                {telecallers.map((u: any) => <option key={u.id} value={u.id}>{u.name} ({u.role.replace(/_/g, ' ')})</option>)}
+                <option value="">Telecaller: All</option>
+                {telecallers.map((u: any) => <option key={u.id} value={u.id}>{u.name}</option>)}
+              </select>
+            )}
+            {canSeeAll && (
+              <select value={filters.meetingAssignedToId} onChange={e => { setFilters(p => ({...p, meetingAssignedToId: e.target.value})); setPage(1) }} className="input">
+                <option value="">Marketing Person: All</option>
+                {marketingPersons.map((u: any) => <option key={u.id} value={u.id}>{u.name}</option>)}
               </select>
             )}
             <input type="date" className="input text-xs" placeholder="From"
@@ -246,7 +265,7 @@ export default function LeadsPage() {
             <input type="date" className="input text-xs" placeholder="To"
               value={filters.dateTo} onChange={e => { setFilters(p => ({...p, dateTo: e.target.value})); setPage(1) }} />
             {activeFilterCount > 0 && (
-              <button onClick={() => { setFilters({status:'',source:'',assignedToId:'',search:'',dateFrom:'',dateTo:''}); setPage(1) }}
+              <button onClick={() => { setFilters({status:'',source:'',assignedToId:'',meetingAssignedToId:'',search:'',dateFrom:'',dateTo:''}); setPage(1) }}
                 className="text-xs text-red-600 hover:underline flex items-center gap-1 col-span-full">
                 <X size={12} /> Clear all
               </button>
@@ -299,11 +318,14 @@ export default function LeadsPage() {
                     ) : <span className="text-gray-400 text-xs">—</span>}
                   </td>
                   <td className="text-xs">
-                    {l.status === 'MEETING_SCHEDULED' && l.meetingDate ? (
+                    {l.meetingDate ? (
                       <div className="text-purple-700 font-medium">
                         <p>🎯 {formatDate(l.meetingDate)}</p>
                         <p className="text-[10px]">{l.meetingSlot || l.meetingTime}</p>
                         {l.meetingAssignedTo && <p className="text-[10px] text-gray-500">→ {l.meetingAssignedTo.name}</p>}
+                        {l.status !== 'MEETING_SCHEDULED' && (
+                          <p className="text-[10px] text-gray-400">({l.status.replace(/_/g, ' ').toLowerCase()})</p>
+                        )}
                       </div>
                     ) : l.followUpDate ? (
                       <div className="text-yellow-700">

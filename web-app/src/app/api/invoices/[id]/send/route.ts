@@ -31,7 +31,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const body = `
       <p>Hi <b>${invoice.client.clientName}</b>,</p>
       <p>Your invoice <b>${invoice.invoiceNumber}</b> for <b>₹${invoice.totalAmount.toLocaleString('en-IN')}</b> is ready.</p>
-      ${invoice.dueDate ? `<p><b>Due Date:</b> ${new Date(invoice.dueDate).toLocaleDateString('en-IN')}</p>` : ''}
+      ${invoice.dueDate ? `<p><b>Due Date:</b> ${new Date(invoice.dueDate).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })}</p>` : ''}
       <p>You can view the invoice and pay via your client portal.</p>
     `
     const r = await sendMail({
@@ -52,7 +52,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         clientName: invoice.client.clientName,
         invoiceNumber: invoice.invoiceNumber,
         amount: `₹${invoice.totalAmount.toLocaleString('en-IN')}`,
-        dueDate: invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString('en-IN') : 'On receipt',
+        dueDate: invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' }) : 'On receipt',
         payUrl: portalUrl,
       },
       referenceType: 'INVOICE',

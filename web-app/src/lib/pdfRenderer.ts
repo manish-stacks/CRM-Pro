@@ -136,6 +136,8 @@ const BUSINESS_BODY_STYLES = `
   .doc-title { text-align: center; font-size: 20px; font-weight: 800; letter-spacing: 1.5px; margin: 0 0 20px; color: #0f172a; }
   .doc-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #1e293b; padding-bottom: 14px; margin-bottom: 20px; }
   .doc-header .company-name { font-size: 18px; font-weight: 800; color: #dc2626; letter-spacing: 0.2px; }
+  .doc-header-left { display: flex; flex-direction: column; align-items: flex-start; text-align: left; }
+  .company-logo { display: block; max-height: 46px; max-width: 190px; object-fit: contain; object-position: left center; margin: 0 0 6px 0; align-self: flex-start; }
   .doc-meta { text-align: right; font-size: 12px; color: #334155; }
   .doc-meta .doc-number { font-weight: 800; font-size: 15px; color: #0f172a; margin-bottom: 3px; }
   .doc-meta div { margin-bottom: 2px; }
@@ -197,6 +199,19 @@ async function pdfOnce(bodyHtml: string, title: string, bodyStyles: string, opts
     // networkidle0 hangs locally when there's an external asset -> use domcontentloaded + fonts wait instead
     await page.setContent(fullHtml, { waitUntil: 'domcontentloaded', timeout: 60_000 })
     await page.evaluate(() => (document as any).fonts?.ready).catch(() => { })
+    // Wait for all <img> tags (e.g. company logo, letterhead) to finish loading
+    // so remote/slow images aren't skipped when the PDF snapshot is taken.
+    await page.evaluate(() => {
+      const imgs = Array.from(document.images)
+      return Promise.all(imgs.map(img => {
+        if (img.complete) return Promise.resolve()
+        return new Promise(resolve => {
+          img.addEventListener('load', resolve, { once: true })
+          img.addEventListener('error', resolve, { once: true })
+          setTimeout(resolve, 8000)
+        })
+      }))
+    }).catch(() => { })
 
     if (opts.useLetterheadImages) {
       const { header, footer } = await getLetterheadImages()

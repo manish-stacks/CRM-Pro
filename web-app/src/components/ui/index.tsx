@@ -1,5 +1,5 @@
 'use client'
-import React, { ReactNode, InputHTMLAttributes, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react'
+import React, { ReactNode, InputHTMLAttributes, SelectHTMLAttributes, TextareaHTMLAttributes, useState, useEffect, useRef } from 'react'
 import { ChevronLeft, ChevronRight, AlertCircle, Search, X, Loader2 } from 'lucide-react'
 
 // Badge
@@ -85,6 +85,77 @@ export function Select({ label, options, className = '', ...props }: SelectProps
       <select className="input" {...props}>
         {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
+    </div>
+  )
+}
+
+// SearchSelect — combobox with server-side search, for pickers with huge
+// datasets (leads, clients) where a plain <select> with thousands of
+// options is unusable. Type to search; results come from `fetchOptions`.
+export function SearchSelect({
+  label, placeholder = 'Search...', value, valueLabel, onSelect, fetchOptions, className = '',
+}: {
+  label?: string
+  placeholder?: string
+  value: string
+  valueLabel?: string // display label for the currently selected value
+  onSelect: (value: string, label: string) => void
+  fetchOptions: (query: string) => Promise<{ value: string; label: string }[]>
+  className?: string
+}) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const [options, setOptions] = useState<{ value: string; label: string }[]>([])
+  const [loading, setLoading] = useState(false)
+  const wrapRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function onClickOutside(e: MouseEvent) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onClickOutside)
+    return () => document.removeEventListener('mousedown', onClickOutside)
+  }, [])
+
+  // Debounced search — fires on open and on every query change while open.
+  useEffect(() => {
+    if (!open) return
+    setLoading(true)
+    const t = setTimeout(() => {
+      fetchOptions(query).then(setOptions).catch(() => setOptions([])).finally(() => setLoading(false))
+    }, 300)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, open])
+
+  return (
+    <div className={`relative ${className}`} ref={wrapRef}>
+      {label && <label className="label">{label}</label>}
+      <div className="relative">
+        <input
+          className="input pr-8"
+          placeholder={placeholder}
+          value={open ? query : (valueLabel || '')}
+          onFocus={() => { setOpen(true); setQuery('') }}
+          onChange={e => setQuery(e.target.value)}
+        />
+        <Search size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+      </div>
+      {open && (
+        <div className="absolute z-30 mt-1 w-full max-h-64 overflow-auto bg-white border border-gray-200 rounded-lg shadow-lg">
+          {loading ? (
+            <div className="px-3 py-2.5 text-xs text-gray-400 flex items-center gap-2"><Loader2 size={12} className="animate-spin" /> Searching…</div>
+          ) : options.length === 0 ? (
+            <div className="px-3 py-2.5 text-xs text-gray-400">No results{query ? ` for "${query}"` : ''}</div>
+          ) : options.map(o => (
+            <button key={o.value} type="button"
+              onClick={() => { onSelect(o.value, o.label); setOpen(false); setQuery('') }}
+              className={`block w-full text-left px-3 py-2 text-sm hover:bg-blue-50 ${o.value === value ? 'bg-blue-50 font-medium text-blue-700' : 'text-gray-700'}`}>
+              {o.label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

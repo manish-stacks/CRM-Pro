@@ -7,6 +7,7 @@ import { successResponse, successStatusResponse, errorResponse, getPaginationPar
 import { logFromRequest } from '@/lib/audit'
 import { getTeamScope } from '@/lib/teamScope'
 import { sendMail, wrapEmailHtml } from '@/lib/mailer'
+import { Settings } from '@/lib/settings'
 
 const LEAVE_TYPES = ['PAID', 'UNPAID', 'SICK', 'CASUAL', 'MATERNITY', 'PATERNITY']
 const DURATIONS   = ['SINGLE_DAY', 'MULTIPLE_DAYS', 'SHORT_HOURLY']
@@ -166,14 +167,19 @@ export async function POST(req: NextRequest) {
       metadata: { leaveType, duration, days },
     })
 
-    // Email admin/HR that a new leave request needs review (best-effort)
-    prisma.user.findMany({
-      where: { role: { in: ['SUPER_ADMIN', 'ADMIN'] }, isActive: true },
-      select: { email: true },
-    }).then(admins => {
-      const to = admins.map(a => a.email).filter(Boolean)
+    // Email HR that a new leave request needs review (best-effort).
+    // Only SUPER_ADMIN/ADMIN get CC'd as a fallback if HR email isn't set yet,
+    // so nothing silently goes unnoticed before the admin configures it.
+    Promise.all([
+      Settings.hrEmail(),
+      prisma.user.findMany({
+        where: { role: { in: ['SUPER_ADMIN', 'ADMIN'] }, isActive: true },
+        select: { email: true },
+      }),
+    ]).then(([hrEmail, admins]) => {
+      const to = hrEmail ? [hrEmail] : admins.map(a => a.email).filter(Boolean)
       if (!to.length) return
-      const fmt = (d: Date) => new Date(d).toLocaleDateString('en-IN')
+      const fmt = (d: Date) => new Date(d).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })
       const dateRange = duration === 'SINGLE_DAY' ? fmt(start) : `${fmt(start)} to ${fmt(end)}`
       return sendMail({
         to,

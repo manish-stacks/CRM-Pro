@@ -97,7 +97,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       params: {
         clientName: client.clientName,
         reportTitle: title,
-        reportPeriod: reportPeriod || new Date().toLocaleDateString('en-IN'),
+        reportPeriod: reportPeriod || new Date().toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' }),
       },
       referenceType: 'CLIENT_REPORT',
       referenceId: report.id,

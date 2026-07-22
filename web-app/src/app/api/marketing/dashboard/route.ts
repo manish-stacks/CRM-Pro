@@ -5,6 +5,9 @@ import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAuth, hasMinRole } from '@/lib/auth'
 import { successResponse } from '@/lib/api'
+import { getISTDateParts } from '@/lib/attendanceDate'
+
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000 // UTC+5:30
 
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req)
@@ -26,12 +29,15 @@ export async function GET(req: NextRequest) {
   const statusFilter = searchParams.get('status')
   const search = searchParams.get('search')
 
-  const now = new Date()
-  const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0)
-  const todayEnd   = new Date(now); todayEnd.setHours(23, 59, 59, 999)
-  const weekEnd    = new Date(now); weekEnd.setDate(now.getDate() + 7)
-  const tmrStart   = new Date(todayStart); tmrStart.setDate(tmrStart.getDate() + 1)
-  const tmrEnd     = new Date(todayEnd); tmrEnd.setDate(tmrEnd.getDate() + 1)
+  // meetingDate is a real timestamp, so day boundaries must be the true UTC
+  // instant of IST midnight (not just UTC-midnight-of-date), else meetings
+  // between 12:00am-5:30am IST land in the wrong "day" bucket.
+  const { year: istY, month: istM, day: istD } = getISTDateParts(new Date())
+  const todayStart = new Date(Date.UTC(istY, istM, istD) - IST_OFFSET_MS)
+  const tmrStart   = new Date(todayStart.getTime() + 86400000)
+  const todayEnd   = new Date(tmrStart.getTime() - 1)
+  const weekEnd    = new Date(todayStart.getTime() + 7 * 86400000)
+  const tmrEnd     = new Date(tmrStart.getTime() + 86400000 - 1)
 
   const filterActive = !!(range || date || dateFrom || dateTo || statusFilter || search)
 
@@ -47,7 +53,9 @@ export async function GET(req: NextRequest) {
       ]
     }
     if (date) {
-      const d0 = new Date(date + 'T00:00:00'); const d1 = new Date(date + 'T23:59:59.999')
+      const [dy, dm, dd] = date.split('-').map(Number)
+      const d0 = new Date(Date.UTC(dy, dm - 1, dd) - IST_OFFSET_MS)
+      const d1 = new Date(Date.UTC(dy, dm - 1, dd + 1) - IST_OFFSET_MS - 1)
       w.meetingDate = { gte: d0, lte: d1 }
     } else if (range === 'today') {
       w.meetingDate = { gte: todayStart, lte: todayEnd }
@@ -61,8 +69,14 @@ export async function GET(req: NextRequest) {
       w.meetingDate = { lt: todayStart }
     } else if (dateFrom || dateTo) {
       w.meetingDate = {}
-      if (dateFrom) w.meetingDate.gte = new Date(dateFrom)
-      if (dateTo) w.meetingDate.lte = new Date(dateTo + 'T23:59:59')
+      if (dateFrom) {
+        const [y, m, d] = dateFrom.split('-').map(Number)
+        w.meetingDate.gte = new Date(Date.UTC(y, m - 1, d) - IST_OFFSET_MS)
+      }
+      if (dateTo) {
+        const [y, m, d] = dateTo.split('-').map(Number)
+        w.meetingDate.lte = new Date(Date.UTC(y, m - 1, d + 1) - IST_OFFSET_MS - 1)
+      }
     }
     return w
   }
@@ -103,7 +117,7 @@ export async function GET(req: NextRequest) {
     take: 20,
   })
 
-  const past30Days = new Date(now); past30Days.setDate(now.getDate() - 30)
+  const past30Days = new Date(todayStart); past30Days.setUTCDate(todayStart.getUTCDate() - 30)
   const pastMeetings = await prisma.lead.findMany({
     where: {
       meetingAssignedToId: userId,

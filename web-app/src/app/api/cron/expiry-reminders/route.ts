@@ -4,6 +4,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { sendWhatsapp } from '@/lib/whatsapp'
+import { todayDateOnly } from '@/lib/attendanceDate'
 
 const REMINDER_DAYS = [30, 15, 7, 1]
 
@@ -15,17 +16,16 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const now = new Date()
-  now.setHours(0, 0, 0, 0)
+  const now = todayDateOnly() // IST "today" as a UTC-midnight instant, matches @db.Date storage
 
   let fired = 0
   const details: any[] = []
 
   for (const daysAhead of REMINDER_DAYS) {
     const target = new Date(now)
-    target.setDate(target.getDate() + daysAhead)
+    target.setUTCDate(target.getUTCDate() + daysAhead)
     const nextDay = new Date(target)
-    nextDay.setDate(nextDay.getDate() + 1)
+    nextDay.setUTCDate(nextDay.getUTCDate() + 1)
 
     const services = await prisma.clientService.findMany({
       where: {
@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
           clientName: svc.client.clientName,
           serviceName: svc.serviceName,
           daysLeft: String(daysAhead),
-          expiryDate: svc.expiryDate?.toLocaleDateString('en-IN') || '',
+          expiryDate: svc.expiryDate?.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' }) || '',
         },
         referenceType: 'SERVICE',
         referenceId: svc.id,

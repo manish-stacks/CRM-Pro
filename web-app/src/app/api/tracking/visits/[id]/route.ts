@@ -54,7 +54,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const notifyUser = data.userId || existing.userId
   if (notifyUser !== session.userId) {
-    const when = visit.scheduledDate ? visit.scheduledDate.toLocaleDateString('en-IN') : 'TBD'
+    const when = visit.scheduledDate ? visit.scheduledDate.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' }) : 'TBD'
     await Notifications.visitUpdated(notifyUser, visit.clientName, when, visit.id).catch(() => {})
   }
 

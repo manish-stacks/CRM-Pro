@@ -3,7 +3,7 @@
 import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireMobileEmployee, ok, fail } from '@/lib/mobileAuth'
-import { todayDateOnly } from '@/lib/attendanceDate'
+import { todayDateOnly, getISTDateParts } from '@/lib/attendanceDate'
 
 export async function GET(req: NextRequest) {
   const res = await requireMobileEmployee(req)
@@ -11,9 +11,9 @@ export async function GET(req: NextRequest) {
   const { session, employee } = res as any
   if (!employee) return fail('Employee profile not found', 404)
 
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1)
+  const { year, month, day } = getISTDateParts(new Date())
+  const today = new Date(Date.UTC(year, month, day))
+  const tomorrow = new Date(today); tomorrow.setUTCDate(tomorrow.getUTCDate() + 1)
   const attToday = todayDateOnly() // UTC date-only to match how attendance is stored
 
   // Clients this marketing person onboarded / owns
@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
 
   // Meetings assigned to this marketing exec (Lead.meetingAssignedToId)
   const meetingWhere = { meetingAssignedToId: session.userId }
-  const in7Days = new Date(today); in7Days.setDate(in7Days.getDate() + 7)
+  const in7Days = new Date(today); in7Days.setUTCDate(in7Days.getUTCDate() + 7)
 
   const [
     totalClients, todayVisits, pendingVisits, completedVisits, attendance,

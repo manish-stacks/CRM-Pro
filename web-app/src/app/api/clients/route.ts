@@ -8,6 +8,9 @@ import { successResponse, errorResponse, unauthorizedResponse, getPaginationPara
 import { generateClientCode } from '@/lib/idgen'
 import { logFromRequest } from '@/lib/audit'
 import { activateClientPortal } from '@/lib/welcomeFlow'
+import { todayDateOnly } from '@/lib/attendanceDate'
+
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000
 
 export async function GET(req: NextRequest) {
   const session = await getRequestSession(req)
@@ -38,8 +41,18 @@ export async function GET(req: NextRequest) {
   if (dateFrom || dateTo) {
     const field = dateField === 'onboardingDate' ? 'onboardingDate' : 'createdAt'
     where[field] = {}
-    if (dateFrom) where[field].gte = new Date(dateFrom)
-    if (dateTo) where[field].lte = new Date(dateTo + 'T23:59:59')
+    if (dateFrom) {
+      const [y, m, d] = dateFrom.split('-').map(Number)
+      where[field].gte = field === 'onboardingDate'
+        ? new Date(Date.UTC(y, m - 1, d))
+        : new Date(Date.UTC(y, m - 1, d) - IST_OFFSET_MS)
+    }
+    if (dateTo) {
+      const [y, m, d] = dateTo.split('-').map(Number)
+      where[field].lte = field === 'onboardingDate'
+        ? new Date(Date.UTC(y, m - 1, d))
+        : new Date(Date.UTC(y, m - 1, d + 1) - IST_OFFSET_MS - 1)
+    }
   }
 
   // ---- Service + expiry filters (Client -> services relation) ----
@@ -48,8 +61,7 @@ export async function GET(req: NextRequest) {
   if (serviceCatalogId) svc.serviceCatalogId = serviceCatalogId
 
   if (expiry) {
-    const now = new Date()
-    const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0)
+    const todayStart = todayDateOnly()
     if (expiry === 'expired') {
       svc.expiryDate = { lt: todayStart }
     } else if (expiry === 'none') {
@@ -60,7 +72,7 @@ export async function GET(req: NextRequest) {
     } else {
       const days = parseInt(expiry)
       if (!isNaN(days)) {
-        const until = new Date(todayStart); until.setDate(until.getDate() + days); until.setHours(23, 59, 59, 999)
+        const until = new Date(todayStart); until.setUTCDate(until.getUTCDate() + days); until.setUTCHours(23, 59, 59, 999)
         svc.expiryDate = { gte: todayStart, lte: until }
       }
     }

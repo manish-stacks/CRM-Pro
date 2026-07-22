@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { useAuth } from '@/hooks/useAuth'
 import api from '@/lib/axios'
-import { Button, Input, Select, Modal, EmptyState, Pagination, Badge } from '@/components/ui'
+import { Button, Input, Select, SearchSelect, Modal, EmptyState, Pagination, Badge } from '@/components/ui'
 import { formatDate, getInitials } from '@/lib/utils'
 import {
   Users2, Plus, Search, Filter, X, Package, User, Building2,
@@ -21,17 +21,19 @@ export default function ProjectsPage() {
   const [loading, setLoading] = useState(true)
   const [showFilter, setShowFilter] = useState(false)
   const [filters, setFilters] = useState({ clientId: '', departmentId: '', isActive: 'true' })
+  const [filterClientLabel, setFilterClientLabel] = useState('')
 
   const [modal, setModal] = useState<'none' | 'assign'>('none')
   const [saving, setSaving] = useState(false)
-  const [clients, setClients] = useState<any[]>([])
   const [departments, setDepartments] = useState<any[]>([])
-  const [users, setUsers] = useState<any[]>([])
+  const [employees, setEmployees] = useState<any[]>([])
   const [clientServices, setClientServices] = useState<any[]>([])
+  const [memberSearch, setMemberSearch] = useState('')
 
   const [form, setForm] = useState({
     clientId: '', clientServiceId: '', managerId: '', memberIds: [] as string[], role: 'MEMBER',
   })
+  const [formClientLabel, setFormClientLabel] = useState('')
 
   const fetch_ = useCallback(async () => {
     setLoading(true)
@@ -48,9 +50,8 @@ export default function ProjectsPage() {
   useEffect(() => { fetch_() }, [fetch_])
 
   useEffect(() => {
-    api.get('/clients?limit=200').then(r => setClients(r.data.data || [])).catch(() => {})
     api.get('/departments').then(r => setDepartments(r.data.data || [])).catch(() => {})
-    api.get('/users/by-role?roles=EMPLOYEE,MANAGER').then(r => setUsers(r.data.data || [])).catch(() => {})
+    api.get('/employees?limit=500&status=true').then(r => setEmployees(r.data.data || [])).catch(() => {})
   }, [])
 
   // When client picked, load its services
@@ -73,6 +74,8 @@ export default function ProjectsPage() {
 
   const openAssign = () => {
     setForm({ clientId: '', clientServiceId: '', managerId: '', memberIds: [], role: 'MEMBER' })
+    setFormClientLabel('')
+    setMemberSearch('')
     setModal('assign')
   }
 
@@ -113,6 +116,35 @@ export default function ProjectsPage() {
 
   const activeFilterCount = Object.values(filters).filter(v => v && v !== 'true').length
 
+  // Manager (dept head) dropdown — only actual department heads, deduped by user id
+  const managerOptions = departments
+    .filter((d: any) => d.manager?.user?.id)
+    .reduce((acc: any[], d: any) => {
+      if (!acc.some(o => o.value === d.manager.user.id)) {
+        acc.push({ value: d.manager.user.id, label: `${d.manager.user.name} (${d.name})` })
+      }
+      return acc
+    }, [])
+
+  // Team Members — grouped by department: head first, then that department's employees.
+  const memberQuery = memberSearch.trim().toLowerCase()
+  const filteredEmployees = employees.filter((e: any) =>
+    !memberQuery || (e.user?.name || '').toLowerCase().includes(memberQuery) || (e.employeeId || '').toLowerCase().includes(memberQuery)
+  )
+  const groupedMembers = departments
+    .map((d: any) => {
+      const headUserId = d.manager?.user?.id
+      const deptEmployees = filteredEmployees.filter((e: any) => e.departmentId === d.id)
+      const sorted = [...deptEmployees].sort((a: any, b: any) => {
+        const aHead = a.user?.id === headUserId ? 0 : 1
+        const bHead = b.user?.id === headUserId ? 0 : 1
+        return aHead - bHead
+      })
+      return { dept: d, employees: sorted }
+    })
+    .filter((g: any) => g.employees.length > 0)
+  const noDeptEmployees = filteredEmployees.filter((e: any) => !e.departmentId)
+
   return (
     <div className="space-y-4">
       <div className="flex items-start justify-between">
@@ -125,10 +157,17 @@ export default function ProjectsPage() {
 
       <div className="card">
         <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-2 flex-wrap">
-          <select value={filters.clientId} onChange={e => { setFilters(p => ({...p, clientId: e.target.value})); setPage(1) }} className="max-w-xs input">
-            <option value="">All clients</option>
-            {clients.map((c: any) => <option key={c.id} value={c.id}>{c.clientName}</option>)}
-          </select>
+          <SearchSelect
+            placeholder="Search client..."
+            value={filters.clientId}
+            valueLabel={filterClientLabel}
+            onSelect={(id, label) => { setFilters(p => ({ ...p, clientId: id })); setFilterClientLabel(label); setPage(1) }}
+            fetchOptions={async (q) => {
+              const r = await api.get(`/clients?search=${encodeURIComponent(q)}&limit=20`)
+              return [{ value: '', label: 'All clients' }, ...(r.data.data || []).map((c: any) => ({ value: c.id, label: c.clientName }))]
+            }}
+            className="max-w-xs"
+          />
           <select value={filters.departmentId} onChange={e => { setFilters(p => ({...p, departmentId: e.target.value})); setPage(1) }} className="max-w-xs input">
             <option value="">All departments</option>
             {departments.map((d: any) => <option key={d.id} value={d.id}>{d.name}</option>)}
@@ -218,6 +257,8 @@ export default function ProjectsPage() {
                       <td className="text-right">
                         <button onClick={() => {
                           setForm({ clientId: group.service.client.id, clientServiceId: group.service.id, managerId: '', memberIds: [], role: 'MEMBER' })
+                          setFormClientLabel(group.service.client.clientName)
+                          setMemberSearch('')
                           setModal('assign')
                         }} className="btn-ghost btn-sm !p-1.5" title="Add more">
                           <UserPlus size={13} />
@@ -238,25 +279,73 @@ export default function ProjectsPage() {
       {/* Assign Modal */}
       <Modal open={modal === 'assign'} onClose={() => setModal('none')} title="Assign Team to Project">
         <div className="space-y-3">
-          <Select label="Client *" value={form.clientId} onChange={e => setForm(p => ({...p, clientId: e.target.value, clientServiceId: ''}))} options={[{ value: '', label: 'Pick a client...' }, ...clients.map((c: any) => ({ value: c.id, label: `${c.clientName} — ${c.companyName}` }))] } />
+          <SearchSelect
+            label="Client *"
+            placeholder="Search client by name or company..."
+            value={form.clientId}
+            valueLabel={formClientLabel}
+            onSelect={(id, label) => { setForm(p => ({ ...p, clientId: id, clientServiceId: '' })); setFormClientLabel(label) }}
+            fetchOptions={async (q) => {
+              const r = await api.get(`/clients?search=${encodeURIComponent(q)}&limit=20`)
+              return (r.data.data || []).map((c: any) => ({ value: c.id, label: `${c.clientName} — ${c.companyName}` }))
+            }}
+          />
           <Select label="Service *" value={form.clientServiceId} onChange={e => setForm(p => ({...p, clientServiceId: e.target.value}))} disabled={!form.clientId} options={[{ value: '', label: form.clientId ? 'Pick a service...' : 'Pick client first' }, ...clientServices.map((s: any) => ({ value: s.id, label: `${s.serviceName} — ${s.status}` }))]} />
-          <Select label="Manager (dept head)" value={form.managerId} onChange={e => setForm(p => ({...p, managerId: e.target.value}))} options={[{ value: '', label: '— No manager —' }, ...users.map((u: any) => ({ value: u.id, label: `${u.name} · ${(u.role || '').replace(/_/g, ' ')}${u.employee?.department?.name ? ` (${u.employee.department.name})` : ''}` }))]} />
-            
+          <Select label="Manager (dept head)" value={form.managerId} onChange={e => setForm(p => ({...p, managerId: e.target.value}))} options={[{ value: '', label: '— No manager —' }, ...managerOptions]} />
+
           <div>
             <label className="label">Team Members</label>
+            <input
+              className="input mb-2"
+              placeholder="Search team members by name or ID..."
+              value={memberSearch}
+              onChange={e => setMemberSearch(e.target.value)}
+            />
             <div className="max-h-60 overflow-y-auto border rounded-lg divide-y divide-gray-100">
-              {users.filter(u => u.role === 'EMPLOYEE' || u.id === user?.id).map((u: any) => (
-                <label key={u.id} className="flex items-center gap-2 p-2 hover:bg-gray-50 cursor-pointer text-sm">
-                  <input type="checkbox" checked={form.memberIds.includes(u.id)} onChange={() => toggleMember(u.id)} />
-                  <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">
-                    {getInitials(u.name)}
-                  </div>
-                  <div className="flex-1">
-                    <p>{u.name}</p>
-                    <p className="text-xs text-gray-500">{u.employee?.department?.name || 'No dept'} · {u.role}</p>
-                  </div>
-                </label>
-              ))}
+              {groupedMembers.length === 0 && noDeptEmployees.length === 0 ? (
+                <p className="text-xs text-gray-400 p-3">No employees found</p>
+              ) : (
+                <>
+                  {groupedMembers.map((g: any) => (
+                    <div key={g.dept.id}>
+                      <p className="px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500 bg-gray-50">{g.dept.name}</p>
+                      {g.employees.map((e: any) => {
+                        const uid = e.user?.id
+                        const isHead = uid === g.dept.manager?.user?.id
+                        return (
+                          <label key={e.id} className="flex items-center gap-2 p-2 hover:bg-gray-50 cursor-pointer text-sm">
+                            <input type="checkbox" checked={form.memberIds.includes(uid)} onChange={() => toggleMember(uid)} />
+                            <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">
+                              {getInitials(e.user?.name || 'X')}
+                            </div>
+                            <div className="flex-1">
+                              <p>{e.user?.name} {isHead && <span className="text-[10px] text-purple-600 font-semibold">· HEAD</span>}</p>
+                              <p className="text-xs text-gray-500">{g.dept.name} · {e.user?.role}</p>
+                            </div>
+                          </label>
+                        )
+                      })}
+                    </div>
+                  ))}
+                  {noDeptEmployees.length > 0 && (
+                    <div>
+                      <p className="px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500 bg-gray-50">No Department</p>
+                      {noDeptEmployees.map((e: any) => (
+                        <label key={e.id} className="flex items-center gap-2 p-2 hover:bg-gray-50 cursor-pointer text-sm">
+                          <input type="checkbox" checked={form.memberIds.includes(e.user?.id)} onChange={() => toggleMember(e.user?.id)} />
+                          <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">
+                            {getInitials(e.user?.name || 'X')}
+                          </div>
+                          <div className="flex-1">
+                            <p>{e.user?.name}</p>
+                            <p className="text-xs text-gray-500">No dept · {e.user?.role}</p>
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
             </div>
             <p className="text-xs text-gray-500 mt-1">{form.memberIds.length} selected</p>
           </div>

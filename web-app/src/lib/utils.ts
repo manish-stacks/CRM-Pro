@@ -19,6 +19,7 @@ export function formatDate(date: Date | string): string {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
+    timeZone: 'Asia/Kolkata',
   })
 }
 
@@ -29,6 +30,7 @@ export function formatDateTime(date: Date | string): string {
     year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
+    timeZone: 'Asia/Kolkata',
   })
 }
 
@@ -111,22 +113,30 @@ export function getStatusColor(status: string): string {
   return colors[status] || 'bg-gray-100 text-gray-700'
 }
 
-/** Compute years/months since a date (for anniversaries) */
+function istParts(d: Date) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(d)
+  const get = (t: string) => Number(parts.find(p => p.type === t)!.value)
+  return { year: get('year'), month: get('month') - 1, day: get('day') }
+}
+
+/** Compute years/months since a date (for anniversaries) — compared in IST */
 export function yearsSince(date: Date | string): number {
-  const start = new Date(date)
-  const now = new Date()
-  let years = now.getFullYear() - start.getFullYear()
-  const m = now.getMonth() - start.getMonth()
-  if (m < 0 || (m === 0 && now.getDate() < start.getDate())) years--
+  const start = istParts(new Date(date))
+  const now = istParts(new Date())
+  let years = now.year - start.year
+  const m = now.month - start.month
+  if (m < 0 || (m === 0 && now.day < start.day)) years--
   return years
 }
 
-/** Is today the anniversary of the given date (month + day match)? */
+/** Is today the anniversary of the given date (month + day match)? — IST */
 export function isAnniversaryToday(date: Date | string | null | undefined): boolean {
   if (!date) return false
-  const d = new Date(date)
-  const now = new Date()
-  return d.getMonth() === now.getMonth() && d.getDate() === now.getDate()
+  const d = istParts(new Date(date))
+  const now = istParts(new Date())
+  return d.month === now.month && d.day === now.day
 }
 
 /** Is today the birthday for the given date? */

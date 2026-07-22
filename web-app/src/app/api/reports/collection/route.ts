@@ -12,8 +12,11 @@ import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/auth'
 import { successResponse, getPaginationParams } from '@/lib/api'
+import { istDayRange, getISTDateParts } from '@/lib/attendanceDate'
 
 const METHODS = ['CASH', 'UPI', 'BANK_TRANSFER', 'CHEQUE', 'CARD', 'ONLINE_GATEWAY']
+
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000
 
 function resolveRange(searchParams: URLSearchParams) {
   const range = searchParams.get('range') || 'today'
@@ -21,24 +24,27 @@ function resolveRange(searchParams: URLSearchParams) {
   const dateTo = searchParams.get('dateTo')
 
   if (dateFrom || dateTo) {
-    const start = dateFrom ? new Date(dateFrom + 'T00:00:00') : new Date('2000-01-01')
-    const end = dateTo ? new Date(dateTo + 'T23:59:59.999') : new Date()
+    const start = dateFrom ? istDayRange(dateFrom).start : new Date('2000-01-01')
+    const end = dateTo ? istDayRange(dateTo).end : new Date()
     return { start, end, label: 'custom' }
   }
 
-  const now = new Date()
-  const start = new Date(now); start.setHours(0, 0, 0, 0)
-  const end = new Date(now); end.setHours(23, 59, 59, 999)
+  const { start: todayStart, end: todayEnd } = istDayRange()
+  let start = todayStart
+  let end = todayEnd
 
   if (range === 'yesterday') {
-    start.setDate(start.getDate() - 1)
-    end.setDate(end.getDate() - 1)
+    start = new Date(start.getTime() - 86400000)
+    end = new Date(end.getTime() - 86400000)
   } else if (range === 'week') {
-    start.setDate(start.getDate() - start.getDay())
+    const { year, month, day } = getISTDateParts(new Date())
+    const dow = new Date(Date.UTC(year, month, day)).getUTCDay()
+    start = new Date(todayStart.getTime() - dow * 86400000)
   } else if (range === 'month') {
-    start.setDate(1)
+    const { year, month } = getISTDateParts(new Date())
+    start = new Date(Date.UTC(year, month, 1) - IST_OFFSET_MS)
   } else if (range === 'all') {
-    start.setFullYear(2000, 0, 1)
+    start = new Date('2000-01-01')
   }
   return { start, end, label: range }
 }

@@ -27,11 +27,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     ? { name: p.lead.companyName || p.lead.clientName, contact: p.lead.clientName, phone: p.lead.clientPhone || undefined, email: p.lead.clientEmail || undefined }
     : { name: '—', contact: '—' }
 
-  const [companyName, companyAddress, companyPhone, companyEmail] = await Promise.all([
+  const [companyName, companyAddress, companyPhone, companyEmail, companyLogoUrl] = await Promise.all([
     Settings.companyName(),
     Settings.companyAddress(),
     Settings.companyPhone(),
     Settings.companyEmail(),
+    Settings.companyLogo(),
   ])
 
   const company: CompanyInfo = {
@@ -39,6 +40,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     companyAddress: companyAddress || undefined,
     companyPhone: companyPhone || undefined,
     companyEmail: companyEmail || undefined,
+    companyLogoUrl: companyLogoUrl || undefined,
   }
 
   const bodyHtml = buildProposalBody({

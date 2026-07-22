@@ -87,11 +87,52 @@ model User {
   createdClientVisits    ClientVisit[]        @relation("CreatedClientVisits")
   collectedPayments      Payment[]            @relation("PaymentCollectedBy")
   lettersGenerated       Letter[]             @relation("LetterGeneratedBy")
+  reminders              Reminder[]
+  notes                  Note[]
 
   @@index([email])
   @@index([role])
   @@index([isActive])
   @@map("users")
+}
+
+// Personal reminders / to-do — each employee manages their own list, optionally
+// gets a push notification (via the same notify()/Expo-FCM pipeline used
+// elsewhere) when remindAt arrives. Checked by /api/cron/reminders.
+model Reminder {
+  id         String    @id @default(cuid())
+  userId     String
+  title      String
+  note       String?
+  remindAt   DateTime
+  isDone     Boolean   @default(false)
+  notifiedAt DateTime? // set once the due push has been sent, so cron doesn't re-notify
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, remindAt])
+  @@map("reminders")
+}
+
+// Free-form personal sticky notes — no date/reminder attached, just a place
+// for an employee to jot quick data (login IDs, references, etc). Private,
+// only the owner can see/edit their own notes.
+model Note {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  content   String   @db.Text
+  color     String   @default("yellow") // yellow, blue, green, pink, purple, orange
+  pinned    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("notes")
 }
 
 model LoginActivity {

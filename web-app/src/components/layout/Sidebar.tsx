@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Users, Clock, Calendar, DollarSign, Building2,
   Target, FileText, Users2, CreditCard, BarChart3, Settings,
   Briefcase, Package, Bell, ChevronDown, ChevronRight, LogOut,
-  User, Menu, X, Video, UserCheck, Shield, MessageSquare, AlertCircle, MapPin, MapPinned, Wallet
+  User, Menu, X, Video, UserCheck, Shield, MessageSquare, AlertCircle, MapPin, MapPinned, Wallet, AlarmClock, StickyNote, Mail
 } from 'lucide-react'
 
 interface NavItem {
@@ -34,7 +34,7 @@ const NAV: NavItem[] = [
     label: 'CRM', icon: Briefcase, children: [
       { label: 'Leads', href: '/leads', icon: Target, roles: ['SUPER_ADMIN', 'ADMIN', 'TELECALLER'] },
       { label: 'My Meetings', href: '/marketing', icon: Video, roles: ['SUPER_ADMIN', 'ADMIN', 'MARKETING_EXECUTIVE'] },
-      { label: 'Proposals', href: '/proposals', icon: FileText, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'MARKETING_EXECUTIVE', 'TELECALLER'] },
+      { label: 'Proposals', href: '/proposals', icon: FileText, roles: ['SUPER_ADMIN', 'ADMIN', 'MARKETING_EXECUTIVE', 'TELECALLER'] },
       { label: 'Invoices', href: '/invoices', icon: CreditCard, roles: ['SUPER_ADMIN', 'ADMIN', 'MARKETING_EXECUTIVE'] },
       { label: 'Clients', href: '/clients', icon: Users2, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'TELECALLER', 'MARKETING_EXECUTIVE'] },
       { label: 'Projects', href: '/projects', icon: Briefcase },
@@ -51,13 +51,16 @@ const NAV: NavItem[] = [
   {
     label: 'Finance', icon: CreditCard, children: [
       { label: 'Payments', href: '/payments', icon: CreditCard, roles: ['SUPER_ADMIN', 'ADMIN'] },
-      { label: 'Daily Collection', href: '/collection', icon: Wallet, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER'] },
+      { label: 'Daily Collection', href: '/collection', icon: Wallet, roles: ['SUPER_ADMIN', 'ADMIN'] },
       { label: 'Reports', href: '/reports', icon: BarChart3, roles: ['SUPER_ADMIN', 'ADMIN'] },
     ]
   },
-  { label: 'Visit Sheet', href: '/visits', icon: MapPinned, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'MARKETING_EXECUTIVE'] },
+  { label: 'Visit Sheet', href: '/visits', icon: MapPinned, roles: ['SUPER_ADMIN', 'ADMIN'] },
   { label: 'Field Tracking', href: '/tracking', icon: MapPin, roles: ['SUPER_ADMIN', 'ADMIN'] },
   { label: 'Notifications', href: '/notifications', icon: Bell },
+  { label: 'Reminders', href: '/reminders', icon: AlarmClock },
+  { label: 'Sticky Notes', href: '/notes', icon: StickyNote },
+  { label: 'Custom Mail', href: '/compose-mail', icon: Mail },
   { label: 'Audit Log', href: '/audit-logs', icon: Shield, roles: ['SUPER_ADMIN', 'ADMIN'] },
   { label: 'Settings', href: '/settings', icon: Settings, roles: ['SUPER_ADMIN', 'ADMIN'] },
 ]
@@ -122,7 +125,7 @@ export default function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose
           <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
             <Briefcase size={16} className="text-white" />
           </div>
-          <span className="font-bold text-gray-900 text-base">Hover Business Services LLP</span>
+          <span className="font-bold text-gray-900 text-base">Hover Business</span>
         </div>
         {mobile && (
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
@@ -133,7 +136,7 @@ export default function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose
       <div className="px-4 py-3 border-b border-gray-100 flex-shrink-0">
         <div className="flex items-center gap-3 bg-gray-50 rounded-xl px-3 py-2">
           <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-            {user?.name?.[0]?.toUpperCase()}
+            {user?.avatar ? <img src={user?.avatar} alt="" className="w-full h-full object-cover rounded-md" /> : user?.name?.[0]?.toUpperCase()}
           </div>
           <div className="min-w-0">
             <p className="text-sm font-semibold text-gray-900 truncate">{user?.name}</p>

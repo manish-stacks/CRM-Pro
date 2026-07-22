@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import api from '@/lib/axios'
-import { Button, Input, Select, Textarea } from '@/components/ui'
+import { Button, Input, Select, SearchSelect, Textarea } from '@/components/ui'
 import { formatCurrency } from '@/lib/utils'
 import { ArrowLeft, Plus, Trash2, Save, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -15,7 +15,7 @@ function InvoiceBuilderInner() {
   const params = useSearchParams()
   const preClientId = params.get('clientId')
 
-  const [clients, setClients] = useState<any[]>([])
+  const [clientLabel, setClientLabel] = useState('')
   const [catalog, setCatalog] = useState<any[]>([])
   const [clientServices, setClientServices] = useState<any[]>([])
   const [loadingClientServices, setLoadingClientServices] = useState(false)
@@ -40,16 +40,16 @@ function InvoiceBuilderInner() {
   const itemsEditedByUserRef = useRef(false)
 
   useEffect(() => {
-    api.get('/clients?limit=200').then(r => {
-      const list = r.data.data || []
-      setClients(list)
-      // auto-set GST default from client if picked
-      if (preClientId) {
-        const c = list.find((x: any) => x.id === preClientId)
-        if (c?.gstApplicable) setForm(p => ({ ...p, gstApplicable: true }))
-      }
-    }).catch(() => { })
     api.get('/services').then(r => setCatalog(r.data.data || [])).catch(() => { })
+    // Resolve label + GST default for a pre-filled client (came via
+    // ?clientId= from the Client detail page's "New Invoice" button).
+    if (preClientId) {
+      api.get(`/clients/${preClientId}`).then(r => {
+        const c = r.data.data
+        setClientLabel(`${c.clientName} — ${c.companyName}`)
+        if (c.gstApplicable) setForm(p => ({ ...p, gstApplicable: true }))
+      }).catch(() => { })
+    }
   }, [preClientId])
 
   // Fetch the selected client's already-assigned services so they can be
@@ -129,12 +129,15 @@ function InvoiceBuilderInner() {
     }
   }
 
-  const onClientChange = (cid: string) => {
+  const onClientChange = (cid: string, label: string) => {
     setForm(p => ({ ...p, clientId: cid }))
-    const c = clients.find((x: any) => x.id === cid)
-    if (c && c.gstApplicable !== form.gstApplicable) {
-      setForm(p => ({ ...p, clientId: cid, gstApplicable: c.gstApplicable }))
-    }
+    setClientLabel(label)
+    api.get(`/clients/${cid}`).then(r => {
+      const c = r.data.data
+      if (c && c.gstApplicable !== form.gstApplicable) {
+        setForm(p => ({ ...p, clientId: cid, gstApplicable: c.gstApplicable }))
+      }
+    }).catch(() => { })
   }
 
   const save = async (sendAfter = false) => {
@@ -188,17 +191,16 @@ function InvoiceBuilderInner() {
           <div className="card p-5">
             <h3 className="font-semibold text-gray-900 mb-3">Basic Info</h3>
             <div className="grid grid-cols-2 gap-3">
-              <Select
+              <SearchSelect
                 label="Client *"
+                placeholder="Search client by name, company, phone..."
                 value={form.clientId}
-                onChange={(e) => onClientChange(e.target.value)}
-                options={[
-                  { value: "", label: "Select client..." },
-                  ...clients.map((c: any) => ({
-                    value: c.id,
-                    label: `${c.clientName} — ${c.companyName}`,
-                  })),
-                ]}
+                valueLabel={clientLabel}
+                onSelect={(id, label) => onClientChange(id, label)}
+                fetchOptions={async (q) => {
+                  const r = await api.get(`/clients?search=${encodeURIComponent(q)}&limit=20`)
+                  return (r.data.data || []).map((c: any) => ({ value: c.id, label: `${c.clientName} — ${c.companyName}` }))
+                }}
               />
 
               <Input label="Due Date" type="date" value={form.dueDate} onChange={e => setForm(p => ({ ...p, dueDate: e.target.value }))} />

@@ -9,10 +9,14 @@ import { requireAuth } from '@/lib/auth'
 import { successResponse, errorResponse, getPaginationParams } from '@/lib/api'
 import { logFromRequest } from '@/lib/audit'
 import { Notifications } from '@/lib/notify'
+import { dateOnly } from '@/lib/attendanceDate'
 
+// scheduledDate is a @db.Date column (stored as UTC-midnight of the IST
+// calendar date) — bound the range using that same convention, resolved via
+// IST, not the ambient server/process timezone.
 function dayRange(d: Date) {
-  const start = new Date(d); start.setHours(0, 0, 0, 0)
-  const end = new Date(d); end.setHours(23, 59, 59, 999)
+  const start = dateOnly(d)
+  const end = new Date(start.getTime() + 86400000 - 1)
   return { start, end }
 }
 
@@ -51,17 +55,17 @@ export async function GET(req: NextRequest) {
     where.scheduledDate = { lt: today.start }
     where.status = where.status || { in: ['PENDING', 'IN_PROGRESS'] }
   } else if (range === 'week') {
-    const start = new Date(today.start); start.setDate(start.getDate() - start.getDay())
-    const end = new Date(start); end.setDate(end.getDate() + 6); end.setHours(23, 59, 59, 999)
+    const start = new Date(today.start); start.setUTCDate(start.getUTCDate() - start.getUTCDay())
+    const end = new Date(start.getTime() + 7 * 86400000 - 1)
     where.scheduledDate = { gte: start, lte: end }
   } else if (range === 'month') {
-    const start = new Date(now.getFullYear(), now.getMonth(), 1)
-    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999)
+    const start = new Date(today.start); start.setUTCDate(1)
+    const end = new Date(start); end.setUTCMonth(end.getUTCMonth() + 1); end.setTime(end.getTime() - 1)
     where.scheduledDate = { gte: start, lte: end }
   } else if (dateFrom || dateTo) {
     where.scheduledDate = {}
-    if (dateFrom) where.scheduledDate.gte = new Date(dateFrom)
-    if (dateTo) where.scheduledDate.lte = new Date(dateTo + 'T23:59:59')
+    if (dateFrom) where.scheduledDate.gte = dateOnly(dateFrom)
+    if (dateTo) where.scheduledDate.lte = dateOnly(dateTo)
   }
 
   const [visits, total, counts] = await Promise.all([
@@ -142,7 +146,7 @@ export async function POST(req: NextRequest) {
 
   // Notify the exec (in-app + push). Awaited on purpose.
   try {
-    await Notifications.visitAssigned(userId, name, sd.toLocaleDateString('en-IN'), visit.id)
+    await Notifications.visitAssigned(userId, name, sd.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' }), visit.id)
   } catch (e) {
     console.error('Visit assign notify failed:', e)
   }

@@ -273,7 +273,7 @@ export async function GET(req: NextRequest) {
         const monthEnd = new Date(y, m, 0, 23, 59, 59)
 
         const employees = await prisma.employee.findMany({
-          where: { user: { isActive: true } },
+          where: { user: { isActive: true, role: { notIn: ['ADMIN', 'SUPER_ADMIN'] } } },
           include: {
             user: { select: { name: true } },
             department: { select: { name: true } },

@@ -7,6 +7,7 @@ import { successResponse, successStatusResponse, errorResponse, getPaginationPar
 import { generateLeadNumber } from '@/lib/idgen'
 import { logFromRequest } from '@/lib/audit'
 import { Notifications } from '@/lib/notify'
+import { dateOnly } from '@/lib/attendanceDate'
 
 const VALID_STATUSES = ['NEW', 'NOT_INTERESTED', 'FOLLOW_UP', 'RINGING', 'MEETING_SCHEDULED', 'CALLBACK', 'CONVERTED', 'CLOSED']
 
@@ -47,13 +48,13 @@ export async function GET(req: NextRequest) {
     if (dateTo)   where.createdAt.lte = new Date(dateTo + 'T23:59:59')
   }
   if (followUpDate) {
-    const d = new Date(followUpDate); d.setHours(0, 0, 0, 0)
-    const next = new Date(d); next.setDate(d.getDate() + 1)
+    const d = dateOnly(followUpDate)
+    const next = new Date(d); next.setUTCDate(d.getUTCDate() + 1)
     where.followUpDate = { gte: d, lt: next }
   }
   if (meetingDate) {
-    const d = new Date(meetingDate); d.setHours(0, 0, 0, 0)
-    const next = new Date(d); next.setDate(d.getDate() + 1)
+    const d = dateOnly(meetingDate)
+    const next = new Date(d); next.setUTCDate(d.getUTCDate() + 1)
     where.meetingDate = { gte: d, lt: next }
   }
 
@@ -119,38 +120,68 @@ export async function POST(req: NextRequest) {
   const finalStatus = status && VALID_STATUSES.includes(status) ? status : 'NEW'
 
   try {
-    // Auto-assign to creator if TELECALLER and no explicit assignee
-    const finalAssigneeId = assignedToId || (session.role === 'TELECALLER' ? session.userId : session.userId)
+    // Who gets this lead if nobody explicitly picked an assignee?
+    // - Telecaller creating their own lead → assign to themselves.
+    // - Anyone else (Admin/Manager/Marketing adding a lead manually without
+    //   picking a telecaller) → default to an Admin, not to themselves —
+    //   a Manager/Marketing Executive self-assigning would incorrectly make
+    //   them "the telecaller" on the lead.
+    let finalAssigneeId: string = assignedToId || ''
+    if (!finalAssigneeId) {
+      if (session.role === 'TELECALLER') {
+        finalAssigneeId = session.userId
+      } else {
+        const defaultAdmin = await prisma.user.findFirst({
+          where: { role: { in: ['SUPER_ADMIN', 'ADMIN'] }, isActive: true },
+          orderBy: { createdAt: 'asc' },
+        })
+        finalAssigneeId = defaultAdmin?.id || session.userId
+      }
+    }
 
-    const lead = await prisma.lead.create({
-      data: {
-        leadNumber: await generateLeadNumber(),
-        companyName: companyName || null,
-        clientName,
-        clientPhone,
-        clientEmail: clientEmail ? String(clientEmail).toLowerCase() : null,
-        alternatePhone: alternatePhone || null,
-        link: link || null,
-        address: address || null,
-        city: city || null,
-        state: state || null,
-        source: source || 'WEBSITE',
-        service: service || null,
-        productPitched: productPitched || null,
-        price: price ? Number(price) : null,
-        status: finalStatus,
-        remark: remark || null,
-        notes: notes || null,
-        followUpDate: followUpDate ? new Date(followUpDate) : null,
-        followUpTime: followUpTime || null,
-        createdById: session.userId,
-        assignedToId: finalAssigneeId,
-      },
-      include: {
-        createdBy: { select: { name: true } },
-        assignedTo: { select: { name: true } },
-      },
-    })
+    // leadNumber is derived from the current max — under concurrent
+    // creates there's a small race window, so retry once with a freshly
+    // generated number if we hit a collision.
+    let lead
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        lead = await prisma.lead.create({
+          data: {
+            leadNumber: await generateLeadNumber(),
+            companyName: companyName || null,
+            clientName,
+            clientPhone,
+            clientEmail: clientEmail ? String(clientEmail).toLowerCase() : null,
+            alternatePhone: alternatePhone || null,
+            link: link || null,
+            address: address || null,
+            city: city || null,
+            state: state || null,
+            source: source || 'WEBSITE',
+            service: service || null,
+            productPitched: productPitched || null,
+            price: price ? Number(price) : null,
+            status: finalStatus,
+            remark: remark || null,
+            notes: notes || null,
+            followUpDate: followUpDate ? new Date(followUpDate) : null,
+            followUpTime: followUpTime || null,
+            createdById: session.userId,
+            assignedToId: finalAssigneeId,
+          },
+          include: {
+            createdBy: { select: { name: true } },
+            assignedTo: { select: { name: true } },
+          },
+        })
+        break
+      } catch (createErr: any) {
+        const isLeadNumberCollision = createErr?.code === 'P2002' && createErr?.meta?.target?.includes?.('leadNumber')
+        if (isLeadNumberCollision && attempt < 2) continue
+        throw createErr
+      }
+    }
+    if (!lead) return errorResponse('Failed to create lead: could not generate a unique lead number, please retry')
 
     // Log the "creation" as an activity so timeline starts here
     await prisma.leadActivity.create({

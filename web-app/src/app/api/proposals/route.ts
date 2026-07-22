@@ -110,7 +110,7 @@ export async function POST(req: NextRequest) {
   } = body
 
   if (!title) return errorResponse('Title required')
-  if (!leadId && !clientId) return errorResponse('leadId or clientId required')
+  if (!leadId) return errorResponse('leadId required — proposals are created from a Lead')
   if (!items.length) return errorResponse('At least one line item required')
 
   // Auto-compute totals for each item + rollup

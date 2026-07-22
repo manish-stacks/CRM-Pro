@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { sendWhatsapp } from '@/lib/whatsapp'
 import { Notifications } from '@/lib/notify'
+import { getISTDateParts } from '@/lib/attendanceDate'
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
@@ -19,8 +20,8 @@ export async function GET(req: NextRequest) {
   }
 
   const today = new Date()
-  const month = today.getMonth() + 1
-  const day = today.getDate()
+  const { year: todayYear, month: todayMonth0, day } = getISTDateParts(today)
+  const month = todayMonth0 + 1
 
   // Fetch employees + linked users with DOB or joinDate today
   const allEmployees = await prisma.employee.findMany({
@@ -45,14 +46,14 @@ export async function GET(req: NextRequest) {
   for (const e of allEmployees) {
     if (e.dateOfBirth) {
       const d = new Date(e.dateOfBirth)
-      if (d.getMonth() + 1 === month && d.getDate() === day) {
+      if (d.getUTCMonth() + 1 === month && d.getUTCDate() === day) {
         birthdaysToday.push(e)
       }
     }
     if (e.joiningDate) {
       const d = new Date(e.joiningDate)
-      if (d.getMonth() + 1 === month && d.getDate() === day && d.getFullYear() < today.getFullYear()) {
-        anniversariesToday.push({ ...e, years: today.getFullYear() - d.getFullYear() })
+      if (d.getUTCMonth() + 1 === month && d.getUTCDate() === day && d.getUTCFullYear() < todayYear) {
+        anniversariesToday.push({ ...e, years: todayYear - d.getUTCFullYear() })
       }
     }
   }

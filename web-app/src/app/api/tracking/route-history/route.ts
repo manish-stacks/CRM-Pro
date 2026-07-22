@@ -4,6 +4,7 @@ import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/auth'
 import { successResponse, errorResponse } from '@/lib/api'
+import { dateOnly, todayDateOnly } from '@/lib/attendanceDate'
 
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req, 'MANAGER')
@@ -14,9 +15,8 @@ export async function GET(req: NextRequest) {
   const date = searchParams.get('date') // YYYY-MM-DD
   if (!userId) return errorResponse('userId required')
 
-  const day = date ? new Date(date) : new Date()
-  day.setHours(0, 0, 0, 0)
-  const next = new Date(day); next.setDate(next.getDate() + 1)
+  const day = date ? dateOnly(date) : todayDateOnly()
+  const next = new Date(day); next.setUTCDate(next.getUTCDate() + 1)
 
   const [pings, visits, user] = await Promise.all([
     prisma.locationPing.findMany({

@@ -4,6 +4,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { sendWhatsapp } from '@/lib/whatsapp'
+import { todayDateOnly } from '@/lib/attendanceDate'
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
@@ -13,9 +14,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const now = new Date()
-  const start = new Date(now); start.setHours(0, 0, 0, 0)
-  const end = new Date(start); end.setDate(end.getDate() + 1)
+  const start = todayDateOnly() // IST "today" as UTC-midnight instant
+  const end = new Date(start); end.setUTCDate(end.getUTCDate() + 1)
 
   const meetings = await prisma.lead.findMany({
     where: {
@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
       template: 'hbs_lead_meeting_scheduled',
       params: {
         clientName: m.clientName,
-        meetingDate: m.meetingDate!.toLocaleDateString('en-IN'),
+        meetingDate: m.meetingDate!.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' }),
         meetingTime: m.meetingTime || m.meetingSlot || 'today',
         marketingPersonName: m.meetingAssignedTo?.name || '',
         marketingPhone: m.meetingAssignedTo?.phone || '',

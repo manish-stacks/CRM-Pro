@@ -9,13 +9,18 @@ import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/auth'
 import { successResponse } from '@/lib/api'
+import { getISTDateParts } from '@/lib/attendanceDate'
 
 // SQL month/day match for both birthdays and joining anniversaries
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req)
   if (auth instanceof Response) return auth
 
-  const now = new Date()
+  // Resolve "now" as today's IST calendar date, held as a UTC-midnight
+  // instant, so every getUTC* call below is timezone-independent (the
+  // server's own OS/process timezone is irrelevant).
+  const { year: istY, month: istM, day: istD } = getISTDateParts(new Date())
+  const now = new Date(Date.UTC(istY, istM, istD))
 
   // Fetch all active employees with dob + joiningDate
   const employees = await prisma.employee.findMany({
@@ -31,12 +36,12 @@ export async function GET(req: NextRequest) {
   })
 
   const isSameDay = (a: Date, b: Date) =>
-    a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
+    a.getUTCMonth() === b.getUTCMonth() && a.getUTCDate() === b.getUTCDate()
 
   const daysUntil = (target: Date, from: Date) => {
-    const t = new Date(from.getFullYear(), target.getMonth(), target.getDate())
-    if (t < from) t.setFullYear(from.getFullYear() + 1)
-    return Math.round((t.getTime() - new Date(from.getFullYear(), from.getMonth(), from.getDate()).getTime()) / 86400000)
+    const t = new Date(Date.UTC(from.getUTCFullYear(), target.getUTCMonth(), target.getUTCDate()))
+    if (t < from) t.setUTCFullYear(from.getUTCFullYear() + 1)
+    return Math.round((t.getTime() - Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate())) / 86400000)
   }
 
   const todayBirthdays: any[] = []
@@ -61,7 +66,7 @@ export async function GET(req: NextRequest) {
         upcomingBirthdays.push({
           id: emp.id, name: emp.user.name, avatar: emp.user.avatar,
           department: emp.department?.name, daysUntil: du,
-          date: `${now.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`,
+          date: `${now.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`,
         })
       }
     }
@@ -69,8 +74,8 @@ export async function GET(req: NextRequest) {
     if (join) {
       const j = new Date(join)
       const du = daysUntil(j, now)
-      const years = now.getFullYear() - j.getFullYear() - (
-        now.getMonth() < j.getMonth() || (now.getMonth() === j.getMonth() && now.getDate() < j.getDate()) ? 1 : 0
+      const years = now.getUTCFullYear() - j.getUTCFullYear() - (
+        now.getUTCMonth() < j.getUTCMonth() || (now.getUTCMonth() === j.getUTCMonth() && now.getUTCDate() < j.getUTCDate()) ? 1 : 0
       )
       if (isSameDay(j, now) && years >= 0) {
         todayAnniversaries.push({
@@ -82,7 +87,7 @@ export async function GET(req: NextRequest) {
         upcomingAnniversaries.push({
           id: emp.id, name: emp.user.name, avatar: emp.user.avatar,
           department: emp.department?.name, years: years + 1, daysUntil: du,
-          date: `${now.getFullYear()}-${String(j.getMonth() + 1).padStart(2, '0')}-${String(j.getDate()).padStart(2, '0')}`,
+          date: `${now.getUTCFullYear()}-${String(j.getUTCMonth() + 1).padStart(2, '0')}-${String(j.getUTCDate()).padStart(2, '0')}`,
         })
       }
     }

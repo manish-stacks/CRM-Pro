@@ -66,6 +66,13 @@ export interface CompanyInfo {
   companyPhone?: string
   companyEmail?: string
   companyGst?: string
+  companyLogoUrl?: string
+}
+
+function logoImg(company: CompanyInfo): string {
+  return company.companyLogoUrl
+    ? `<img src="${esc(company.companyLogoUrl)}" alt="logo" class="company-logo" />`
+    : ''
 }
 
 // ---------------------------------------------------------------------------
@@ -113,7 +120,8 @@ export function buildInvoiceBody(d: InvoiceDocData): string {
   
   <div class="doc-title">TAX INVOICE</div>
   <div class="doc-header">
-    <div>
+    <div class="doc-header-left">
+      ${logoImg(d.company)}
       <h2 class="company-name">${esc(d.company.companyName)}</h2>
       ${d.company.companyAddress ? `<div style="font-size:11px;color:#64748b;max-width:320px;margin-top:5px;">${esc(d.company.companyAddress)}</div>` : ''}
       <div style="font-size:11px;color:#64748b;margin-top:4px;">
@@ -216,7 +224,8 @@ export function buildPayslipBody(d: PayslipDocData): string {
   return `
   
   <div class="doc-header">
-    <div>
+    <div class="doc-header-left">
+      ${logoImg(d.company)}
       <h2 class="company-name">${esc(d.company.companyName)}</h2>
       ${d.company.companyAddress ? `<div style="font-size:11px;color:#64748b;max-width:320px;margin-top:5px;">${esc(d.company.companyAddress)}</div>` : ''}
     </div>
@@ -319,7 +328,8 @@ export function buildProposalBody(d: ProposalDocData): string {
   
   <div class="doc-title">PROPOSAL</div>
   <div class="doc-header">
-    <div>
+    <div class="doc-header-left">
+      ${logoImg(d.company)}
       <h2 class="company-name">${esc(d.company.companyName)}</h2>
       ${d.company.companyAddress ? `<div style="font-size:11px;color:#64748b;max-width:320px;margin-top:5px;">${esc(d.company.companyAddress)}</div>` : ''}
       <div style="font-size:11px;color:#64748b;margin-top:4px;">

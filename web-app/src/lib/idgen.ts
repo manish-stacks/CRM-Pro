@@ -16,14 +16,37 @@ export async function generateTicketNumber(): Promise<string> {
   const count = await prisma.supportTicket.count()
   return `TCK-${String(count + 1).padStart(6, '0')}`
 }
+
+// count()+1 breaks the moment any lead is deleted or bulk-imported (count
+// no longer matches the highest existing number), causing a collision with
+// an existing leadNumber → unique constraint error on create. Base it on
+// the highest existing leadNumber instead. Still has a tiny race window
+// under concurrent creates, so the POST route retries once on collision.
 export async function generateLeadNumber(): Promise<string> {
-  const count = await prisma.lead.count()
-  return `LEAD-${String(count + 1).padStart(6, '0')}`
+  const last = await prisma.lead.findFirst({
+    orderBy: { leadNumber: 'desc' },
+    select: { leadNumber: true },
+  })
+  let next = 1
+  if (last?.leadNumber) {
+    const n = parseInt(last.leadNumber.replace(/^LEAD-/, ''), 10)
+    if (!isNaN(n)) next = n + 1
+  }
+  return `LEAD-${String(next).padStart(6, '0')}`
 }
 
+// Same fix as generateLeadNumber — see comment above.
 export async function generateClientCode(): Promise<string> {
-  const count = await prisma.client.count()
-  return `CLT-${String(count + 1).padStart(6, '0')}`
+  const last = await prisma.client.findFirst({
+    orderBy: { clientCode: 'desc' },
+    select: { clientCode: true },
+  })
+  let next = 1
+  if (last?.clientCode) {
+    const n = parseInt(last.clientCode.replace(/^CLT-/, ''), 10)
+    if (!isNaN(n)) next = n + 1
+  }
+  return `CLT-${String(next).padStart(6, '0')}`
 }
 
 export async function generateProposalNumber(): Promise<string> {

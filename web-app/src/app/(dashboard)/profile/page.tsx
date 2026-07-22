@@ -178,6 +178,7 @@ export default function ProfilePage() {
           <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-3xl font-bold overflow-hidden">
             {form.avatar ? <img src={form.avatar} alt="" className="w-full h-full object-cover" /> : (profile?.name?.[0] || '?')}
           </div>
+          
           <button
             onClick={() => avatarRef.current?.click()}
             disabled={avatarUploading}

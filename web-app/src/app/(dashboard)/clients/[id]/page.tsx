@@ -346,15 +346,14 @@ export default function ClientDetailPage() {
             </div>
           )}
 
-          {/* PROPOSALS — canEdit roles only */}
+          {/* PROPOSALS — read-only history (proposals are created from the Lead, before conversion) */}
           {tab === 'proposals' && canEdit && (
             <div>
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-semibold text-gray-900">Proposals</h3>
-                <Link href={`/proposals/new?clientId=${client.id}`} className="btn-primary btn-sm"><Plus size={13} /> Create Proposal</Link>
               </div>
               {!client.proposals?.length ? (
-                <EmptyState icon={<FileText size={20} />} title="No proposals" description="Create a proposal to send to the client" />
+                <EmptyState icon={<FileText size={20} />} title="No proposals" description="Proposals for this client are created from its Lead, before conversion." />
               ) : (
                 <div className="space-y-2">
                   {client.proposals.map((p: any) => (

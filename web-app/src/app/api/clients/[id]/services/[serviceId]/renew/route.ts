@@ -80,7 +80,7 @@ export async function POST(
         paidAmount: 0, dueAmount: totalAmount,
         status: 'PENDING',
         dueDate,
-        notes: `Renewal of ${svc.serviceName}. Valid until ${nextExpiry.toLocaleDateString('en-IN')}.`,
+        notes: `Renewal of ${svc.serviceName}. Valid until ${nextExpiry.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })}.`,
         items: {
           create: [{
             serviceName: svc.serviceName,
@@ -101,7 +101,7 @@ export async function POST(
       params: {
         clientName: svc.client.clientName,
         serviceName: svc.serviceName,
-        newExpiryDate: nextExpiry.toLocaleDateString('en-IN'),
+        newExpiryDate: nextExpiry.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' }),
       },
       referenceType: 'CLIENT_SERVICE',
       referenceId: serviceId,

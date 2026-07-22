@@ -87,7 +87,7 @@ export async function POST(req: NextRequest) {
     items = [],
   } = body
 
-  if (!clientId && !leadId) return fail('clientId or leadId required')
+  if (!leadId) return fail('leadId required — proposals are created from a Lead')
   if (!title?.trim()) return fail('Title required')
   if (!items.length) return fail('At least one line item required')
 

@@ -20,12 +20,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   })
   if (!invoice) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const [companyName, companyAddress, companyPhone, companyEmail, companyGst] = await Promise.all([
+  const [companyName, companyAddress, companyPhone, companyEmail, companyGst, companyLogoUrl] = await Promise.all([
     Settings.companyName(),
     Settings.companyAddress(),
     Settings.companyPhone(),
     Settings.companyEmail(),
     Settings.companyGst(),
+    Settings.companyLogo(),
   ])
 
   const company: CompanyInfo = {
@@ -34,6 +35,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     companyPhone: companyPhone || undefined,
     companyEmail: companyEmail || undefined,
     companyGst: companyGst || undefined,
+    companyLogoUrl: companyLogoUrl || undefined,
   }
 
   const bodyHtml = buildInvoiceBody({

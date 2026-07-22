@@ -1,29 +1,39 @@
 'use client'
 import { useState } from 'react'
 import { useAuth } from '@/hooks/useAuth'
-import { Menu, Search, LogOut, User, Settings, ChevronDown } from 'lucide-react'
+import { Menu, LogOut, User, Settings, ChevronDown } from 'lucide-react'
 import Link from 'next/link'
 import { NotificationBell } from '@/components/NotificationBell'
+import { ReminderWidget } from '@/components/ReminderWidget'
+import { NoteWidget } from '@/components/NoteWidget'
+import { GlobalSearch } from '@/components/GlobalSearch'
+import { MyIdCardButton } from '@/components/MyIdCardButton'
 
 export default function Header({ onMenuClick }: { onMenuClick?: () => void }) {
   const { user, logout } = useAuth()
   const [dropdownOpen, setDropdownOpen] = useState(false)
 
   return (
-    <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 md:px-6 flex-shrink-0">
+    <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 md:px-6 flex-shrink-0 sticky top-0 z-30">
       <div className="flex items-center gap-3">
         <button onClick={onMenuClick} className="md:hidden p-2 text-gray-500 hover:text-gray-700">
           <Menu size={20} />
         </button>
-        <div className="hidden md:flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 w-64">
-          <Search size={15} className="text-gray-400" />
-          <input className="bg-transparent text-sm text-gray-700 placeholder-gray-400 outline-none w-full" placeholder="Search..." />
-        </div>
+        <GlobalSearch />
       </div>
 
       <div className="flex items-center gap-2">
         {/* Notifications */}
         <NotificationBell />
+
+        {/* Personal reminders / to-do */}
+        <ReminderWidget />
+
+        {/* Sticky notes */}
+        <NoteWidget />
+
+        {/* My ID Card */}
+        <MyIdCardButton />
 
         {/* User menu */}
         <div className="relative">
@@ -32,7 +42,7 @@ export default function Header({ onMenuClick }: { onMenuClick?: () => void }) {
             className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors"
           >
             <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold">
-              {user?.name?.[0]?.toUpperCase()}
+              {user?.avatar ? <img src={user?.avatar} alt="" className="w-full h-full object-cover rounded-md" /> : user?.name?.[0]?.toUpperCase()}
             </div>
             <div className="hidden md:block text-left">
               <p className="text-sm font-semibold text-gray-900 leading-tight">{user?.name}</p>

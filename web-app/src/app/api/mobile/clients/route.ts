@@ -5,6 +5,9 @@ import { prisma } from '@/lib/prisma'
 import { requireMobileEmployee, ok, fail } from '@/lib/mobileAuth'
 import { generateClientCode } from '@/lib/idgen'
 import { logFromRequest } from '@/lib/audit'
+import { istDayRange, todayDateOnly, getISTDateParts } from '@/lib/attendanceDate'
+
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000
 
 export async function GET(req: NextRequest) {
   const res = await requireMobileEmployee(req)
@@ -22,9 +25,8 @@ export async function GET(req: NextRequest) {
   const expiry = searchParams.get('expiry')
   const search = searchParams.get('search')
 
-  const now = new Date()
-  const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0)
-  const todayEnd = new Date(now); todayEnd.setHours(23, 59, 59, 999)
+  const { start: todayStart, end: todayEnd } = istDayRange() // for createdAt (real timestamp)
+  const expiryToday = todayDateOnly() // for expiryDate (@db.Date column)
 
   const where: any = {
     OR: [
@@ -46,28 +48,33 @@ export async function GET(req: NextRequest) {
   }
 
   if (date) {
-    where.createdAt = { gte: new Date(date + 'T00:00:00'), lte: new Date(date + 'T23:59:59.999') }
+    const { start, end } = istDayRange(date)
+    where.createdAt = { gte: start, lte: end }
   } else if (range === 'today') {
     where.createdAt = { gte: todayStart, lte: todayEnd }
   } else if (range === 'week') {
-    const s0 = new Date(todayStart); s0.setDate(s0.getDate() - s0.getDay())
+    const { year, month, day } = getISTDateParts(new Date())
+    const dow = new Date(Date.UTC(year, month, day)).getUTCDay()
+    const s0 = new Date(todayStart.getTime() - dow * 86400000)
     where.createdAt = { gte: s0, lte: todayEnd }
   } else if (range === 'month') {
-    where.createdAt = { gte: new Date(now.getFullYear(), now.getMonth(), 1), lte: todayEnd }
+    const { year, month } = getISTDateParts(new Date())
+    const s0 = new Date(Date.UTC(year, month, 1) - IST_OFFSET_MS)
+    where.createdAt = { gte: s0, lte: todayEnd }
   } else if (dateFrom || dateTo) {
     where.createdAt = {}
-    if (dateFrom) where.createdAt.gte = new Date(dateFrom)
-    if (dateTo) where.createdAt.lte = new Date(dateTo + 'T23:59:59')
+    if (dateFrom) where.createdAt.gte = istDayRange(dateFrom).start
+    if (dateTo) where.createdAt.lte = istDayRange(dateTo).end
   }
 
   if (expiry) {
     const svc: any = {}
-    if (expiry === 'expired') svc.expiryDate = { lt: todayStart }
+    if (expiry === 'expired') svc.expiryDate = { lt: expiryToday }
     else {
       const days = parseInt(expiry)
       if (!isNaN(days)) {
-        const until = new Date(todayStart); until.setDate(until.getDate() + days); until.setHours(23, 59, 59, 999)
-        svc.expiryDate = { gte: todayStart, lte: until }
+        const until = new Date(expiryToday); until.setUTCDate(until.getUTCDate() + days); until.setUTCHours(23, 59, 59, 999)
+        svc.expiryDate = { gte: expiryToday, lte: until }
       }
     }
     if (Object.keys(svc).length) where.services = { some: svc }

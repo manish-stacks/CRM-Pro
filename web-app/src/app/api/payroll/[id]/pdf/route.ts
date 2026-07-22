@@ -31,11 +31,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December']
 
-    const [companyName, companyAddress, companyPhone, companyEmail] = await Promise.all([
+    const [companyName, companyAddress, companyPhone, companyEmail, companyLogoUrl] = await Promise.all([
       Settings.companyName(),
       Settings.companyAddress(),
       Settings.companyPhone(),
       Settings.companyEmail(),
+      Settings.companyLogo(),
     ])
 
     const company: CompanyInfo = {
@@ -43,13 +44,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       companyAddress: companyAddress || undefined,
       companyPhone: companyPhone || undefined,
       companyEmail: companyEmail || undefined,
+      companyLogoUrl: companyLogoUrl || undefined,
     }
 
     const bodyHtml = buildPayslipBody({
       month: MONTH_NAMES[payslip.month - 1] || String(payslip.month),
       year: payslip.year,
       paidDays: Math.round((payslip.workingDays || 0) - (payslip.lopDays || 0)),
-      payDate: new Date(payslip.generatedAt || payslip.createdAt).toLocaleDateString('en-GB'),
+      payDate: new Date(payslip.generatedAt || payslip.createdAt).toLocaleDateString('en-GB', { timeZone: 'Asia/Kolkata' }),
       employee: {
         name: payslip.employee.user.name,
         employeeId: payslip.employee.employeeId,
