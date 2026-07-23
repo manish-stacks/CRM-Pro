@@ -80,8 +80,7 @@ export async function GET(req: NextRequest) {
         take: 6, orderBy: { expiryDate: 'asc' },
       })
 
-      // Revenue Trend is admin-only — everyone else gets an empty series
-      // (the dashboard hides the chart when it's empty).
+      // Revenue is admin-only — everyone else gets an empty series / zero.
       const canSeeRevenue = ['SUPER_ADMIN', 'ADMIN'].includes(session.role)
       const revenueChart: { month: string; revenue: number }[] = []
       for (let i = 5; canSeeRevenue && i >= 0; i--) {
@@ -95,7 +94,7 @@ export async function GET(req: NextRequest) {
         .map(l => ({ status: l.status, count: l._count._all }))
 
       return successResponse({
-        stats: { totalEmployees, totalLeads, totalClients, totalProposals, pendingLeaves, monthRevenue: monthRevenue._sum.amount || 0 },
+        stats: { totalEmployees, totalLeads, totalClients, totalProposals, pendingLeaves, monthRevenue: canSeeRevenue ? (monthRevenue._sum.amount || 0) : 0 },
         birthdays: birthdaysToday,
         upcomingBirthdays,
         revenueChart,

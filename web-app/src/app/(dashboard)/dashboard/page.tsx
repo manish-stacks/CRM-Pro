@@ -7,7 +7,7 @@ import { Users, Target, FileText, DollarSign, Clock, UserCheck, LogIn, LogOut, W
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import api from '@/lib/axios'
-import { getCurrentGeo, withAccuracy } from '@/lib/geolocation'
+import { getCurrentGeo } from '@/lib/geolocation'
 import { FIELD_LABELS } from '@/lib/profileCompletion'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
@@ -67,18 +67,18 @@ export default function DashboardPage() {
 
   const handlePunch = async (workMode: string = 'WFO') => {
     setPunching(true)
-    const locToast = toast.loading('Getting your exact location...')
+    const locToast = toast.loading('Getting your location...')
     try {
       const action = todayAttendance?.punchIn && !todayAttendance?.punchOut ? 'punch_out' : 'punch_in'
       let geo: any = {}
       try {
-        // Same best-fix strategy as the Attendance page: never use a cached fix,
-        // keep refining for up to 20s and take the most accurate reading.
+        // Coordinates only — address is resolved server-side (much faster).
         const g = await getCurrentGeo({
-          reverseGeocode: true,
-          timeoutMs: 20000,
+          reverseGeocode: false,
+          timeoutMs: 10000,
+          settleMs: 2500,
           highAccuracy: true,
-          desiredAccuracyM: 60,
+          desiredAccuracyM: 100,
           warnAccuracyM: 500,
           maxAgeMs: 0,
         })
@@ -86,8 +86,10 @@ export default function DashboardPage() {
         else toast(`Punching without location — ${g.error}`, { icon: '📍' })
       } catch { /* ignore */ }
       toast.dismiss(locToast)
-      if (geo.lowAccuracy) {
-        toast(`Location is approximate (±${Math.round(geo.accuracy || 0)}m). Enable precise location / GPS for an exact address.`, { icon: '⚠️', duration: 6000 })
+      if (geo.ipLevel) {
+        toast('This PC has no GPS, so the location is a Wi-Fi/IP estimate and can be several km off. Punch from the mobile app for an exact address.', { icon: '⚠️', duration: 7000 })
+      } else if (geo.lowAccuracy) {
+        toast(`Location is approximate (±${Math.round(geo.accuracy || 0)}m).`, { icon: '⚠️', duration: 5000 })
       }
       const res = await api.post('/attendance', {
         action,
@@ -95,7 +97,6 @@ export default function DashboardPage() {
         latitude: geo.latitude ?? null,
         longitude: geo.longitude ?? null,
         accuracy: geo.accuracy ?? null,
-        address: withAccuracy(geo.address, geo.accuracy) ?? null,
       })
       setTodayAttendance(res.data.data)
       toast.success(action === 'punch_in' ? '✅ Punched In!' : '👋 Punched Out!')
@@ -120,6 +121,8 @@ export default function DashboardPage() {
   }
   // Regular employees don't see business/revenue metrics
   const showBiz = user?.role !== 'EMPLOYEE'
+  // Revenue Trend chart + Month Revenue stat: admins only
+  const showRevenue = ['SUPER_ADMIN', 'ADMIN'].includes(user?.role || '')
 
   const greeting = () => {
     const h = new Date().getHours()
@@ -325,13 +328,15 @@ export default function DashboardPage() {
           <div className="animate-rise stagger-3"><StatCard label="Clients" value={stats?.totalClients || 0} icon={UserCheck} color="text-green-600" /></div>
           <div className="animate-rise stagger-4"><StatCard label="Proposals" value={stats?.totalProposals || 0} icon={FileText} color="text-indigo-600" /></div>
           <div className="animate-rise stagger-5"><StatCard label="Pending Leaves" value={stats?.pendingLeaves || 0} icon={Clock} color="text-yellow-600" /></div>
-          <div className="animate-rise stagger-6"><StatCard label="Month Revenue" value={formatCurrency(stats?.monthRevenue || 0)} icon={DollarSign} color="text-brand-600" /></div>
+          {showRevenue && (
+            <div className="animate-rise stagger-6"><StatCard label="Month Revenue" value={formatCurrency(stats?.monthRevenue || 0)} icon={DollarSign} color="text-brand-600" /></div>
+          )}
         </div>
       ))}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Revenue chart */}
-        {showBiz && (
+        {/* Revenue chart — admin only */}
+        {showBiz && showRevenue && (
           <div className="card card-glow hover-lift animate-rise stagger-1 p-5 lg:col-span-2">
             <h3 className="font-semibold text-gray-900 mb-4">Revenue Trend</h3>
             <ResponsiveContainer width="100%" height={220}>
@@ -353,7 +358,7 @@ export default function DashboardPage() {
         )}
 
         {/* Celebration widget */}
-        <div className={`animate-rise stagger-2 ${showBiz ? '' : 'lg:col-span-3'}`}>
+        <div className={`animate-rise stagger-2 ${showBiz && showRevenue ? '' : 'lg:col-span-3'}`}>
           <CelebrationWidget leaveBalance={user?.role === 'EMPLOYEE' ? leaveBalance : null} />
         </div>
       </div>
