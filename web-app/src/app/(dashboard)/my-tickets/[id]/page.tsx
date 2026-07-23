@@ -77,7 +77,7 @@ export default function MyTicketDetailPage() {
       {/* Original */}
       <div className="card p-4">
         <div className="flex items-center gap-3 mb-2">
-          <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">
+          <div className="w-9 h-9 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-xs font-bold">
             {getInitials(ticket.createdBy?.name || 'X')}
           </div>
           <div>

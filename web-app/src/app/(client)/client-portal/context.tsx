@@ -173,7 +173,7 @@ function useClientPortalState() {
     const map: Record<string, string> = {
       ACTIVE: 'bg-emerald-100 text-emerald-700', PAID: 'bg-emerald-100 text-emerald-700',
       PENDING: 'bg-amber-100 text-amber-700', PARTIAL: 'bg-amber-100 text-amber-700',
-      OVERDUE: 'bg-red-100 text-red-700', OPEN: 'bg-blue-100 text-blue-700',
+      OVERDUE: 'bg-red-100 text-red-700', OPEN: 'bg-brand-100 text-brand-700',
       IN_PROGRESS: 'bg-amber-100 text-amber-700', RESOLVED: 'bg-emerald-100 text-emerald-700',
     }
     return map[s] || 'bg-gray-100 text-gray-600'

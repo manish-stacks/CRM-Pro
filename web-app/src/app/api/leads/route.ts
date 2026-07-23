@@ -8,6 +8,7 @@ import { generateLeadNumber } from '@/lib/idgen'
 import { logFromRequest } from '@/lib/audit'
 import { Notifications } from '@/lib/notify'
 import { dateOnly } from '@/lib/attendanceDate'
+import { getTeamUserIds } from '@/lib/teamScope'
 
 const VALID_STATUSES = ['NEW', 'NOT_INTERESTED', 'FOLLOW_UP', 'RINGING', 'MEETING_SCHEDULED', 'CALLBACK', 'CONVERTED', 'CLOSED']
 
@@ -58,29 +59,52 @@ export async function GET(req: NextRequest) {
     where.meetingDate = { gte: d, lt: next }
   }
 
-  // Role-based visibility
-  if (session.role === 'TELECALLER') {
-    // Sees only own assigned leads
-    where.assignedToId = session.userId
-  } else if (session.role === 'MARKETING_EXECUTIVE') {
-    // Sees only meetings assigned to them
-    where.meetingAssignedToId = session.userId
-  } else if (session.role === 'EMPLOYEE') {
-    // Regular employees don't see any leads
-    return successResponse([], 0)
-  }
-  // MANAGER, ADMIN, SUPER_ADMIN see all (respecting filters)
+  // Role-based visibility.
+  // NOTE: `where.OR` may already be taken by the search filter, so visibility
+  // rules go into `where.AND` — Prisma ANDs all top-level keys together.
+  const and: any[] = []
+  // Team leads / department heads who aren't MANAGER-role still need the team view
+  let canFilterOthers = ['SUPER_ADMIN', 'ADMIN', 'MANAGER'].includes(session.role)
 
-  // Admin can filter further
-  if (assignedToId && ['SUPER_ADMIN', 'ADMIN', 'MANAGER'].includes(session.role)) {
-    where.assignedToId = assignedToId
+  if (session.role === 'TELECALLER') {
+    // Own leads only — the ones assigned to them OR the ones they added themselves
+    and.push({
+      OR: [
+        { assignedToId: session.userId },
+        { createdById: session.userId },
+      ],
+    })
+  } else if (session.role === 'MARKETING_EXECUTIVE') {
+    // Meetings assigned to them, plus anything they added
+    and.push({
+      OR: [
+        { meetingAssignedToId: session.userId },
+        { createdById: session.userId },
+      ],
+    })
+  } else if (session.role === 'EMPLOYEE') {
+    // Regular employees see nothing — UNLESS they head a department / have
+    // direct reports (a team lead on an EMPLOYEE role), in which case they
+    // see their whole team's leads and can filter within it.
+    const team = await getTeamUserIds(session.userId)
+    if (!team.canSeeTeam) return successResponse([], 0)
+    canFilterOthers = true
+    and.push({
+      OR: [
+        { assignedToId: { in: team.userIds } },
+        { createdById: { in: team.userIds } },
+        { meetingAssignedToId: { in: team.userIds } },
+      ],
+    })
   }
-  if (meetingAssignedToId && ['SUPER_ADMIN', 'ADMIN', 'MANAGER'].includes(session.role)) {
-    where.meetingAssignedToId = meetingAssignedToId
-  }
-  if (createdById && ['SUPER_ADMIN', 'ADMIN', 'MANAGER'].includes(session.role)) {
-    where.createdById = createdById
-  }
+  // MANAGER (telecaller TL), ADMIN, SUPER_ADMIN see all (respecting filters)
+
+  // Filters — only for roles allowed to look at other people's leads
+  if (assignedToId && canFilterOthers) and.push({ assignedToId })
+  if (meetingAssignedToId && canFilterOthers) and.push({ meetingAssignedToId })
+  if (createdById && canFilterOthers) and.push({ createdById })
+
+  if (and.length) where.AND = and
 
   const [leads, total] = await Promise.all([
     prisma.lead.findMany({

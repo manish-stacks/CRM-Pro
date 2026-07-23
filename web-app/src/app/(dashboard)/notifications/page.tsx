@@ -67,7 +67,7 @@ export default function NotificationsPage() {
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => { setUnreadOnly(!unreadOnly); setPage(1) }}
-            className={`btn-secondary btn-sm ${unreadOnly ? 'border-blue-500 text-blue-600' : ''}`}>
+            className={`btn-secondary btn-sm ${unreadOnly ? 'border-brand-500 text-brand-600' : ''}`}>
             <Filter size={13} /> {unreadOnly ? 'Unread only' : 'All'}
           </button>
           {unread > 0 && <Button size="sm" onClick={markAll}><Check size={13} /> Mark all read</Button>}
@@ -80,7 +80,7 @@ export default function NotificationsPage() {
         ) : items.length === 0 ? (
           <EmptyState icon={<Bell size={48} />} title="No notifications" description={unreadOnly ? "You've read everything!" : "Nothing here yet"} />
         ) : items.map(n => (
-          <div key={n.id} className={`p-4 flex items-start gap-3 ${!n.isRead ? 'bg-blue-50/40' : ''}`}>
+          <div key={n.id} className={`p-4 flex items-start gap-3 ${!n.isRead ? 'bg-brand-50/40' : ''}`}>
             <div className="text-xl flex-shrink-0 mt-0.5">{TYPE_ICONS[n.type] || '🔔'}</div>
             <div className="flex-1 min-w-0">
               <p className={`text-sm ${!n.isRead ? 'font-semibold' : ''}`}>{n.title}</p>
@@ -89,7 +89,7 @@ export default function NotificationsPage() {
                 <p className="text-[10px] text-gray-400">{timeAgo(n.createdAt)}</p>
                 {n.link && (
                   <Link href={n.link} onClick={() => markOne(n.id)}
-                    className="text-xs text-blue-600 hover:underline flex items-center gap-0.5">
+                    className="text-xs text-brand-600 hover:underline flex items-center gap-0.5">
                     View <ExternalLink size={9} />
                   </Link>
                 )}

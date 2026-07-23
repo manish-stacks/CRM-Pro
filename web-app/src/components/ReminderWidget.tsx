@@ -82,7 +82,7 @@ export function ReminderWidget() {
               <h3 className="font-semibold text-gray-900 text-sm">My Reminders</h3>
               {pendingCount > 0 && <p className="text-xs text-gray-500">{pendingCount} pending</p>}
             </div>
-            <button onClick={() => setShowAdd(v => !v)} className="text-xs text-blue-600 hover:underline flex items-center gap-1">
+            <button onClick={() => setShowAdd(v => !v)} className="text-xs text-brand-600 hover:underline flex items-center gap-1">
               <Plus size={12} /> Add
             </button>
           </div>
@@ -126,7 +126,7 @@ export function ReminderWidget() {
           </div>
 
           <Link href="/reminders" onClick={() => setOpen(false)}
-            className="block text-center text-xs text-blue-600 hover:underline p-2 border-t border-gray-100">
+            className="block text-center text-xs text-brand-600 hover:underline p-2 border-t border-gray-100">
             View all
           </Link>
         </div>

@@ -136,14 +136,14 @@ export default function TicketsPage() {
                   <td className="text-sm">
                     {t.assignedTo ? (
                       <div className="flex items-center gap-1">
-                        <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">{getInitials(t.assignedTo.name)}</div>
+                        <div className="w-6 h-6 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-xs font-bold">{getInitials(t.assignedTo.name)}</div>
                         <span className="text-xs">{t.assignedTo.name}</span>
                       </div>
                     ) : <span className="text-xs text-gray-400">Unassigned</span>}
                   </td>
                   <td className="text-xs text-gray-500">{formatDate(t.createdAt)}</td>
                   <td className="text-right">
-                    <Link href={`/tickets/${t.id}`} className="text-xs text-blue-600 hover:underline">Open</Link>
+                    <Link href={`/tickets/${t.id}`} className="text-xs text-brand-600 hover:underline">Open</Link>
                   </td>
                 </tr>
               ))}

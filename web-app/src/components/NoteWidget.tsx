@@ -13,7 +13,7 @@ const COLOR_DOTS: Record<string, string> = {
   pink: 'bg-pink-400', purple: 'bg-purple-400', orange: 'bg-orange-400',
 }
 const CARD_BG: Record<string, string> = {
-  yellow: 'bg-yellow-50', blue: 'bg-blue-50', green: 'bg-emerald-50',
+  yellow: 'bg-yellow-50', blue: 'bg-brand-50', green: 'bg-emerald-50',
   pink: 'bg-pink-50', purple: 'bg-purple-50', orange: 'bg-orange-50',
 }
 
@@ -82,7 +82,7 @@ export function NoteWidget() {
         <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-xl shadow-2xl border border-gray-200 max-h-[75vh] overflow-hidden flex flex-col z-50">
           <div className="p-3 border-b border-gray-100 flex items-center justify-between">
             <h3 className="font-semibold text-gray-900 text-sm">Sticky Notes</h3>
-            <button onClick={() => setShowAdd(v => !v)} className="text-xs text-blue-600 hover:underline flex items-center gap-1">
+            <button onClick={() => setShowAdd(v => !v)} className="text-xs text-brand-600 hover:underline flex items-center gap-1">
               <Plus size={12} /> Add
             </button>
           </div>
@@ -129,7 +129,7 @@ export function NoteWidget() {
           </div>
 
           <Link href="/notes" onClick={() => setOpen(false)}
-            className="block text-center text-xs text-blue-600 hover:underline p-2 border-t border-gray-100">
+            className="block text-center text-xs text-brand-600 hover:underline p-2 border-t border-gray-100">
             View all
           </Link>
         </div>

@@ -4,12 +4,14 @@
 // Now the client portal has its own path/cookie tree; middleware handles both.
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyToken } from './lib/auth'
+import { isMobileBrowserUA, isMobileAllowedPath, MOBILE_BLOCK_HTML, MOBILE_BLOCK_MESSAGE } from './lib/mobileGuard'
 
 // Fully public paths (no auth of any kind required)
 const publicPaths = [
   '/login',
   '/api/auth/login',
   '/api/auth/verify-login-otp',  // Step 2 of admin login (2FA) — no session exists yet
+  '/api/auth/forgot-password',   // send-otp + reset (user is locked out, no session)
   '/api/proposals/view',         // Public "view proposal" PDF (Proposal.shareToken) + its data API — replaces the old /proposal/view HTML page
   '/api/invoices/view',          // Public "view invoice" PDF (Invoice.shareToken) + its data API — replaces the old /invoice/view HTML page
   '/receipt/view',               // Public "view payment receipt" page (Payment.receiptToken)
@@ -32,6 +34,21 @@ const clientPortalPaths = [
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
+
+  // ---- Desktop-only gate -------------------------------------------------
+  // Staff must use the mobile app on phones/tablets/iOS — the browser CRM is
+  // blocked there (login page included). The RN app, the client portal and
+  // public share links are exempt (see MOBILE_ALLOWED_PREFIXES).
+  const isAppRequest = req.headers.get('x-client-platform') === 'mobile-app'
+  if (!isAppRequest && !isMobileAllowedPath(pathname) && isMobileBrowserUA(req.headers.get('user-agent'))) {
+    if (pathname.startsWith('/api/')) {
+      return NextResponse.json({ error: MOBILE_BLOCK_MESSAGE }, { status: 403 })
+    }
+    return new NextResponse(MOBILE_BLOCK_HTML, {
+      status: 403,
+      headers: { 'content-type': 'text/html; charset=utf-8' },
+    })
+  }
 
   // Fully public paths pass through
   if (publicPaths.some(path => pathname === path || pathname.startsWith(path + '/'))) {

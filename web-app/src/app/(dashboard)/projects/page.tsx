@@ -209,7 +209,7 @@ export default function ProjectsPage() {
                 }, {})).map((group: any) => (
                   <tr key={group.service.id} className="hover:bg-slate-50">
                     <td>
-                      <Link href={`/clients/${group.service.client.id}`} className="hover:text-blue-600">
+                      <Link href={`/clients/${group.service.client.id}`} className="hover:text-brand-600">
                         <p className="font-medium text-sm">{group.service.client.clientName}</p>
                         <p className="text-xs text-gray-500 flex items-center gap-1"><Package size={10} /> {group.service.serviceName}</p>
                       </Link>
@@ -236,8 +236,8 @@ export default function ProjectsPage() {
                       {group.members.length === 0 ? <span className="text-xs text-gray-400">—</span> : (
                         <div className="flex flex-wrap gap-1">
                           {group.members.map((m: any) => (
-                            <div key={m.id} className="flex items-center gap-1 bg-blue-50 border border-blue-100 rounded px-2 py-0.5 text-xs">
-                              <div className="w-4 h-4 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-[9px] font-bold">
+                            <div key={m.id} className="flex items-center gap-1 bg-brand-50 border border-brand-100 rounded px-2 py-0.5 text-xs">
+                              <div className="w-4 h-4 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[9px] font-bold">
                                 {getInitials(m.member?.name || 'X')}
                               </div>
                               <span>{m.member?.name}</span>
@@ -315,7 +315,7 @@ export default function ProjectsPage() {
                         return (
                           <label key={e.id} className="flex items-center gap-2 p-2 hover:bg-gray-50 cursor-pointer text-sm">
                             <input type="checkbox" checked={form.memberIds.includes(uid)} onChange={() => toggleMember(uid)} />
-                            <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">
+                            <div className="w-6 h-6 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-xs font-bold">
                               {getInitials(e.user?.name || 'X')}
                             </div>
                             <div className="flex-1">
@@ -333,7 +333,7 @@ export default function ProjectsPage() {
                       {noDeptEmployees.map((e: any) => (
                         <label key={e.id} className="flex items-center gap-2 p-2 hover:bg-gray-50 cursor-pointer text-sm">
                           <input type="checkbox" checked={form.memberIds.includes(e.user?.id)} onChange={() => toggleMember(e.user?.id)} />
-                          <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">
+                          <div className="w-6 h-6 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-xs font-bold">
                             {getInitials(e.user?.name || 'X')}
                           </div>
                           <div className="flex-1">

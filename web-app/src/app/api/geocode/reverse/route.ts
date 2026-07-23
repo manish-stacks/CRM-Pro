@@ -39,12 +39,22 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${GOOGLE_MAPS_KEY}`
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${GOOGLE_MAPS_KEY}&language=en&region=in`
     const res = await fetch(url)
     if (!res.ok) return NextResponse.json({ address: null })
     const data = await res.json()
     if (data.status === 'OK' && data.results?.length) {
-      return NextResponse.json({ address: data.results[0].formatted_address as string })
+      // Google returns results[0] as whatever it thinks is "best" — very often a
+      // nearby POI (a temple, a metro station), which is why saved addresses looked
+      // wrong even when the coordinates were fine. Prefer real postal/street results.
+      const PRIORITY = [
+        'street_address', 'premise', 'subpremise', 'route',
+        'sublocality_level_1', 'sublocality', 'neighborhood', 'locality',
+      ]
+      const pick =
+        PRIORITY.map(t => data.results.find((r: any) => r.types?.includes(t))).find(Boolean) ||
+        data.results[0]
+      return NextResponse.json({ address: pick.formatted_address as string })
     }
     return NextResponse.json({ address: null })
   } catch (e) {

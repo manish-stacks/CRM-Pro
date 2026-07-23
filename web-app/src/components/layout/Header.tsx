@@ -41,7 +41,7 @@ export default function Header({ onMenuClick }: { onMenuClick?: () => void }) {
             onClick={() => setDropdownOpen(!dropdownOpen)}
             className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors"
           >
-            <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold">
+            <div className="w-8 h-8 rounded-full bg-brand-600 flex items-center justify-center text-white text-xs font-bold">
               {user?.avatar ? <img src={user?.avatar} alt="" className="w-full h-full object-cover rounded-md" /> : user?.name?.[0]?.toUpperCase()}
             </div>
             <div className="hidden md:block text-left">
@@ -58,7 +58,7 @@ export default function Header({ onMenuClick }: { onMenuClick?: () => void }) {
             <div className="absolute right-0 top-full mt-1 w-48 bg-white border border-gray-200 rounded-xl shadow-xl z-50 overflow-hidden">
               <div className="px-4 py-2.5 border-b border-gray-100 bg-gray-50">
                 <p className="text-sm font-semibold text-gray-900 truncate">{user?.name}</p>
-                {user?.employee?.employeeId && <p className="text-xs font-mono text-blue-600">{user.employee.employeeId}</p>}
+                {user?.employee?.employeeId && <p className="text-xs font-mono text-brand-600">{user.employee.employeeId}</p>}
               </div>
               <Link href="/profile" onClick={() => setDropdownOpen(false)}>
                 <div className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-sm text-gray-700">

@@ -23,6 +23,41 @@ export async function GET(req: NextRequest) {
 
   const role = session.role
   const canSeeAllCrm = ['SUPER_ADMIN', 'ADMIN', 'MANAGER'].includes(role)
+  // Plain employees get NO CRM data from the header search — the only thing
+  // they can look up is their own leave history.
+  const isPlainEmployee = role === 'EMPLOYEE'
+
+  if (isPlainEmployee) {
+    const me = await prisma.employee.findFirst({ where: { userId: session.userId }, select: { id: true } })
+    if (!me) return successResponse({ clients: [], leads: [], employees: [], invoices: [], leaves: [] })
+
+    const upper = q.toUpperCase().replace(/\s+/g, '_')
+    const myLeaves = await prisma.leave.findMany({
+      where: {
+        employeeId: me.id,
+        OR: [
+          { reason: { contains: q } },
+          { leaveType: { contains: upper } },
+          { status: { contains: upper } },
+          { rejectionReason: { contains: q } },
+        ],
+      },
+      take: PER_GROUP,
+      orderBy: { startDate: 'desc' },
+      select: { id: true, leaveType: true, status: true, days: true, startDate: true, endDate: true },
+    }).catch(() => [])
+
+    const fmt = (d: Date) => new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+    return successResponse({
+      clients: [], leads: [], employees: [], invoices: [],
+      leaves: myLeaves.map((l: any) => ({
+        id: l.id,
+        label: `${String(l.leaveType).replace(/_/g, ' ')} · ${l.days}d`,
+        sub: `${l.status} · ${fmt(l.startDate)}${l.endDate && fmt(l.endDate) !== fmt(l.startDate) ? ` — ${fmt(l.endDate)}` : ''}`,
+        link: '/leaves',
+      })),
+    })
+  }
 
   // ---- Clients ----
   const clientsWhere: any = {
@@ -35,7 +70,7 @@ export async function GET(req: NextRequest) {
   }
   if (role === 'TELECALLER') clientsWhere.telecallerId = session.userId
   else if (role === 'MARKETING_EXECUTIVE') clientsWhere.marketingPersonId = session.userId
-  else if (role === 'EMPLOYEE') clientsWhere.id = '__none__'
+
 
   // ---- Leads ----
   const leadsWhere: any = {
@@ -49,7 +84,7 @@ export async function GET(req: NextRequest) {
   }
   if (role === 'TELECALLER') leadsWhere.assignedToId = session.userId
   else if (role === 'MARKETING_EXECUTIVE') leadsWhere.meetingAssignedToId = session.userId
-  else if (role === 'EMPLOYEE') leadsWhere.id = '__none__'
+
 
   // ---- Invoices ----
   const invoicesWhere: any = {
@@ -60,7 +95,7 @@ export async function GET(req: NextRequest) {
   }
   if (role === 'TELECALLER') invoicesWhere.client = { telecallerId: session.userId }
   else if (role === 'MARKETING_EXECUTIVE') invoicesWhere.client = { marketingPersonId: session.userId }
-  else if (role === 'EMPLOYEE') invoicesWhere.id = '__none__'
+
 
   // ---- Employees ---- (team-scope for non-admins, same as /api/employees)
   let employeesWhere: any = {
@@ -91,5 +126,6 @@ export async function GET(req: NextRequest) {
     leads: leads.map((l: any) => ({ id: l.id, label: l.clientName, sub: `${l.leadNumber}${l.companyName ? ` · ${l.companyName}` : ''}`, link: `/leads/${l.id}` })),
     employees: employees.map((e: any) => ({ id: e.id, label: e.user?.name, sub: e.employeeId, link: `/employees/${e.id}` })),
     invoices: invoices.map((i: any) => ({ id: i.id, label: i.invoiceNumber, sub: i.client?.clientName, link: `/invoices/${i.id}` })),
+    leaves: [],
   })
 }

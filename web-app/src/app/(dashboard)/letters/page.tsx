@@ -227,13 +227,13 @@ export default function LettersPage() {
                   <div className="font-medium text-gray-900">{l.employee?.user?.name}</div>
                   <div className="text-xs text-gray-400">{l.employee?.employeeId} · {l.employee?.department?.name || '—'}</div>
                 </td>
-                <td><span className="badge bg-blue-100 text-blue-700">{TYPE_LABEL[l.type] || l.type}</span></td>
+                <td><span className="badge bg-brand-100 text-brand-700">{TYPE_LABEL[l.type] || l.type}</span></td>
                 <td>{l.generatedBy?.name || '—'}</td>
                 <td>{new Date(l.createdAt).toLocaleDateString('en-GB')}</td>
                 <td>
                   <div className="flex gap-1">
                     <Button variant="ghost" size="sm" className="p-1.5" onClick={() => window.open(`/api/letters/${l.id}/pdf`, '_blank')}><Download size={13} /></Button>
-                    <Button variant="ghost" size="sm" className="p-1.5" loading={sendingId === l.id} onClick={() => sendLetterEmail(l)} title="Email to employee"><Mail size={13} className="text-blue-600" /></Button>
+                    <Button variant="ghost" size="sm" className="p-1.5" loading={sendingId === l.id} onClick={() => sendLetterEmail(l)} title="Email to employee"><Mail size={13} className="text-brand-600" /></Button>
                     <Button variant="ghost" size="sm" className="p-1.5" onClick={() => removeLetter(l.id)}><Trash2 size={13} className="text-red-500" /></Button>
                   </div>
                 </td>
@@ -268,7 +268,7 @@ export default function LettersPage() {
               <button
                 key={tab.value}
                 onClick={() => setActiveTab(tab.value)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition ${activeTab === tab.value ? 'bg-blue-600 text-white' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'}`}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition ${activeTab === tab.value ? 'bg-brand-600 text-white' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'}`}
               >
                 <tab.icon size={14} />{tab.label}
               </button>

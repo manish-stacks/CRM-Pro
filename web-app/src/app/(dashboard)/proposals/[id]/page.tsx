@@ -185,9 +185,9 @@ export default function ProposalDetailPage() {
 
       <Modal open={modal === 'send'} onClose={() => setModal('none')} title="Send Proposal">
         <div className="space-y-4">
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm">
+          <div className="bg-brand-50 border border-blue-200 rounded-lg p-3 text-sm">
             <p>Sending <b>{proposal.proposalNumber}</b> to <b>{personName}</b></p>
-            <p className="text-xs text-blue-700 mt-1">Email + WhatsApp will be delivered with a shareable link.</p>
+            <p className="text-xs text-brand-700 mt-1">Email + WhatsApp will be delivered with a shareable link.</p>
           </div>
           <div className="flex justify-end gap-2">
             <Button variant="secondary" onClick={() => setModal('none')}>Cancel</Button>

@@ -17,7 +17,8 @@ const STATUSES = ['ACTIVE', 'INACTIVE', 'CHURNED']
 
 export default function ClientsPage() {
   const { user, isAtLeast } = useAuth()
-  const canCreate = ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'MARKETING_EXECUTIVE', 'TELECALLER'].includes(user?.role || '')
+  // Admin, telecalling head (MANAGER) and Marketing Executive only
+  const canCreate = ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'MARKETING_EXECUTIVE'].includes(user?.role || '')
 
   const [clients, setClients] = useState<any[]>([])
   const [total, setTotal] = useState(0)
@@ -146,9 +147,9 @@ export default function ClientsPage() {
           <div className="flex items-center gap-2">
             <span className="text-xs text-gray-500">{total} total</span>
             <button onClick={() => setShowFilter(!showFilter)}
-              className={`btn-secondary btn-sm ${activeFilterCount > 0 ? 'border-blue-500 text-blue-600' : ''}`}>
+              className={`btn-secondary btn-sm ${activeFilterCount > 0 ? 'border-brand-500 text-brand-600' : ''}`}>
               <Filter size={13} /> Filters
-              {activeFilterCount > 0 && <span className="ml-1 bg-blue-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">{activeFilterCount}</span>}
+              {activeFilterCount > 0 && <span className="ml-1 bg-brand-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">{activeFilterCount}</span>}
             </button>
           </div>
         </div>
@@ -301,11 +302,11 @@ export default function ClientsPage() {
               <p className="text-sm font-semibold text-emerald-900 mb-1">✅ Client created!</p>
               <p className="text-xs text-emerald-700">Welcome message sent via email + WhatsApp. Temporary password shown below (save it — this is the only time it appears):</p>
             </div>
-            <div className="bg-white border-2 border-blue-500 rounded-lg p-4 text-center">
+            <div className="bg-white border-2 border-brand-500 rounded-lg p-4 text-center">
               <p className="text-xs text-gray-500 mb-1">Temporary Password</p>
               <p className="text-2xl font-mono font-bold text-gray-900 tracking-wider">{showPwd}</p>
               <button onClick={() => { navigator.clipboard.writeText(showPwd); toast.success('Copied!') }}
-                className="text-xs text-blue-600 hover:underline mt-2">Copy</button>
+                className="text-xs text-brand-600 hover:underline mt-2">Copy</button>
             </div>
             <div className="flex justify-end pt-2">
               <Button onClick={() => { setModal('none'); setShowPwd(null) }}>Done</Button>
@@ -351,11 +352,11 @@ export default function ClientsPage() {
               <Select label="Reporting Person" value={form.reportingPersonId} onChange={e => setForm(p => ({ ...p, reportingPersonId: e.target.value }))} options={users.filter(u => u.role === 'MANAGER').map(u => ({ value: u.id, label: u.name }))} />
 
             </div>
-            <label className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg p-3 cursor-pointer">
+            <label className="flex items-center gap-2 bg-brand-50 border border-blue-200 rounded-lg p-3 cursor-pointer">
               <input type="checkbox" checked={form.sendWelcome} onChange={e => setForm(p => ({ ...p, sendWelcome: e.target.checked }))} />
               <div className="flex-1 text-sm">
                 <p className="font-medium text-blue-900 flex items-center gap-1"><Send size={13} /> Send Welcome Message</p>
-                <p className="text-xs text-blue-700">Auto-generate portal password + send credentials via email + WhatsApp</p>
+                <p className="text-xs text-brand-700">Auto-generate portal password + send credentials via email + WhatsApp</p>
               </div>
             </label>
             <div className="flex justify-end gap-2 pt-2">

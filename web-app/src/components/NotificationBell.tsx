@@ -90,7 +90,7 @@ export function NotificationBell() {
               {unread > 0 && <p className="text-xs text-gray-500">{unread} unread</p>}
             </div>
             {unread > 0 && (
-              <button onClick={markAllRead} className="text-xs text-blue-600 hover:underline">
+              <button onClick={markAllRead} className="text-xs text-brand-600 hover:underline">
                 Mark all read
               </button>
             )}
@@ -107,7 +107,7 @@ export function NotificationBell() {
             ) : (
               <div className="divide-y divide-gray-100">
                 {items.map(n => (
-                  <div key={n.id} className={`p-3 hover:bg-gray-50 flex items-start gap-3 ${!n.isRead ? 'bg-blue-50/40' : ''}`}>
+                  <div key={n.id} className={`p-3 hover:bg-gray-50 flex items-start gap-3 ${!n.isRead ? 'bg-brand-50/40' : ''}`}>
                     <div className="text-lg flex-shrink-0 mt-0.5">{TYPE_ICONS[n.type] || '🔔'}</div>
                     <div className="flex-1 min-w-0">
                       <p className={`text-sm ${!n.isRead ? 'font-semibold text-gray-900' : 'text-gray-700'}`}>{n.title}</p>
@@ -116,7 +116,7 @@ export function NotificationBell() {
                         <p className="text-[10px] text-gray-400">{timeAgo(n.createdAt)}</p>
                         {n.link && (
                           <Link href={n.link} onClick={() => { markOne(n.id); setOpen(false) }}
-                            className="text-[10px] text-blue-600 hover:underline flex items-center gap-0.5">
+                            className="text-[10px] text-brand-600 hover:underline flex items-center gap-0.5">
                             View <ExternalLink size={9} />
                           </Link>
                         )}
@@ -139,7 +139,7 @@ export function NotificationBell() {
           </div>
 
           <Link href="/notifications" onClick={() => setOpen(false)}
-            className="block text-center text-xs text-blue-600 hover:underline p-2 border-t border-gray-100">
+            className="block text-center text-xs text-brand-600 hover:underline p-2 border-t border-gray-100">
             View all
           </Link>
         </div>

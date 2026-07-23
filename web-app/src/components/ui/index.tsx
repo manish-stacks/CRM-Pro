@@ -12,25 +12,25 @@ export function Badge({ status, className = '' }: { status?: string; className?:
     LEAVE: 'bg-purple-100 text-purple-700', PAID: 'bg-green-100 text-green-700',
     UNPAID: 'bg-gray-100 text-gray-600', OVERDUE: 'bg-red-100 text-red-700',
     PARTIAL: 'bg-orange-100 text-orange-700', DRAFT: 'bg-gray-100 text-gray-600',
-    SENT: 'bg-blue-100 text-blue-700', VIEWED: 'bg-purple-100 text-purple-700',
+    SENT: 'bg-brand-100 text-brand-700', VIEWED: 'bg-purple-100 text-purple-700',
     ACCEPTED: 'bg-green-100 text-green-700', CONVERTED: 'bg-emerald-100 text-emerald-700',
-    CLOSED: 'bg-gray-100 text-gray-600', NEW: 'bg-blue-100 text-blue-700',
+    CLOSED: 'bg-gray-100 text-gray-600', NEW: 'bg-brand-100 text-brand-700',
     FOLLOW_UP: 'bg-yellow-100 text-yellow-700', MEETING: 'bg-indigo-100 text-indigo-700',
-    PROPOSAL: 'bg-cyan-100 text-cyan-700', OPEN: 'bg-blue-100 text-blue-700',
-    RESOLVED: 'bg-green-100 text-green-700', WEBSITE: 'bg-blue-100 text-blue-700',
+    PROPOSAL: 'bg-cyan-100 text-cyan-700', OPEN: 'bg-brand-100 text-brand-700',
+    RESOLVED: 'bg-green-100 text-green-700', WEBSITE: 'bg-brand-100 text-brand-700',
     REFERRAL: 'bg-purple-100 text-purple-700', SOCIAL_MEDIA: 'bg-pink-100 text-pink-700',
     COLD_CALL: 'bg-orange-100 text-orange-700', EMAIL: 'bg-cyan-100 text-cyan-700',
     // Ticket statuses
     IN_PROGRESS: 'bg-amber-100 text-amber-700', REOPENED: 'bg-orange-100 text-orange-700',
     // Priorities
-    LOW: 'bg-slate-100 text-slate-600', MEDIUM: 'bg-blue-100 text-blue-700',
+    LOW: 'bg-slate-100 text-slate-600', MEDIUM: 'bg-brand-100 text-brand-700',
     HIGH: 'bg-orange-100 text-orange-700', URGENT: 'bg-red-100 text-red-700',
     // Lead statuses (uppercase enum)
     NOT_INTERESTED: 'bg-red-100 text-red-700', RINGING: 'bg-yellow-100 text-yellow-700',
     MEETING_SCHEDULED: 'bg-indigo-100 text-indigo-700', CALLBACK: 'bg-purple-100 text-purple-700',
     // Service statuses
     EXPIRED: 'bg-red-100 text-red-700', PAUSED: 'bg-gray-100 text-gray-600',
-    CANCELLED: 'bg-gray-100 text-gray-600', RENEWING: 'bg-blue-100 text-blue-700',
+    CANCELLED: 'bg-gray-100 text-gray-600', RENEWING: 'bg-brand-100 text-brand-700',
     OTHER: 'bg-gray-100 text-gray-600',
   }
   return (
@@ -150,7 +150,7 @@ export function SearchSelect({
           ) : options.map(o => (
             <button key={o.value} type="button"
               onClick={() => { onSelect(o.value, o.label); setOpen(false); setQuery('') }}
-              className={`block w-full text-left px-3 py-2 text-sm hover:bg-blue-50 ${o.value === value ? 'bg-blue-50 font-medium text-blue-700' : 'text-gray-700'}`}>
+              className={`block w-full text-left px-3 py-2 text-sm hover:bg-brand-50 ${o.value === value ? 'bg-brand-50 font-medium text-brand-700' : 'text-gray-700'}`}>
               {o.label}
             </button>
           ))}
@@ -209,7 +209,7 @@ export function Pagination({ page, totalPages, onPageChange, onChange }: { page:
           if (p < 1 || p > totalPages) return null
           return (
             <button key={p} onClick={() => go(p)}
-              className={`w-8 h-8 rounded-lg text-sm ${p === page ? 'bg-blue-600 text-white' : 'hover:bg-gray-100 text-gray-600'}`}>
+              className={`w-8 h-8 rounded-lg text-sm ${p === page ? 'bg-brand-600 text-white' : 'hover:bg-gray-100 text-gray-600'}`}>
               {p}
             </button>
           )
@@ -266,14 +266,14 @@ export function StatCard({ label, value, icon: Icon, color, change, sub }: {
   color: string; change?: string; sub?: string
 }) {
   return (
-    <div className="card p-5">
+    <div className="card card-glow hover-lift p-5">
       <div className="flex items-start justify-between">
         <div>
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{label}</p>
-          <p className={`text-2xl font-bold mt-1 ${color}`}>{value}</p>
+          <p className={`text-2xl font-bold mt-1 count-up ${color}`}>{value}</p>
           {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
         </div>
-        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${color.replace('text-', 'bg-').replace('-600', '-50').replace('-700', '-50').replace('-500', '-50')}`}>
+        <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-transform duration-300 hover:scale-110 hover:rotate-6 ${color.replace('text-', 'bg-').replace('-600', '-50').replace('-700', '-50').replace('-500', '-50')}`}>
           <Icon size={19} className={color} />
         </div>
       </div>
@@ -284,7 +284,7 @@ export function StatCard({ label, value, icon: Icon, color, change, sub }: {
 
 // Spinner
 export function Spinner({ size = 20 }: { size?: number }) {
-  return <Loader2 size={size} className="animate-spin text-blue-600" />
+  return <Loader2 size={size} className="animate-spin text-brand-600" />
 }
 
 // ConfirmDialog

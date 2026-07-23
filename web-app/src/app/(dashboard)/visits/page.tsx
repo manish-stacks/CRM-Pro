@@ -232,11 +232,11 @@ export default function VisitsPage() {
                       <td className="px-4 py-3">
                         <p className="font-semibold text-gray-900">{v.clientName}</p>
                         {v.purpose && <p className="text-xs text-gray-400">{v.purpose}</p>}
-                        {v.lead?.leadNumber && <span className="text-[10px] text-blue-600">{v.lead.leadNumber}</span>}
+                        {v.lead?.leadNumber && <span className="text-[10px] text-brand-600">{v.lead.leadNumber}</span>}
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 rounded-lg bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center">
+                          <div className="w-7 h-7 rounded-lg bg-brand-600 text-white text-[10px] font-bold flex items-center justify-center">
                             {getInitials(v.user?.name || '?')}
                           </div>
                           <span className="text-gray-700">{v.user?.name}</span>
@@ -258,7 +258,7 @@ export default function VisitsPage() {
                       <td className="px-4 py-3 text-gray-500">{v.durationMins != null ? `${v.durationMins} min` : '—'}</td>
                       <td className="px-4 py-3">
                         <div className="flex justify-end gap-1">
-                          <button onClick={() => openEdit(v)} className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-blue-600"><Pencil size={14} /></button>
+                          <button onClick={() => openEdit(v)} className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-brand-600"><Pencil size={14} /></button>
                           {isAtLeast('ADMIN') && (
                             <button onClick={() => setDelId(v.id)} className="p-1.5 rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-600"><Trash2 size={14} /></button>
                           )}

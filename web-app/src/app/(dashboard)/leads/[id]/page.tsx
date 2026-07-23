@@ -16,7 +16,7 @@ import toast from 'react-hot-toast'
 import Swal from "sweetalert2";
 
 const STATUS_COLORS: Record<string, string> = {
-  NEW: 'bg-blue-100 text-blue-700',
+  NEW: 'bg-brand-100 text-brand-700',
   RINGING: 'bg-amber-100 text-amber-700',
   FOLLOW_UP: 'bg-yellow-100 text-yellow-700',
   CALLBACK: 'bg-cyan-100 text-cyan-700',
@@ -239,7 +239,7 @@ export default function LeadDetailPage() {
               <span className="font-mono text-gray-500">{lead.leadNumber}</span>
               <span className={`badge ${STATUS_COLORS[lead.status]}`}>{lead.status.replace(/_/g, ' ')}</span>
               {lead.client && (
-                <Link href={`/clients/${lead.client.id}`} className="badge bg-blue-50 text-blue-700 hover:bg-blue-100">
+                <Link href={`/clients/${lead.client.id}`} className="badge bg-brand-50 text-brand-700 hover:bg-blue-100">
                   → Client {lead.client.clientCode}
                 </Link>
               )}
@@ -247,9 +247,9 @@ export default function LeadDetailPage() {
             <h1 className="text-2xl font-bold text-gray-900">{lead.clientName}</h1>
             {lead.companyName && <p className="text-sm text-gray-600 flex items-center gap-1 mt-1"><Building2 size={12} /> {lead.companyName}</p>}
             <div className="flex items-center gap-4 mt-3 text-sm text-gray-600 flex-wrap">
-              <a href={`tel:${lead.clientPhone}`} className="flex items-center gap-1 hover:text-blue-600"><Phone size={12} /> {lead.clientPhone}</a>
-              {lead.clientEmail && <a href={`mailto:${lead.clientEmail}`} className="flex items-center gap-1 hover:text-blue-600"><Mail size={12} /> {lead.clientEmail}</a>}
-              {lead.link && <a href={lead.link} target="_blank" className="flex items-center gap-1 hover:text-blue-600"><Globe size={12} /> {lead.link.replace(/^https?:\/\//, '')} <ExternalLink size={9} /></a>}
+              <a href={`tel:${lead.clientPhone}`} className="flex items-center gap-1 hover:text-brand-600"><Phone size={12} /> {lead.clientPhone}</a>
+              {lead.clientEmail && <a href={`mailto:${lead.clientEmail}`} className="flex items-center gap-1 hover:text-brand-600"><Mail size={12} /> {lead.clientEmail}</a>}
+              {lead.link && <a href={lead.link} target="_blank" className="flex items-center gap-1 hover:text-brand-600"><Globe size={12} /> {lead.link.replace(/^https?:\/\//, '')} <ExternalLink size={9} /></a>}
               {lead.city && <span className="flex items-center gap-1"><MapPin size={12} /> {lead.city}{lead.state ? `, ${lead.state}` : ''}</span>}
             </div>
           </div>
@@ -319,7 +319,7 @@ export default function LeadDetailPage() {
                 <p className="text-xs text-gray-500">Currently Assigned To</p>
                 {lead.assignedTo ? (
                   <div className="flex items-center gap-2 mt-0.5">
-                    <div className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">
+                    <div className="w-7 h-7 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-xs font-bold">
                       {getInitials(lead.assignedTo.name)}
                     </div>
                     <div>
@@ -466,7 +466,7 @@ export default function LeadDetailPage() {
                   return (
                     <div key={a.id} className="relative flex gap-3">
                       <div className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center border-2 border-white shadow z-10 ${isMeeting ? 'bg-purple-100 text-purple-600' :
-                          isStatus ? 'bg-blue-100 text-blue-600' :
+                          isStatus ? 'bg-brand-100 text-brand-600' :
                             'bg-gray-100 text-gray-600'
                         }`}>
                         <Icon size={13} />
@@ -549,9 +549,9 @@ export default function LeadDetailPage() {
       {/* Reassign Modal */}
       <Modal open={modal === 'reassign'} onClose={() => setModal('none')} title="Reassign Lead">
         <div className="space-y-3">
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs">
+          <div className="bg-brand-50 border border-blue-200 rounded-lg p-3 text-xs">
             <p className="font-semibold text-blue-900">Currently assigned to:</p>
-            <p className="text-blue-700">{lead.assignedTo?.name || 'Unassigned'}</p>
+            <p className="text-brand-700">{lead.assignedTo?.name || 'Unassigned'}</p>
           </div>
           <Select label="Reassign to *" value={reassignForm.toUserId} onChange={e => setReassignForm(p => ({ ...p, toUserId: e.target.value }))}
             options={[{ value: '', label: 'Select user...' }].concat(telecallers.map((u: any) => ({ value: u.id, label: `${u.name} (${u.role.replace(/_/g, ' ')})` })))} />

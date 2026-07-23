@@ -131,7 +131,7 @@ export default function ReceiptViewPage() {
           <tbody>
             <tr className="border-b border-slate-200">
               <td className="p-2.5 bg-slate-50 font-semibold text-slate-700 w-48">Against Invoice</td>
-              <td className="p-2.5 font-mono text-blue-700">{receipt.invoice.invoiceNumber}</td>
+              <td className="p-2.5 font-mono text-brand-700">{receipt.invoice.invoiceNumber}</td>
             </tr>
             <tr className="border-b border-slate-200">
               <td className="p-2.5 bg-slate-50 font-semibold text-slate-700">Payment Method</td>

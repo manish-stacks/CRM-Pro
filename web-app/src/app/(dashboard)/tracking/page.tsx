@@ -189,7 +189,7 @@ export default function TrackingPage() {
         ].map((t: any) => (
           <button key={t.key} onClick={() => setTab(t.key)}
             className={`px-4 py-2 text-sm font-medium border-b-2 flex items-center gap-2 ${
-              tab === t.key ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'
+              tab === t.key ? 'border-blue-600 text-brand-600' : 'border-transparent text-gray-500 hover:text-gray-700'
             }`}>
             <t.icon size={14} /> {t.label}
           </button>
@@ -253,7 +253,7 @@ export default function TrackingPage() {
               ) : live.map(u => (
                 <div key={u.userId} className="card p-3">
                   <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold flex-shrink-0">
+                    <div className="w-9 h-9 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-xs font-bold flex-shrink-0">
                       {u.avatar ? <img src={u.avatar} className="w-full h-full rounded-full object-cover" /> : getInitials(u.name)}
                     </div>
                     <div className="flex-1 min-w-0">
@@ -264,7 +264,7 @@ export default function TrackingPage() {
                     </div>
                     {u.lastPing ? (
                       <div className="text-right">
-                        <span className={`badge text-[10px] ${u.lastPing.isMoving ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'}`}>
+                        <span className={`badge text-[10px] ${u.lastPing.isMoving ? 'bg-brand-100 text-brand-700' : 'bg-slate-100 text-slate-600'}`}>
                           {u.lastPing.isMoving ? '🚶 Moving' : '📍 Idle'}
                         </span>
                         {u.lastPing.battery != null && (
@@ -291,7 +291,7 @@ export default function TrackingPage() {
               <>
                 <div className="card p-4">
                   <div className="flex items-center gap-3 mb-3">
-                    <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold">
+                    <div className="w-10 h-10 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center font-bold">
                       {getInitials(routeData.user?.name || 'X')}
                     </div>
                     <div>

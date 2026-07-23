@@ -184,10 +184,10 @@ export default function CollectionPage() {
               </thead>
               <tbody>
                 {data.rows.map((r: any) => (
-                  <tr key={r.userId} onClick={() => openDrill(r)} className="border-t border-gray-50 hover:bg-blue-50/40 cursor-pointer">
+                  <tr key={r.userId} onClick={() => openDrill(r)} className="border-t border-gray-50 hover:bg-brand-50/40 cursor-pointer">
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-lg bg-blue-600 text-white text-[11px] font-bold flex items-center justify-center">
+                        <div className="w-8 h-8 rounded-lg bg-brand-600 text-white text-[11px] font-bold flex items-center justify-center">
                           {getInitials(r.name)}
                         </div>
                         <div>
@@ -202,7 +202,7 @@ export default function CollectionPage() {
                       {r.visitsPending > 0 && <span className="block text-[10px] text-amber-600">{r.visitsPending} pending</span>}
                     </td>
                     <td className="px-3 py-3 text-right">{r.cash ? <span className="font-semibold text-amber-700">{formatCurrency(r.cash)}</span> : <span className="text-gray-300">—</span>}</td>
-                    <td className="px-3 py-3 text-right">{r.upi ? <span className="font-semibold text-blue-700">{formatCurrency(r.upi)}</span> : <span className="text-gray-300">—</span>}</td>
+                    <td className="px-3 py-3 text-right">{r.upi ? <span className="font-semibold text-brand-700">{formatCurrency(r.upi)}</span> : <span className="text-gray-300">—</span>}</td>
                     <td className="px-3 py-3 text-right text-gray-600">{r.bank ? formatCurrency(r.bank) : <span className="text-gray-300">—</span>}</td>
                     <td className="px-3 py-3 text-right text-gray-600">{r.cheque ? formatCurrency(r.cheque) : <span className="text-gray-300">—</span>}</td>
                     <td className="px-3 py-3 text-right text-gray-600">{r.card ? formatCurrency(r.card) : <span className="text-gray-300">—</span>}</td>
@@ -262,7 +262,7 @@ export default function CollectionPage() {
                         <p className="font-medium text-gray-900">{p.invoice?.client?.companyName || p.invoice?.client?.clientName || '—'}</p>
                         <p className="text-[10px] text-gray-400">{p.invoice?.client?.clientCode}</p>
                       </td>
-                      <td className="px-3 py-2.5 text-blue-600">{p.invoice?.invoiceNumber}</td>
+                      <td className="px-3 py-2.5 text-brand-600">{p.invoice?.invoiceNumber}</td>
                       <td className="px-3 py-2.5"><Badge status={p.method} /></td>
                       <td className="px-3 py-2.5 text-gray-500 text-xs">{p.reference || '—'}</td>
                       <td className="px-3 py-2.5 text-right font-bold text-gray-900">{formatCurrency(p.amount)}</td>

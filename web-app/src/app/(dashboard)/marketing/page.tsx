@@ -128,7 +128,7 @@ export default function MarketingDashboardPage() {
               <button key={t.key || 'ov'}
                 onClick={() => { setExactDate(''); setDateFrom(''); setDateTo(''); setRange(t.key) }}
                 className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all border ${
-                  active ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-600 border-gray-200 hover:border-purple-300'
+                  active ? 'bg-brand-600 text-white border-brand-600' : 'bg-white text-gray-600 border-gray-200 hover:border-brand-300'
                 }`}>
                 {t.label}
                 {t.key === 'today' && s.todayCount ? ` (${s.todayCount})` : ''}
@@ -235,7 +235,7 @@ export default function MarketingDashboardPage() {
             {data.todayMeetings.map((l: any) => (
               <Link key={l.id} href={`/leads/${l.id}`}
                 className="flex items-center gap-3 bg-white rounded-lg p-3 border border-purple-100 hover:border-purple-300 hover:shadow-sm transition-all group">
-                <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold">
+                <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-brand-500 to-brand-600 flex items-center justify-center text-white font-bold">
                   {l.meetingTime?.split(':')[0] || '--'}<span className="text-xs">:{l.meetingTime?.split(':')[1] || '00'}</span>
                 </div>
                 <div className="flex-1 min-w-0">

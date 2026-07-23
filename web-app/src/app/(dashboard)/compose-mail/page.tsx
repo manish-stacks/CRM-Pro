@@ -61,11 +61,11 @@ export default function ComposeMailPage() {
         <div className="card p-5 space-y-4">
           <div className="flex gap-2">
             <button onClick={() => setMode('employee')}
-              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium border ${mode === 'employee' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'}`}>
+              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium border ${mode === 'employee' ? 'bg-brand-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'}`}>
               <User size={13} /> Employee
             </button>
             <button onClick={() => setMode('custom')}
-              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium border ${mode === 'custom' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'}`}>
+              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium border ${mode === 'custom' ? 'bg-brand-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'}`}>
               <AtSign size={13} /> Custom Email
             </button>
           </div>

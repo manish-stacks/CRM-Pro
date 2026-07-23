@@ -122,10 +122,13 @@ export default function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose
       {/* Logo */}
       <div className="flex items-center justify-between px-5 h-16 border-b border-gray-100 flex-shrink-0">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-500 to-brand-600 flex items-center justify-center shadow-sm">
             <Briefcase size={16} className="text-white" />
           </div>
-          <span className="font-bold text-gray-900 text-base">Hover Business</span>
+          <div className="leading-tight">
+            <span className="font-extrabold text-gray-900 text-sm block">HOVER BUSINESS</span>
+            <span className="text-[10px] font-medium text-gray-400 tracking-wide">SERVICES LLP.</span>
+          </div>
         </div>
         {mobile && (
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
@@ -135,7 +138,7 @@ export default function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose
       {/* User pill */}
       <div className="px-4 py-3 border-b border-gray-100 flex-shrink-0">
         <div className="flex items-center gap-3 bg-gray-50 rounded-xl px-3 py-2">
-          <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+          <div className="w-8 h-8 rounded-full bg-brand-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
             {user?.avatar ? <img src={user?.avatar} alt="" className="w-full h-full object-cover rounded-md" /> : user?.name?.[0]?.toUpperCase()}
           </div>
           <div className="min-w-0">

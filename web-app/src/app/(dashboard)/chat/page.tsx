@@ -31,6 +31,10 @@ export default function ChatPage() {
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const pollRef = useRef<any>(null)
+  // Per-group message cache — switching back to a chat shows instantly,
+  // exactly like WhatsApp, instead of flashing a spinner every time.
+  const msgCacheRef = useRef<Record<string, any[]>>({})
+  const activeIdRef = useRef<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const wishHandled = useRef(false)
 
@@ -43,13 +47,49 @@ export default function ChatPage() {
     } catch {} finally { setLoadingGroups(false) }
   }, [])
 
-  const loadMessages = useCallback(async (groupId: string) => {
-    setLoadingMsgs(true)
+  /** Is the user parked at the bottom of the thread? (within ~80px) */
+  const isAtBottom = () => {
+    const el = scrollRef.current
+    if (!el) return true
+    return el.scrollHeight - el.scrollTop - el.clientHeight < 80
+  }
+
+  /**
+   * `silent` = background poll: never show a spinner, never yank the scroll
+   * position, and don't re-render when nothing actually changed.
+   */
+  const loadMessages = useCallback(async (groupId: string, silent = false) => {
+    const cached = msgCacheRef.current[groupId]
+    if (!silent) {
+      // Show cached messages immediately; only spin when we have nothing at all.
+      if (cached) { setMessages(cached); setLoadingMsgs(false) }
+      else { setMessages([]); setLoadingMsgs(true) }
+    }
     try {
       const r = await api.get(`/chat/groups/${groupId}/messages?limit=100`)
-      setMessages(r.data.data || [])
-      setTimeout(() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight }), 50)
-    } catch {} finally { setLoadingMsgs(false) }
+      const next = r.data.data || []
+      msgCacheRef.current[groupId] = next
+      // Ignore a response that landed after the user switched chats
+      if (activeIdRef.current !== groupId) return
+
+      const stick = isAtBottom()
+      setMessages(prev => {
+        // No change → skip the state update entirely (no flicker, no re-render)
+        if (prev.length === next.length &&
+            prev.length > 0 &&
+            prev[prev.length - 1]?.id === next[next.length - 1]?.id &&
+            !prev.some((m: any) => m._optimistic)) {
+          return prev
+        }
+        return next
+      })
+      if (!silent || stick) {
+        setTimeout(() => {
+          const el = scrollRef.current
+          if (el) el.scrollTo({ top: el.scrollHeight, behavior: silent ? 'smooth' : 'auto' })
+        }, 40)
+      }
+    } catch {} finally { if (!silent) setLoadingMsgs(false) }
   }, [])
 
   useEffect(() => { loadGroups() }, [loadGroups])
@@ -86,12 +126,14 @@ export default function ChatPage() {
   }, [user?.id])
 
   useEffect(() => {
-    if (activeId) {
-      loadMessages(activeId)
-      // Poll for new messages every 5s
-      pollRef.current = setInterval(() => loadMessages(activeId), 5000)
-      return () => clearInterval(pollRef.current)
-    }
+    activeIdRef.current = activeId
+    if (!activeId) return
+    loadMessages(activeId)
+    // Poll for new messages every 5s — silent, so the thread never flickers
+    pollRef.current = setInterval(() => {
+      if (document.visibilityState === 'visible') loadMessages(activeId, true)
+    }, 5000)
+    return () => clearInterval(pollRef.current)
   }, [activeId, loadMessages])
 
   const send = async () => {
@@ -109,9 +151,9 @@ export default function ChatPage() {
     setTimeout(() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' }), 50)
     try {
       await api.post(`/chat/groups/${activeId}/messages`, { content: optimistic.content })
-      loadMessages(activeId)
+      loadMessages(activeId, true)
       loadGroups()  // bump order
-    } catch { toast.error('Failed to send'); loadMessages(activeId) }
+    } catch { toast.error('Failed to send'); loadMessages(activeId, true) }
     finally { setSending(false) }
   }
 
@@ -137,7 +179,7 @@ export default function ChatPage() {
         attachmentType: file.type,
         attachmentName: file.name,
       })
-      loadMessages(activeId)
+      loadMessages(activeId, true)
       loadGroups()
     } catch (e: any) {
       toast.error(e.response?.data?.error || 'Upload failed')
@@ -154,6 +196,7 @@ export default function ChatPage() {
     try {
       await api.delete(`/chat/groups/${activeId}`)
       toast.success('Chat deleted')
+      delete msgCacheRef.current[activeId]
       setActiveId(null)
       setMessages([])
       await loadGroups()
@@ -189,7 +232,7 @@ export default function ChatPage() {
         <div className="p-3 border-b border-gray-100">
           <div className="flex items-center justify-between mb-2">
             <h2 className="font-bold text-gray-900">Chats</h2>
-            <button onClick={() => setShowNewChat(true)} className="text-blue-600 hover:bg-blue-50 rounded p-1.5"><Plus size={16} /></button>
+            <button onClick={() => setShowNewChat(true)} className="text-brand-600 hover:bg-brand-50 rounded p-1.5"><Plus size={16} /></button>
           </div>
           <div className="relative">
             <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -206,9 +249,9 @@ export default function ChatPage() {
             </div>
           ) : filteredGroups.map(g => (
             <button key={g.id} onClick={() => setActiveId(g.id)}
-              className={`w-full text-left p-3 border-b border-gray-100 hover:bg-slate-50 ${activeId === g.id ? 'bg-blue-50' : ''}`}>
+              className={`w-full text-left p-3 border-b border-gray-100 hover:bg-slate-50 ${activeId === g.id ? 'bg-brand-50' : ''}`}>
               <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center text-white font-bold ${g.type === 'DIRECT' ? 'bg-gradient-to-br from-blue-500 to-indigo-500' : 'bg-gradient-to-br from-emerald-500 to-teal-500'}`}>
+                <div className={`w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center text-white font-bold ${g.type === 'DIRECT' ? 'bg-gradient-to-br from-brand-500 to-brand-600' : 'bg-gradient-to-br from-brand-600 to-brand-800'}`}>
                   {g.type === 'DIRECT' ? (g.avatar ? <img src={g.avatar} className="w-full h-full rounded-full object-cover" /> : getInitials(g.name || 'X')) : <Users2 size={18} />}
                 </div>
                 <div className="flex-1 min-w-0">
@@ -242,7 +285,7 @@ export default function ChatPage() {
               <button onClick={() => setActiveId(null)} className="md:hidden text-gray-500 hover:text-gray-700">
                 <ChevronLeft size={18} />
               </button>
-              <div className={`w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center text-white font-bold ${activeGroup.type === 'DIRECT' ? 'bg-gradient-to-br from-blue-500 to-indigo-500' : 'bg-gradient-to-br from-emerald-500 to-teal-500'}`}>
+              <div className={`w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center text-white font-bold ${activeGroup.type === 'DIRECT' ? 'bg-gradient-to-br from-brand-500 to-brand-600' : 'bg-gradient-to-br from-brand-600 to-brand-800'}`}>
                 {activeGroup.type === 'DIRECT' ? getInitials(activeGroup.name || 'X') : <Users2 size={16} />}
               </div>
               <div className="flex-1">
@@ -262,7 +305,13 @@ export default function ChatPage() {
             {/* Messages */}
             <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 bg-slate-50" style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'40\' height=\'40\'%3E%3Ccircle cx=\'20\' cy=\'20\' r=\'1\' fill=\'%23cbd5e1\'/%3E%3C/svg%3E")' }}>
               {loadingMsgs ? (
-                <div className="text-center p-8"><Loader2 className="animate-spin mx-auto text-gray-400" /></div>
+                <div className="space-y-3 py-2">
+                  {[70, 45, 60, 35, 55].map((w, i) => (
+                    <div key={i} className={`flex ${i % 2 ? 'justify-end' : 'justify-start'}`}>
+                      <div className="h-9 rounded-2xl bg-gray-200/70 animate-pulse" style={{ width: `${w}%`, maxWidth: 320 }} />
+                    </div>
+                  ))}
+                </div>
               ) : messages.length === 0 ? (
                 <p className="text-center text-sm text-gray-400 py-12">No messages yet. Say hi 👋</p>
               ) : (
@@ -272,13 +321,13 @@ export default function ChatPage() {
                     return (
                       <div key={m.id} className={`flex gap-2 ${isMe ? 'justify-end' : 'justify-start'}`}>
                         {!isMe && (
-                          <div className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-[10px] font-bold flex-shrink-0">
+                          <div className="w-7 h-7 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[10px] font-bold flex-shrink-0">
                             {getInitials(m.sender?.name || 'X')}
                           </div>
                         )}
                         <div className={`max-w-md px-3 py-2 rounded-2xl ${isMe ? 'bg-emerald-100 text-emerald-950' : 'bg-white'} shadow-sm ${m._optimistic ? 'opacity-70' : ''}`}>
                           {!isMe && activeGroup.type !== 'DIRECT' && (
-                            <p className="text-xs font-semibold text-blue-600 mb-0.5">{m.sender?.name}</p>
+                            <p className="text-xs font-semibold text-brand-600 mb-0.5">{m.sender?.name}</p>
                           )}
                           {m.attachmentUrl && (
                             m.attachmentType?.startsWith('image/') ? (
@@ -286,7 +335,7 @@ export default function ChatPage() {
                                 className="rounded-lg max-w-[220px] max-h-[240px] object-cover cursor-pointer mb-1" />
                             ) : (
                               <a href={m.attachmentUrl} target="_blank" rel="noreferrer"
-                                className="flex items-center gap-1 text-xs text-blue-600 underline mb-1">
+                                className="flex items-center gap-1 text-xs text-brand-600 underline mb-1">
                                 <Paperclip size={11} /> {m.attachmentName || 'Attachment'}
                               </a>
                             )
@@ -325,7 +374,7 @@ export default function ChatPage() {
                   className="w-10 h-10 rounded-full hover:bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 disabled:opacity-50" title="Send image">
                   {uploading ? <Loader2 size={16} className="animate-spin" /> : <ImageIcon size={18} />}
                 </button>
-                <textarea className="flex-1 border border-gray-200 rounded-2xl px-4 py-2 text-sm resize-none focus:outline-none focus:border-blue-500"
+                <textarea className="flex-1 border border-gray-200 rounded-2xl px-4 py-2 text-sm resize-none focus:outline-none focus:border-brand-500"
                   placeholder="Type a message..." value={msgText}
                   onChange={e => setMsgText(e.target.value)} rows={1}
                   onFocus={() => setShowEmoji(false)}
@@ -366,7 +415,7 @@ export default function ChatPage() {
                           p.memberIds.includes(u.id) ? p.memberIds.filter(x => x !== u.id) : [...p.memberIds, u.id],
                       }))
                     }} />
-                  <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">
+                  <div className="w-6 h-6 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-xs font-bold">
                     {getInitials(u.name)}
                   </div>
                   <div className="flex-1">

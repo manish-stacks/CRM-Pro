@@ -80,8 +80,11 @@ export async function GET(req: NextRequest) {
         take: 6, orderBy: { expiryDate: 'asc' },
       })
 
-      const revenueChart = []
-      for (let i = 5; i >= 0; i--) {
+      // Revenue Trend is admin-only — everyone else gets an empty series
+      // (the dashboard hides the chart when it's empty).
+      const canSeeRevenue = ['SUPER_ADMIN', 'ADMIN'].includes(session.role)
+      const revenueChart: { month: string; revenue: number }[] = []
+      for (let i = 5; canSeeRevenue && i >= 0; i--) {
         const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
         const end = new Date(d.getFullYear(), d.getMonth() + 1, 0)
         const res = await prisma.payment.aggregate({ _sum: { amount: true }, where: { paidAt: { gte: d, lte: end } } })

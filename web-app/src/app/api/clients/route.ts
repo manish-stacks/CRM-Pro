@@ -136,7 +136,9 @@ export async function POST(req: NextRequest) {
   if (!session) return unauthorizedResponse()
 
   // Admin/Manager, Marketing Executive, and Telecaller can all create clients manually
-  if (!['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'MARKETING_EXECUTIVE', 'TELECALLER'].includes(session.role)) {
+  // Only Admin, the telecalling head (MANAGER) and Marketing Executives may
+  // add a client. Telecallers convert a lead instead of creating directly.
+  if (!['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'MARKETING_EXECUTIVE'].includes(session.role)) {
     return errorResponse('Forbidden', 403)
   }
 

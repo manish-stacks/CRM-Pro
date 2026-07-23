@@ -93,8 +93,8 @@ export default function ServicesPage() {
             <div key={svc.id} className={`card p-5 ${!svc.isActive ? 'opacity-60' : ''}`}>
               <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center">
-                    <Package size={18} className="text-blue-600" />
+                  <div className="w-10 h-10 rounded-xl bg-brand-50 flex items-center justify-center">
+                    <Package size={18} className="text-brand-600" />
                   </div>
                   <div>
                     <h3 className="font-semibold text-gray-900">{svc.name}</h3>

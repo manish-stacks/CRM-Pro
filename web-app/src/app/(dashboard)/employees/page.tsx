@@ -170,10 +170,10 @@ export default function EmployeesPage() {
             <span className="text-xs text-gray-500">{total} total</span>
             <button
               onClick={() => setShowFilter(!showFilter)}
-              className={`btn-secondary btn-sm ${activeFilterCount > 0 ? 'border-blue-500 text-blue-600' : ''}`}
+              className={`btn-secondary btn-sm ${activeFilterCount > 0 ? 'border-brand-500 text-brand-600' : ''}`}
             >
               <Filter size={13} /> Filters
-              {activeFilterCount > 0 && <span className="ml-1 bg-blue-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">{activeFilterCount}</span>}
+              {activeFilterCount > 0 && <span className="ml-1 bg-brand-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">{activeFilterCount}</span>}
             </button>
           </div>
         </div>
@@ -226,7 +226,7 @@ export default function EmployeesPage() {
                 <tr key={e.id} className={!e.user.isActive ? 'opacity-60' : ''}>
                   <td>
                     <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold overflow-hidden">
+                      <div className="w-9 h-9 rounded-full bg-brand-600 flex items-center justify-center text-white text-xs font-bold overflow-hidden">
                         {e.user.avatar ? <img src={e.user.avatar} className="w-full h-full object-cover" /> : getInitials(e.user.name)}
                       </div>
                       <div>
@@ -252,7 +252,7 @@ export default function EmployeesPage() {
                   <td className="text-right">
                     <div className="flex items-center justify-end gap-1">
                       <Link href={`/employees/${e.id}`} className="btn-ghost btn-sm !p-1.5" title="View"><Eye size={13} /></Link>
-                      <button onClick={() => makeIdCard(e)} className="btn-ghost btn-sm !p-1.5" title="Generate ID Card"><IdCard size={13} className="text-blue-600" /></button>
+                      <button onClick={() => makeIdCard(e)} className="btn-ghost btn-sm !p-1.5" title="Generate ID Card"><IdCard size={13} className="text-brand-600" /></button>
                       {canManage && (
                         <button onClick={() => openToggle(e)} className="btn-ghost btn-sm !p-1.5" title={e.user.isActive ? 'Disable' : 'Enable'}>
                           {e.user.isActive ? <UserX size={13} className="text-red-600" /> : <UserCheck size={13} className="text-green-600" />}
@@ -273,7 +273,7 @@ export default function EmployeesPage() {
       {/* Add Employee (limited fields — user completes profile later) */}
       <Modal open={modal === 'add'} onClose={() => setModal('none')} title="Add New Employee">
         <div className="space-y-4">
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-800">
+          <div className="bg-brand-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-800">
             <p className="font-semibold mb-1">👋 Quick setup</p>
             <p>Fill in the basics below. Employee ID will auto-generate (HBS format). The employee will fill in personal, ID, bank, and other details themselves after first login via their Profile page.</p>
           </div>

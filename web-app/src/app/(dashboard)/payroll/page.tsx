@@ -165,7 +165,7 @@ export default function PayrollPage() {
       {/* Generate Modal */}
       <Modal open={showGenModal} onClose={() => setShowGenModal(false)} title="Generate Payroll" className="max-w-md">
         <div className="space-y-4">
-          <div className="bg-blue-50 rounded-xl p-4 text-sm text-blue-700">
+          <div className="bg-brand-50 rounded-xl p-4 text-sm text-brand-700">
             This will calculate payroll based on attendance for each employee. Existing payslips for the same month won't be overwritten.
           </div>
           <div className="form-grid">

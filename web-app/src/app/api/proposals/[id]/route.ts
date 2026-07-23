@@ -32,7 +32,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       items: { orderBy: { order: 'asc' } },
       client: { select: { id: true, clientCode: true, clientName: true, companyName: true, phone: true, email: true, gstApplicable: true, gstNo: true, address: true, city: true, state: true } },
       lead: { select: { id: true, leadNumber: true, clientName: true, companyName: true, clientPhone: true, clientEmail: true, address: true, city: true, state: true } },
-      createdBy: { select: { name: true, email: true } },
+      createdBy: { select: { id: true, name: true, email: true, role: true } },
     },
   })
   if (!proposal) return notFoundResponse('Proposal')

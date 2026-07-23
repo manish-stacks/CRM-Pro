@@ -4,6 +4,9 @@ import { prisma } from '@/lib/prisma'
 import { requireAuth, getRequestSession } from '@/lib/auth'
 import { errorResponse, successResponse } from '@/lib/api'
 import { dateOnly } from '@/lib/attendanceDate'
+import { getTeamScope } from '@/lib/teamScope'
+
+const isAdminRole = (role: string) => ['SUPER_ADMIN', 'ADMIN'].includes(role)
 
 function toCsv(data: any[], filename: string) {
   if (data.length === 0) {
@@ -103,16 +106,29 @@ export async function GET(req: NextRequest) {
           if (dateTo) where.date.lte = new Date(dateTo + 'T23:59:59')
         }
         if (status) where.status = status
-        if (departmentId) {
+
+        // Role scope: non-admins (TL / dept head / manager) only get their own team
+        if (!isAdminRole(session.role)) {
+          const scope = await getTeamScope((session as any).userId)
+          if (!scope.visibleIds.length) return toCsv([], 'attendance-export')
+          where.employeeId = { in: scope.visibleIds }
+        }
+
+        const intersect = (ids: string[]) => {
+          where.employeeId = where.employeeId?.in
+            ? { in: where.employeeId.in.filter((id: string) => ids.includes(id)) }
+            : { in: ids }
+        }
+
+        // Department filter is admin-only (TLs already scoped to their own dept/team)
+        if (departmentId && isAdminRole(session.role)) {
           const deptEmps = await prisma.employee.findMany({ where: { departmentId }, select: { id: true } })
-          where.employeeId = { in: deptEmps.map(e => e.id) }
+          intersect(deptEmps.map(e => e.id))
         }
         if (search) {
           const users = await prisma.user.findMany({ where: { name: { contains: search } }, select: { id: true } })
           const emps = await prisma.employee.findMany({ where: { userId: { in: users.map(u => u.id) } }, select: { id: true } })
-          where.employeeId = where.employeeId?.in
-            ? { in: where.employeeId.in.filter((id: string) => emps.map(e => e.id).includes(id)) }
-            : { in: emps.map(e => e.id) }
+          intersect(emps.map(e => e.id))
         }
 
         const attendance = await prisma.attendance.findMany({
@@ -272,8 +288,16 @@ export async function GET(req: NextRequest) {
         const monthStart = new Date(y, m - 1, 1)
         const monthEnd = new Date(y, m, 0, 23, 59, 59)
 
+        const empWhere: any = { user: { isActive: true, role: { notIn: ['ADMIN', 'SUPER_ADMIN'] } } }
+        // Non-admin (TL / manager): summary only for employees under them
+        if (!isAdminRole(session.role)) {
+          const scope = await getTeamScope((session as any).userId)
+          if (!scope.visibleIds.length) return toCsv([], `attendance-summary-${monthParam}`)
+          empWhere.id = { in: scope.visibleIds }
+        }
+
         const employees = await prisma.employee.findMany({
-          where: { user: { isActive: true, role: { notIn: ['ADMIN', 'SUPER_ADMIN'] } } },
+          where: empWhere,
           include: {
             user: { select: { name: true } },
             department: { select: { name: true } },

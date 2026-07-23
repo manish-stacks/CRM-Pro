@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import api from '@/lib/axios'
+import { useAuth } from '@/hooks/useAuth'
 import { Button, Input, Select, SearchSelect, Textarea } from '@/components/ui'
 import { formatCurrency } from '@/lib/utils'
 import { ArrowLeft, Plus, Trash2, Save, Loader2, Package, FileText } from 'lucide-react'
@@ -18,10 +19,15 @@ interface Item {
   unitPrice: number
 }
 
+// Admin, telecalling head (MANAGER) and Marketing Executive only
+const CAN_CREATE_ROLES = ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'MARKETING_EXECUTIVE']
+
 function BuilderPageInner() {
   const router = useRouter()
   const params = useSearchParams()
   const preLeadId = params.get('leadId')
+  const { user } = useAuth()
+  const canCreate = CAN_CREATE_ROLES.includes(user?.role || '')
 
   const [leadLabel, setLeadLabel] = useState('')
   const [catalog, setCatalog] = useState<any[]>([])
@@ -145,6 +151,20 @@ function BuilderPageInner() {
     } catch (e: any) {
       toast.error(e.response?.data?.error || 'Failed')
     } finally { setSaving(false) }
+  }
+
+
+  if (user && !canCreate) {
+    return (
+      <div className="max-w-md mx-auto mt-20 text-center card p-8">
+        <FileText size={40} className="mx-auto text-gray-300 mb-3" />
+        <h2 className="font-semibold text-gray-900 mb-1">Not allowed</h2>
+        <p className="text-sm text-gray-500">
+          Only Admin, the telecalling head and Marketing Executives can create proposals.
+        </p>
+        <Link href="/proposals" className="btn-secondary btn-sm mt-4 inline-flex">Back to proposals</Link>
+      </div>
+    )
   }
 
   return (

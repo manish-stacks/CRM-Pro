@@ -89,6 +89,7 @@ model User {
   lettersGenerated       Letter[]             @relation("LetterGeneratedBy")
   reminders              Reminder[]
   notes                  Note[]
+  leavesApproved         Leave[]              @relation("LeaveApprovedBy")
 
   @@index([email])
   @@index([role])
@@ -451,16 +452,24 @@ model Leave {
   hourlyHours     Float?    // 2.0
   reason          String    @db.Text
   status          String    @default("PENDING") // PENDING, APPROVED, REJECTED, CANCELLED
-  approvedBy      String?
+
+  // Approval trail — who acted on this request, and in what capacity.
+  approvedBy      String?   // User.id of the approver/rejecter
   approvedAt      DateTime?
+  approverRole    String?   // their app role at the time: SUPER_ADMIN / ADMIN / MANAGER / EMPLOYEE
+  approverType    String?   // business capacity: "ADMIN" | "TEAM_LEAD"
+  approverNote    String?   // e.g. "Head of Web Development" — how they had rights over this employee
+
   rejectionReason String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
   employee        Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  approver        User?     @relation("LeaveApprovedBy", fields: [approvedBy], references: [id], onDelete: SetNull)
 
   @@index([employeeId, status])
   @@index([startDate, endDate])
+  @@index([approvedBy])
   @@map("leaves")
 }
 

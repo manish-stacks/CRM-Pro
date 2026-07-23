@@ -13,7 +13,7 @@ const COLORS = ['blue', 'indigo', 'purple', 'pink', 'red', 'orange', 'amber', 'y
 const ICONS = ['Building2', 'Briefcase', 'Code2', 'Megaphone', 'Search', 'MapPin', 'Target', 'TrendingUp', 'Share2', 'Palette', 'Users']
 
 const colorMap: Record<string, string> = {
-  blue: 'bg-blue-100 text-blue-700 border-blue-200',
+  blue: 'bg-brand-100 text-brand-700 border-blue-200',
   indigo: 'bg-indigo-100 text-indigo-700 border-indigo-200',
   purple: 'bg-purple-100 text-purple-700 border-purple-200',
   pink: 'bg-pink-100 text-pink-700 border-pink-200',
@@ -26,7 +26,7 @@ const colorMap: Record<string, string> = {
   teal: 'bg-teal-100 text-teal-700 border-teal-200',
   cyan: 'bg-cyan-100 text-cyan-700 border-cyan-200',
   slate: 'bg-slate-100 text-slate-700 border-slate-200',
-  rose: 'bg-rose-100 text-rose-700 border-rose-200',
+  rose: 'bg-brand-100 text-brand-700 border-brand-200',
 }
 
 export default function DepartmentsPage() {
@@ -176,7 +176,7 @@ export default function DepartmentsPage() {
               {canEdit && (
                 <button
                   onClick={() => openMgr(d)}
-                  className="w-full mt-4 text-xs text-blue-600 hover:bg-blue-50 py-2 rounded-lg flex items-center justify-center gap-1 font-semibold"
+                  className="w-full mt-4 text-xs text-brand-600 hover:bg-brand-50 py-2 rounded-lg flex items-center justify-center gap-1 font-semibold"
                 >
                   <UserCheck size={12} /> {d.managerId ? 'Change Manager' : 'Assign Manager'} <ChevronRight size={12} />
                 </button>
@@ -196,7 +196,7 @@ export default function DepartmentsPage() {
             <div className="flex flex-wrap gap-2">
               {COLORS.map(c => (
                 <button key={c} onClick={() => setForm(p => ({ ...p, color: c }))} type="button"
-                  className={`w-8 h-8 rounded-lg border-2 ${colorMap[c]} ${form.color === c ? 'ring-2 ring-offset-2 ring-blue-500' : ''}`} />
+                  className={`w-8 h-8 rounded-lg border-2 ${colorMap[c]} ${form.color === c ? 'ring-2 ring-offset-2 ring-brand-500' : ''}`} />
               ))}
             </div>
           </div>
@@ -222,9 +222,9 @@ export default function DepartmentsPage() {
       <Modal open={modal === 'manager'} onClose={() => setModal('none')} title={`Change Manager — ${target?.name}`}>
         <div className="space-y-4">
           {target?.manager && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm">
+            <div className="bg-brand-50 border border-blue-200 rounded-lg p-3 text-sm">
               <p className="font-semibold text-blue-900">Current Manager</p>
-              <p className="text-blue-700">{target.manager.user?.name}</p>
+              <p className="text-brand-700">{target.manager.user?.name}</p>
             </div>
           )}
           <label className="label">New Manager</label>

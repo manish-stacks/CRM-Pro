@@ -9,7 +9,7 @@ import toast from 'react-hot-toast'
 
 const ACTION_COLORS: Record<string, string> = {
   CREATE: 'bg-emerald-100 text-emerald-700',
-  UPDATE: 'bg-blue-100 text-blue-700',
+  UPDATE: 'bg-brand-100 text-brand-700',
   DELETE: 'bg-red-100 text-red-700',
   LOGIN: 'bg-slate-100 text-slate-700',
   LOGOUT: 'bg-slate-100 text-slate-700',
@@ -21,7 +21,7 @@ const ACTION_COLORS: Record<string, string> = {
   ENABLE: 'bg-emerald-100 text-emerald-700',
   DISABLE: 'bg-red-100 text-red-700',
   REASSIGN: 'bg-purple-100 text-purple-700',
-  SEND: 'bg-blue-100 text-blue-700',
+  SEND: 'bg-brand-100 text-brand-700',
   CONVERT_TO_INVOICE: 'bg-emerald-100 text-emerald-700',
   CONVERTED: 'bg-emerald-100 text-emerald-700',
   RECORD_PAYMENT: 'bg-emerald-100 text-emerald-700',
@@ -132,7 +132,7 @@ export default function AuditLogsPage() {
                     <td>
                       {l.user ? (
                         <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">
+                          <div className="w-6 h-6 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-xs font-bold">
                             {getInitials(l.user.name)}
                           </div>
                           <div>

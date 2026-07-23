@@ -77,7 +77,7 @@ export default function MyTicketsPage() {
             { key: 'all', label: 'All (my dept)' },
           ].map((t: any) => (
             <button key={t.key} onClick={() => { setMode(t.key); setPage(1) }}
-              className={`px-4 py-1.5 text-sm rounded-md ${mode === t.key ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-600 hover:bg-gray-50'}`}>
+              className={`px-4 py-1.5 text-sm rounded-md ${mode === t.key ? 'bg-brand-50 text-brand-700 font-medium' : 'text-gray-600 hover:bg-gray-50'}`}>
               {t.label}
             </button>
           ))}

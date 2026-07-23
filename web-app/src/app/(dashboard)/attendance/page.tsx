@@ -24,6 +24,7 @@ function DeviceIcon({ device }: { device?: string | null }) {
 export default function AttendancePage() {
   const { user, isAtLeast } = useAuth()
   const canSeeAll = isAtLeast('MANAGER')
+  const isAdminUser = isAtLeast('ADMIN')
 
   const [records, setRecords] = useState<any[]>([])
   const [total, setTotal] = useState(0)
@@ -55,14 +56,18 @@ export default function AttendancePage() {
     setLoading(true)
     try {
       const activeFilters: Record<string, string> = { page: String(page), limit: '20' }
-      Object.entries(filters).forEach(([k, v]) => { if (v) activeFilters[k] = v })
+      Object.entries(filters).forEach(([k, v]) => {
+        if (!v) return
+        if (k === 'departmentId' && !isAdminUser) return
+        activeFilters[k] = v
+      })
       const r = await api.get(`/attendance?${new URLSearchParams(activeFilters)}`)
       setRecords(r.data.data || [])
       setTotal(r.data.total || 0)
       setLateTotal(r.data.lateTotal || 0)
     } catch { toast.error('Failed to load attendance') }
     finally { setLoading(false) }
-  }, [page, filters])
+  }, [page, filters, isAdminUser])
 
   const fetchToday = useCallback(async () => {
     try {
@@ -74,13 +79,15 @@ export default function AttendancePage() {
   useEffect(() => { fetchRecords() }, [fetchRecords])
   useEffect(() => { fetchToday() }, [fetchToday])
   useEffect(() => {
-    if (canSeeAll) {
+    if (isAdminUser) {
       api.get('/departments').then(r => setDepartments(r.data.data || [])).catch(() => {})
+    }
+    if (canSeeAll) {
       api.get('/employees?limit=500').then(r => setEmployeesList(r.data.data || [])).catch(() => {})
     }
-  }, [canSeeAll])
+  }, [canSeeAll, isAdminUser])
 
-  const isAdmin = isAtLeast('ADMIN')
+  const isAdmin = isAdminUser
 
   const openAdd = () => {
     setAttForm({ employeeId: '', date: new Date().toISOString().slice(0, 10), status: 'PRESENT', workMode: 'WFO', inTime: '', outTime: '', notes: '' })
@@ -147,14 +154,27 @@ export default function AttendancePage() {
     const loadingToast = toast.loading('Getting your location...')
 
     try {
-      // Get browser geo + reverse geocode. If it fails (common on desktop PCs
-      // without GPS/WiFi), don't block the punch — just go in without location.
-      const geo = await getCurrentGeo({ reverseGeocode: true, timeoutMs: 8000 })
+      // Coordinates only — the address is resolved server-side, which is what
+      // keeps this fast. We take the best fix but stop as soon as it stops
+      // improving (a desktop Wi-Fi/IP fix never improves, so no long wait).
+      const geo = await getCurrentGeo({
+        reverseGeocode: false,
+        timeoutMs: 10000,
+        settleMs: 2500,
+        highAccuracy: true,
+        desiredAccuracyM: 100,
+        warnAccuracyM: 500,
+        maxAgeMs: 0,
+      })
       const hasLocation = !geo.error
 
       toast.dismiss(loadingToast)
       if (!hasLocation) {
         toast(`Punching ${action === 'punch_in' ? 'in' : 'out'} without location — ${geo.error}`, { icon: '📍' })
+      } else if (geo.ipLevel) {
+        toast('This PC has no GPS, so the location is a Wi-Fi/IP estimate and can be several km off. Punch from the mobile app for an exact address.', { icon: '⚠️', duration: 7000 })
+      } else if (geo.lowAccuracy) {
+        toast(`Location is approximate (±${Math.round(geo.accuracy || 0)}m).`, { icon: '⚠️', duration: 5000 })
       }
       toast.loading(action === 'punch_in' ? 'Punching in...' : 'Punching out...')
       const r = await api.post('/attendance', {
@@ -162,7 +182,7 @@ export default function AttendancePage() {
         workMode,
         latitude: hasLocation ? geo.latitude : null,
         longitude: hasLocation ? geo.longitude : null,
-        address: hasLocation ? geo.address : null,
+        accuracy: hasLocation ? geo.accuracy : null,
       })
       toast.dismiss()
       setToday(r.data.data)
@@ -178,7 +198,11 @@ export default function AttendancePage() {
 
   const exportAttendance = () => {
     const p = new URLSearchParams({ type: 'attendance', format: 'csv' })
-    Object.entries(filters).forEach(([k, v]) => { if (v) p.set(k, v as string) })
+    Object.entries(filters).forEach(([k, v]) => {
+      if (!v) return
+      if (k === 'departmentId' && !isAdminUser) return
+      p.set(k, v as string)
+    })
     window.open(`/api/import-export?${p.toString()}`, '_blank')
   }
 
@@ -263,7 +287,7 @@ export default function AttendancePage() {
                   onClick={() => handlePunch()}
                   disabled={punching}
                   className={`flex items-center justify-center gap-2 px-5 py-3 rounded-lg font-semibold text-sm transition-all shadow-sm ${
-                    isPunchedIn ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-green-600 hover:bg-green-700 text-white'
+                    isPunchedIn ? 'bg-gray-700 hover:bg-gray-800 text-white' : 'bg-gradient-to-r from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 text-white'
                   } disabled:opacity-50`}
                 >
                   {punching ? <Loader2 size={16} className="animate-spin" /> :
@@ -329,11 +353,11 @@ export default function AttendancePage() {
             )}
             <button
               onClick={() => setShowFilter(!showFilter)}
-              className={`btn-secondary btn-sm ${activeFilterCount > 0 ? 'border-blue-500 text-blue-600' : ''}`}
+              className={`btn-secondary btn-sm ${activeFilterCount > 0 ? 'border-brand-500 text-brand-600' : ''}`}
             >
               <Filter size={13} /> Filters
               {activeFilterCount > 0 && (
-                <span className="ml-1 bg-blue-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                <span className="ml-1 bg-brand-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
                   {activeFilterCount}
                 </span>
               )}
@@ -364,17 +388,19 @@ export default function AttendancePage() {
                 {STATUSES.map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
               </select>
             </div>
+            {isAdmin && (
+              <div>
+                <label className="text-xs font-medium text-gray-600 mb-1 block">Department</label>
+                <select className="input text-xs"
+                  value={filters.departmentId}
+                  onChange={e => { setFilters(p => ({ ...p, departmentId: e.target.value })); setPage(1) }}>
+                  <option value="">All</option>
+                  {departments.map((d: any) => <option key={d.id} value={d.id}>{d.name}</option>)}
+                </select>
+              </div>
+            )}
             {canSeeAll && (
               <>
-                <div>
-                  <label className="text-xs font-medium text-gray-600 mb-1 block">Department</label>
-                  <select className="input text-xs"
-                    value={filters.departmentId}
-                    onChange={e => { setFilters(p => ({ ...p, departmentId: e.target.value })); setPage(1) }}>
-                    <option value="">All</option>
-                    {departments.map((d: any) => <option key={d.id} value={d.id}>{d.name}</option>)}
-                  </select>
-                </div>
                 <div>
                   <label className="text-xs font-medium text-gray-600 mb-1 block">Employee</label>
                   <div className="relative">
@@ -429,7 +455,7 @@ export default function AttendancePage() {
                   {canSeeAll && (
                     <td>
                       <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold">
+                        <div className="w-8 h-8 rounded-full bg-brand-600 flex items-center justify-center text-white text-xs font-bold">
                           {getInitials(r.employee?.user?.name || '?')}
                         </div>
                         <div>
@@ -478,7 +504,7 @@ export default function AttendancePage() {
                   {isAdmin && (
                     <td>
                       <div className="flex items-center gap-1">
-                        <button onClick={() => openEdit(r)} className="p-1.5 rounded-lg hover:bg-blue-50 text-gray-400 hover:text-blue-600" title="Edit"><Edit3 size={13} /></button>
+                        <button onClick={() => openEdit(r)} className="p-1.5 rounded-lg hover:bg-brand-50 text-gray-400 hover:text-brand-600" title="Edit"><Edit3 size={13} /></button>
                         <button onClick={() => deleteAtt(r)} className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-600" title="Delete"><Trash2 size={13} /></button>
                       </div>
                     </td>

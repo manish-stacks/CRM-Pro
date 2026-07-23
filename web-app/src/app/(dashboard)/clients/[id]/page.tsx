@@ -196,7 +196,7 @@ export default function ClientDetailPage() {
       <div className="card p-5">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div className="flex items-start gap-4 flex-1 min-w-0">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-2xl font-bold flex-shrink-0">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-brand-500 to-brand-600 flex items-center justify-center text-white text-2xl font-bold flex-shrink-0">
               {getInitials(client.clientName)}
             </div>
             <div className="flex-1 min-w-0">
@@ -213,8 +213,8 @@ export default function ClientDetailPage() {
               <h1 className="text-2xl font-bold text-gray-900">{client.clientName}</h1>
               <p className="text-sm text-gray-600 flex items-center gap-1 mt-0.5"><Building2 size={12} /> {client.companyName}</p>
               <div className="flex items-center gap-4 mt-2 text-sm text-gray-600 flex-wrap">
-                <a href={`tel:${client.phone}`} className="flex items-center gap-1 hover:text-blue-600"><Phone size={12} /> {client.phone}</a>
-                {client.email && <a href={`mailto:${client.email}`} className="flex items-center gap-1 hover:text-blue-600"><Mail size={12} /> {client.email}</a>}
+                <a href={`tel:${client.phone}`} className="flex items-center gap-1 hover:text-brand-600"><Phone size={12} /> {client.phone}</a>
+                {client.email && <a href={`mailto:${client.email}`} className="flex items-center gap-1 hover:text-brand-600"><Mail size={12} /> {client.email}</a>}
                 {client.city && <span className="flex items-center gap-1"><MapPin size={12} /> {client.city}{client.state ? `, ${client.state}` : ''}</span>}
                 {client.onboardingDate && <span className="text-xs text-gray-500 flex items-center gap-1"><Calendar size={11} />Onboarded: {formatDate(client.onboardingDate)}</span>}
               </div>
@@ -280,11 +280,11 @@ export default function ClientDetailPage() {
         <div className="border-b border-gray-100 flex items-center overflow-x-auto">
           {visibleTabs.map((t: any) => (
             <button key={t.key} onClick={() => setTab(t.key)}
-              className={`px-5 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${tab === t.key ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'
+              className={`px-5 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${tab === t.key ? 'border-blue-600 text-brand-600' : 'border-transparent text-gray-500 hover:text-gray-700'
                 }`}>
               <t.icon size={14} /> {t.label}
               {t.count !== null && t.count !== undefined && (
-                <span className={`text-xs ${tab === t.key ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'} px-1.5 rounded`}>{t.count}</span>
+                <span className={`text-xs ${tab === t.key ? 'bg-brand-100 text-brand-700' : 'bg-gray-100 text-gray-500'} px-1.5 rounded`}>{t.count}</span>
               )}
             </button>
           ))}
@@ -358,7 +358,7 @@ export default function ClientDetailPage() {
                 <div className="space-y-2">
                   {client.proposals.map((p: any) => (
                     <Link key={p.id} href={`/proposals/${p.id}`}
-                      className="border border-gray-200 rounded-lg p-3 hover:border-blue-300 flex items-center gap-3 group">
+                      className="border border-gray-200 rounded-lg p-3 hover:border-brand-300 flex items-center gap-3 group">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-mono text-xs text-gray-500">{p.proposalNumber}</span>
@@ -388,7 +388,7 @@ export default function ClientDetailPage() {
                 <div className="space-y-2">
                   {client.invoices.map((inv: any) => (
                     <Link key={inv.id} href={`/invoices/${inv.id}`}
-                      className="border border-gray-200 rounded-lg p-3 hover:border-blue-300 flex items-center gap-3">
+                      className="border border-gray-200 rounded-lg p-3 hover:border-brand-300 flex items-center gap-3">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-mono text-xs text-gray-500">{inv.invoiceNumber}</span>
@@ -528,11 +528,11 @@ export default function ClientDetailPage() {
                 <p className="text-sm font-semibold text-emerald-900 mb-1">✅ Welcome sent!</p>
                 <p className="text-xs text-emerald-700">Email + WhatsApp delivered with the new password. Save it below — shown only once.</p>
               </div>
-              <div className="bg-white border-2 border-blue-500 rounded-lg p-4 text-center">
+              <div className="bg-white border-2 border-brand-500 rounded-lg p-4 text-center">
                 <p className="text-xs text-gray-500 mb-1">Temporary Password</p>
                 <p className="text-2xl font-mono font-bold tracking-wider">{showPwd}</p>
                 <button onClick={() => { navigator.clipboard.writeText(showPwd); toast.success('Copied!') }}
-                  className="text-xs text-blue-600 hover:underline mt-2">Copy</button>
+                  className="text-xs text-brand-600 hover:underline mt-2">Copy</button>
               </div>
               <div className="flex justify-end">
                 <Button onClick={() => { setModal('none'); setShowPwd(null) }}>Done</Button>
@@ -643,7 +643,7 @@ function PaymentsSection({ clientId }: { clientId: string }) {
               <div className="flex-1">
                 <p className="font-medium text-sm">
                   {formatCurrency(p.amount)} · <span className="text-gray-500">{p.method}</span>
-                  {p.source === 'CLIENT_PORTAL' && <span className="badge bg-blue-100 text-blue-700 text-[10px] ml-2">Client Portal</span>}
+                  {p.source === 'CLIENT_PORTAL' && <span className="badge bg-brand-100 text-brand-700 text-[10px] ml-2">Client Portal</span>}
                 </p>
                 <p className="text-xs text-gray-500">
                   Invoice {p.invoice?.invoiceNumber} · {formatDate(p.paidAt)}{p.reference && <> · Ref: {p.reference}</>}
@@ -779,12 +779,12 @@ function ReportsSection({ clientId, services }: { clientId: string, services: an
                     <p className="font-medium text-sm">{r.title}</p>
                     <span className="badge bg-slate-100 text-slate-700 text-[10px]">{r.reportType}</span>
                     {r.reportPeriod && <span className="badge bg-purple-100 text-purple-700 text-[10px]">{r.reportPeriod}</span>}
-                    {r.clientService && <span className="badge bg-blue-50 text-blue-700 text-[10px]">{r.clientService.serviceName}</span>}
+                    {r.clientService && <span className="badge bg-brand-50 text-brand-700 text-[10px]">{r.clientService.serviceName}</span>}
                   </div>
                   {r.description && <p className="text-xs text-gray-600 mt-1">{r.description}</p>}
                   {r.content && <p className="text-sm text-gray-700 mt-1 whitespace-pre-wrap">{r.content}</p>}
                   {r.fileUrl && (
-                    <a href={r.fileUrl} target="_blank" className="text-xs text-blue-600 hover:underline flex items-center gap-1 mt-1">
+                    <a href={r.fileUrl} target="_blank" className="text-xs text-brand-600 hover:underline flex items-center gap-1 mt-1">
                       📎 View attachment
                     </a>
                   )}
@@ -818,10 +818,10 @@ function ReportsSection({ clientId, services }: { clientId: string, services: an
           <div>
             <label className="label">Attach File (image / PDF)</label>
             <input type="file" accept="image/*,application/pdf" onChange={handleFile} disabled={uploading} className="input" />
-            {uploading && <p className="text-xs text-blue-600 mt-1"><Loader2 size={11} className="animate-spin inline" /> Uploading...</p>}
+            {uploading && <p className="text-xs text-brand-600 mt-1"><Loader2 size={11} className="animate-spin inline" /> Uploading...</p>}
             {form.fileUrl && !uploading && <p className="text-xs text-emerald-600 mt-1">✓ Uploaded: <a href={form.fileUrl} target="_blank" className="underline">View</a></p>}
           </div>
-          <label className="flex items-center gap-2 text-sm bg-blue-50 border border-blue-200 rounded-lg p-3 cursor-pointer">
+          <label className="flex items-center gap-2 text-sm bg-brand-50 border border-blue-200 rounded-lg p-3 cursor-pointer">
             <input type="checkbox" checked={form.notifyClient} onChange={e => setForm(p => ({ ...p, notifyClient: e.target.checked }))} />
             <span>📲 Send WhatsApp notification to client</span>
           </label>
@@ -943,7 +943,7 @@ function TeamSection({ clientId, services, canEdit, user, onChanged }: {
           <h3 className="font-semibold text-gray-900">Project Team</h3>
           <p className="text-xs text-gray-500">Assign a department head for each service — the head can add their own team members or themselves</p>
         </div>
-        <Link href={`/projects`} className="text-xs text-blue-600 hover:underline">All assignments →</Link>
+        <Link href={`/projects`} className="text-xs text-brand-600 hover:underline">All assignments →</Link>
       </div>
 
       {services.length === 0 ? (
@@ -991,7 +991,7 @@ function TeamSection({ clientId, services, canEdit, user, onChanged }: {
                     ) : (
                       <div className="text-xs text-gray-400">
                         No head assigned
-                        {suggested && <span className="text-blue-600"> · Suggested: {suggested.name}</span>}
+                        {suggested && <span className="text-brand-600"> · Suggested: {suggested.name}</span>}
                       </div>
                     )}
                   </div>
@@ -1000,8 +1000,8 @@ function TeamSection({ clientId, services, canEdit, user, onChanged }: {
                     {g.members.length === 0 ? <p className="text-xs text-gray-400">No members</p> : (
                       <div className="flex flex-wrap gap-1">
                         {g.members.map((m: any) => (
-                          <div key={m.id} className="flex items-center gap-1 bg-blue-50 rounded px-2 py-0.5 text-xs">
-                            <div className="w-4 h-4 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-[9px] font-bold">
+                          <div key={m.id} className="flex items-center gap-1 bg-brand-50 rounded px-2 py-0.5 text-xs">
+                            <div className="w-4 h-4 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[9px] font-bold">
                               {getInitials(m.member?.name || 'X')}
                             </div>
                             <span>{m.member?.name}</span>
@@ -1044,7 +1044,7 @@ function TeamSection({ clientId, services, canEdit, user, onChanged }: {
                   ]}
                 />
                 {modal.service.departmentId && deptHead[modal.service.departmentId] && (
-                  <p className="text-xs text-blue-600 mt-1">
+                  <p className="text-xs text-brand-600 mt-1">
                     Suggested dept head: {deptHead[modal.service.departmentId].name}
                   </p>
                 )}
@@ -1058,7 +1058,7 @@ function TeamSection({ clientId, services, canEdit, user, onChanged }: {
                   ) : memberCandidates(modal.service).map((u: any) => (
                     <label key={u.id} className="flex items-center gap-2 p-2 hover:bg-gray-50 cursor-pointer text-sm">
                       <input type="checkbox" checked={form.memberIds.includes(u.id)} onChange={() => toggle(u.id)} />
-                      <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">
+                      <div className="w-6 h-6 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-xs font-bold">
                         {getInitials(u.name)}
                       </div>
                       <div className="flex-1">

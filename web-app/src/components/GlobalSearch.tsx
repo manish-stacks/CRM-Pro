@@ -5,16 +5,21 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import api from '@/lib/axios'
-import { Search, Loader2, Users2, Target, UserCheck, CreditCard } from 'lucide-react'
+import { Search, Loader2, Users2, Target, UserCheck, CreditCard, CalendarDays } from 'lucide-react'
+import { useAuth } from '@/hooks/useAuth'
 
 const GROUPS = [
   { key: 'clients', label: 'Clients', icon: Users2 },
   { key: 'leads', label: 'Leads', icon: Target },
   { key: 'employees', label: 'Employees', icon: UserCheck },
   { key: 'invoices', label: 'Invoices', icon: CreditCard },
+  { key: 'leaves', label: 'My Leaves', icon: CalendarDays },
 ] as const
 
 export function GlobalSearch() {
+  const { user } = useAuth()
+  // Plain employees can only look up their own leaves
+  const isPlainEmployee = user?.role === 'EMPLOYEE'
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -56,11 +61,11 @@ export function GlobalSearch() {
 
   return (
     <div ref={ref} className="relative hidden md:block w-72">
-      <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 focus-within:border-blue-300 focus-within:bg-white transition-colors">
+      <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-full px-3.5 py-2 focus-within:border-brand-300 focus-within:bg-white transition-colors">
         <Search size={15} className="text-gray-400 flex-shrink-0" />
         <input
           className="bg-transparent text-sm text-gray-700 placeholder-gray-400 outline-none w-full"
-          placeholder="Search clients, leads, employees, invoices..."
+          placeholder={isPlainEmployee ? 'Search your leaves...' : 'Search clients, leads, employees, invoices...'}
           value={query}
           onFocus={() => setOpen(true)}
           onChange={e => { setQuery(e.target.value); setOpen(true) }}
@@ -87,7 +92,7 @@ export function GlobalSearch() {
                   </p>
                   {items.map((it: any) => (
                     <button key={it.id} onClick={() => goTo(it.link)}
-                      className="w-full text-left px-3 py-2 hover:bg-blue-50 flex flex-col">
+                      className="w-full text-left px-3 py-2 hover:bg-brand-50 flex flex-col">
                       <span className="text-sm text-gray-900 font-medium truncate">{it.label || '—'}</span>
                       {it.sub && <span className="text-xs text-gray-500 truncate">{it.sub}</span>}
                     </button>

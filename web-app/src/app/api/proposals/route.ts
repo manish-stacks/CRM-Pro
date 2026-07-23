@@ -81,7 +81,7 @@ export async function GET(req: NextRequest) {
       include: {
         client: { select: { id: true, clientCode: true, clientName: true, companyName: true } },
         lead:   { select: { id: true, leadNumber: true, clientName: true, companyName: true } },
-        createdBy: { select: { name: true } },
+        createdBy: { select: { id: true, name: true, role: true, avatar: true } },
       },
       orderBy: { createdAt: 'desc' },
     }),
@@ -94,7 +94,9 @@ export async function POST(req: NextRequest) {
   const session = await getRequestSession(req)
   if (!session) return unauthorizedResponse()
 
-  if (!['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'MARKETING_EXECUTIVE', 'TELECALLER'].includes(session.role)) {
+  // Only Admin, the telecalling head (MANAGER) and Marketing Executives may
+  // raise a proposal. Telecallers pass the lead up instead of quoting directly.
+  if (!['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'MARKETING_EXECUTIVE'].includes(session.role)) {
     return errorResponse('Forbidden', 403)
   }
 

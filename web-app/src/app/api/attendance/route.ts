@@ -11,6 +11,7 @@ import { todayDateOnly, dateOnly, computeLate } from '@/lib/attendanceDate'
 import { Settings } from '@/lib/settings'
 import { getTeamScope } from '@/lib/teamScope'
 import { getProfileCompletion, PROFILE_COMPLETION_THRESHOLD } from '@/lib/profileCompletion'
+import { reverseGeocodeForPunch } from '@/lib/reverseGeocodeServer'
 
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req)
@@ -111,7 +112,8 @@ export async function POST(req: NextRequest) {
       notes,
       latitude,
       longitude,
-      address,
+      accuracy,     // metres — how good the fix is (folded into the saved address)
+      address,      // optional; when missing we resolve it server-side (faster)
       employeeId,   // admin_save: whose attendance
       date,         // admin_save: which day
       punchIn,      // admin_save: ISO or null
@@ -148,6 +150,14 @@ export async function POST(req: NextRequest) {
     const today = todayDateOnly()
     const dev = deviceFromRequest(req)
 
+    // Resolve the street address here instead of in the browser — the client
+    // only sends coordinates, which is what keeps punch in/out fast. Capped by
+    // its own timeout, and failure is non-fatal.
+    let resolvedAddress: string | null = address ?? null
+    if (!resolvedAddress && typeof latitude === 'number' && typeof longitude === 'number') {
+      resolvedAddress = await reverseGeocodeForPunch(latitude, longitude, accuracy)
+    }
+
     if (action === 'punch_in') {
       const { percent } = getProfileCompletion(employee)
       if (percent < PROFILE_COMPLETION_THRESHOLD) {
@@ -178,7 +188,7 @@ export async function POST(req: NextRequest) {
           lateBy,
           punchInLat: latitude ?? null,
           punchInLng: longitude ?? null,
-          punchInAddress: address ?? null,
+          punchInAddress: resolvedAddress,
           punchInIp: dev.ip,
           punchInDevice: dev.device,
           punchInBrowser: dev.browser,
@@ -195,7 +205,7 @@ export async function POST(req: NextRequest) {
           notes,
           punchInLat: latitude ?? null,
           punchInLng: longitude ?? null,
-          punchInAddress: address ?? null,
+          punchInAddress: resolvedAddress,
           punchInIp: dev.ip,
           punchInDevice: dev.device,
           punchInBrowser: dev.browser,
@@ -237,7 +247,7 @@ export async function POST(req: NextRequest) {
           status,
           punchOutLat: latitude ?? null,
           punchOutLng: longitude ?? null,
-          punchOutAddress: address ?? null,
+          punchOutAddress: resolvedAddress,
           punchOutIp: dev.ip,
           punchOutDevice: dev.device,
           punchOutBrowser: dev.browser,

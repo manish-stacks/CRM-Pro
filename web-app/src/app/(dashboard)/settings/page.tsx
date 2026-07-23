@@ -35,6 +35,7 @@ const DEFAULTS: Record<string, any> = {
   // Leave accrual + carry-forward
   leave_monthly_accrual: 1,
   leave_max_carryforward: 6,
+  leave_balance_start_month: '',
   // Desktop Tracker (check-in/out + idle time)
   tracker_enabled: true,
   tracker_idle_threshold_seconds: 300,
@@ -122,7 +123,7 @@ export default function SettingsPage() {
           'payroll_pf_percent', 'payroll_pf_wage_ceiling', 'payroll_esi_percent', 'payroll_esi_gross_ceiling',
           'payroll_profession_tax', 'payroll_profession_tax_threshold',
           'payroll_tds_percent', 'payroll_tds_annual_threshold', 'payroll_tds_monthly_exempt'],
-        attendance: ['office_start_time', 'office_end_time', 'late_grace_minutes', 'leave_monthly_accrual', 'leave_max_carryforward'],
+        attendance: ['office_start_time', 'office_end_time', 'late_grace_minutes', 'leave_monthly_accrual', 'leave_max_carryforward', 'leave_balance_start_month'],
         tracker: ['tracker_enabled', 'tracker_idle_threshold_seconds'],
         notifications: ['email_enabled', 'whatsapp_enabled'],
       }
@@ -166,7 +167,7 @@ export default function SettingsPage() {
           ].map((t: any) => (
             <button key={t.key} onClick={() => setTab(t.key)}
               className={`px-5 py-3 text-sm font-medium border-b-2 flex items-center gap-2 whitespace-nowrap ${
-                tab === t.key ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'
+                tab === t.key ? 'border-blue-600 text-brand-600' : 'border-transparent text-gray-500 hover:text-gray-700'
               }`}>
               <t.icon size={13} /> {t.label}
             </button>
@@ -234,7 +235,7 @@ export default function SettingsPage() {
                     return (
                       <button key={m} type="button" onClick={() => togglePaymentMethod(m)}
                         className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
-                          active ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300'
+                          active ? 'bg-brand-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300'
                         }`}>
                         {m.replace(/_/g, ' ')}
                       </button>
@@ -257,7 +258,7 @@ export default function SettingsPage() {
                       <button key={i} type="button" onClick={() => toggleWeeklyOff(i)}
                         className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
                           active
-                            ? 'bg-blue-600 text-white border-blue-600'
+                            ? 'bg-brand-600 text-white border-blue-600'
                             : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300'
                         }`}>
                         {d}
@@ -364,6 +365,41 @@ export default function SettingsPage() {
                   That means {(values.leave_monthly_accrual ?? 1) * 12}/year will be earned, but no more than {values.leave_max_carryforward ?? 6} can accumulate at once.
                 </div>
               </div>
+
+              <div className="border-t border-gray-100 pt-4 mt-2">
+                <h3 className="font-semibold text-gray-900 text-sm mb-1">Leave — reset the balance</h3>
+                <p className="text-xs text-gray-500 mb-3">
+                  Set a start month to wipe every employee's balance and begin accruing fresh from that month.
+                  Nothing before it is counted — no accrual, no lapsed leaves, and leaves taken earlier stop
+                  affecting the balance. Set it to <b>next month</b> to show everyone 0 today.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
+                  <Input label="Count balance from (month)" type="month"
+                    value={values.leave_balance_start_month || ''}
+                    onChange={e => set('leave_balance_start_month', e.target.value)} />
+                  <div className="flex gap-2">
+                    <button type="button"
+                      onClick={() => {
+                        const d = new Date()
+                        d.setMonth(d.getMonth() + 1)
+                        set('leave_balance_start_month', `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
+                      }}
+                      className="btn-secondary btn-sm">Start next month</button>
+                    <button type="button"
+                      onClick={() => set('leave_balance_start_month', '')}
+                      className="btn-ghost btn-sm text-gray-500">Clear</button>
+                  </div>
+                </div>
+                <div className={`rounded-lg p-3 text-xs mt-3 border ${
+                  values.leave_balance_start_month
+                    ? 'bg-amber-50 border-amber-200 text-amber-800'
+                    : 'bg-gray-50 border-gray-200 text-gray-600'
+                }`}>
+                  {values.leave_balance_start_month
+                    ? <>Balances are counted from <b>{values.leave_balance_start_month}</b>. Everything before that month is ignored.</>
+                    : <>No reset set — each employee's balance is counted from their joining date.</>}
+                </div>
+              </div>
             </>
           )}
 
@@ -377,7 +413,7 @@ export default function SettingsPage() {
                 <label className="relative inline-flex items-center cursor-pointer flex-shrink-0 ml-3">
                   <input type="checkbox" className="sr-only peer" checked={!!values.tracker_enabled}
                     onChange={e => set('tracker_enabled', e.target.checked)} />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-5" />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:bg-brand-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-5" />
                 </label>
               </div>
 
@@ -390,7 +426,7 @@ export default function SettingsPage() {
                 If an employee stays inactive for <b>{Math.round((values.tracker_idle_threshold_seconds ?? 300) / 60)} minutes</b>, that time is counted as idle in their session.
               </p>
 
-              <div className="rounded-lg bg-blue-50 border border-blue-100 p-3 text-xs text-blue-800">
+              <div className="rounded-lg bg-brand-50 border border-brand-100 p-3 text-xs text-blue-800">
                 To exempt an individual employee from tracking, do it from their <b>Employee profile</b> page — this is only the global default.
               </div>
             </>
@@ -406,7 +442,7 @@ export default function SettingsPage() {
                 <label className="relative inline-flex items-center cursor-pointer flex-shrink-0 ml-3">
                   <input type="checkbox" className="sr-only peer" checked={!!values.email_enabled}
                     onChange={e => set('email_enabled', e.target.checked)} />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-5" />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:bg-brand-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-5" />
                 </label>
               </div>
 
@@ -418,7 +454,7 @@ export default function SettingsPage() {
                 <label className="relative inline-flex items-center cursor-pointer flex-shrink-0 ml-3">
                   <input type="checkbox" className="sr-only peer" checked={!!values.whatsapp_enabled}
                     onChange={e => set('whatsapp_enabled', e.target.checked)} />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-5" />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:bg-brand-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-5" />
                 </label>
               </div>
 

@@ -150,7 +150,7 @@ export default function PaymentsPage() {
       {tab === 'invoices' && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
-            { label: 'Total Invoiced', value: formatCurrency(items.reduce((s: number, i: any) => s + i.totalAmount, 0)), color: 'text-blue-600', bg: 'bg-blue-50' },
+            { label: 'Total Invoiced', value: formatCurrency(items.reduce((s: number, i: any) => s + i.totalAmount, 0)), color: 'text-brand-600', bg: 'bg-brand-50' },
             { label: 'Total Paid', value: formatCurrency(items.reduce((s: number, i: any) => s + i.paidAmount, 0)), color: 'text-green-600', bg: 'bg-green-50' },
             { label: 'Pending', value: formatCurrency(items.reduce((s: number, i: any) => s + i.dueAmount, 0)), color: 'text-yellow-600', bg: 'bg-yellow-50' },
             { label: 'Overdue', value: items.filter((i: any) => i.status === 'OVERDUE').length, color: 'text-red-600', bg: 'bg-red-50' },
@@ -172,7 +172,7 @@ export default function PaymentsPage() {
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
           {(['invoices', 'payments'] as Tab[]).map(t => (
-            <button key={t} onClick={() => { setTab(t); setPage(1) }} className={`px-4 py-1.5 rounded-lg text-sm font-medium capitalize transition-all ${tab === t ? 'bg-white shadow text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}>{t}</button>
+            <button key={t} onClick={() => { setTab(t); setPage(1) }} className={`px-4 py-1.5 rounded-lg text-sm font-medium capitalize transition-all ${tab === t ? 'bg-white shadow text-brand-600' : 'text-gray-500 hover:text-gray-700'}`}>{t}</button>
           ))}
         </div>
         <div className="flex gap-2">
@@ -200,7 +200,7 @@ export default function PaymentsPage() {
                 : items.length === 0 ? <tr><td colSpan={8}><EmptyState title="No invoices" /></td></tr>
                   : items.map((inv: any) => (
                     <tr key={inv.id}>
-                      <td><div className="font-mono text-xs text-blue-600">
+                      <td><div className="font-mono text-xs text-brand-600">
                         <a href={`/invoices/${inv.id}`} target="_blank" rel="noreferrer" className="hover:underline">
                           {inv.invoiceNumber}
                         </a>
@@ -244,7 +244,7 @@ export default function PaymentsPage() {
                 : items.length === 0 ? <tr><td colSpan={7}><EmptyState title="No payments" /></td></tr>
                   : items.map((p: any) => (
                     <tr key={p.id}>
-                      <td className="font-mono text-xs text-blue-600">{p.invoice?.invoiceNumber || '—'}</td>
+                      <td className="font-mono text-xs text-brand-600">{p.invoice?.invoiceNumber || '—'}</td>
                       <td className="text-sm">{p.invoice?.client?.companyName || '—'}</td>
                       <td className="font-bold text-green-600">{formatCurrency(p.amount)}</td>
                       <td><Badge status={p.method} /></td>
@@ -302,7 +302,7 @@ export default function PaymentsPage() {
             <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800">
               No pending invoice found (only invoices with balance due are shown). Create a full-amount invoice first to make a part payment.
               <button type="button" onClick={() => { setShowPmtModal(false); setInvForm({ clientId: '', dueDate: '', notes: '', items: [{ description: '', quantity: 1, unitPrice: '', total: 0 }] }); setShowInvModal(true) }}
-                className="mt-2 block w-full text-center bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2 text-sm font-medium">
+                className="mt-2 block w-full text-center bg-brand-600 hover:bg-brand-700 text-white rounded-lg py-2 text-sm font-medium">
                 + New Invoice banao
               </button>
             </div>
@@ -316,7 +316,7 @@ export default function PaymentsPage() {
             <div className="flex gap-2">
               {[7, 10, 15, 30].map(d => (
                 <button key={d} type="button" onClick={() => setPmtForm(p => ({ ...p, nextDueDate: new Date(Date.now() + d * 864e5).toISOString().split('T')[0] }))}
-                  className="text-xs px-2 py-1 rounded-lg border border-gray-200 hover:border-blue-400 hover:text-blue-600">+{d}d</button>
+                  className="text-xs px-2 py-1 rounded-lg border border-gray-200 hover:border-blue-400 hover:text-brand-600">+{d}d</button>
               ))}
             </div>
           </div>

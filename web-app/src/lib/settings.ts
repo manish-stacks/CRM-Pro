@@ -69,6 +69,9 @@ export const Settings = {
   // Leave accrual + carry-forward
   leaveMonthlyAccrual: () => getSetting<number>('leave_monthly_accrual', 1),     // paid leaves earned per month
   leaveMaxCarryForward: () => getSetting<number>('leave_max_carryforward', 6),    // max leaves that can accumulate
+  // "YYYY-MM" — wipe every balance and start accruing fresh from this month.
+  // Empty/unset = keep counting from each employee's joining date (old behaviour).
+  leaveBalanceStartMonth: () => getSetting<string>('leave_balance_start_month', ''),
   invoiceDueDays: () => getSetting<number>('invoice_due_days', 15),
   invoicePrefix: () => getSetting<string>('invoice_prefix', 'INV-'),
   paymentMethods: () => getSetting<string[]>('payment_methods', ['UPI', 'CASH', 'BANK_TRANSFER', 'CHEQUE', 'CARD']),

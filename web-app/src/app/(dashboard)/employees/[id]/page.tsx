@@ -148,13 +148,13 @@ export default function EmployeeDetailPage() {
         <Link href="/employees"><Button variant="ghost" size="sm"><ArrowLeft size={15} />Back</Button></Link>
         <div className="flex-1">
           <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-2xl bg-blue-600 flex items-center justify-center text-white text-2xl font-bold">
+            <div className="w-16 h-16 rounded-2xl bg-brand-600 flex items-center justify-center text-white text-2xl font-bold">
               {emp.user.avatar ? <img src={emp.user.avatar} className="w-full h-full object-cover rounded-md" /> : getInitials(emp.user.name)}
             </div>
             <div>
               <h1 className="text-2xl font-bold text-gray-900">{emp.user.name}</h1>
               <div className="flex items-center gap-2 mt-1 flex-wrap">
-                <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-medium">{emp.employeeId}</span>
+                <span className="text-xs bg-brand-50 text-brand-700 px-2 py-0.5 rounded-full font-medium">{emp.employeeId}</span>
                 <span className="text-sm text-gray-500">{emp.position || emp.user.role.replace(/_/g, ' ')}</span>
                 {emp.department && <span className="text-xs text-gray-400">· {emp.department.name}</span>}
                 <Badge status={emp.user.isActive ? 'ACTIVE' : 'INACTIVE'} />
@@ -178,7 +178,7 @@ export default function EmployeeDetailPage() {
       <div className="flex gap-1 bg-gray-100 rounded-xl p-1 w-fit">
         {TABS.map(t => (
           <button key={t} onClick={() => setTab(t)}
-            className={`px-4 py-1.5 rounded-lg text-sm font-medium capitalize transition-all ${tab === t ? 'bg-white shadow text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}>
+            className={`px-4 py-1.5 rounded-lg text-sm font-medium capitalize transition-all ${tab === t ? 'bg-white shadow text-brand-600' : 'text-gray-500 hover:text-gray-700'}`}>
             {t}
           </button>
         ))}
@@ -188,7 +188,7 @@ export default function EmployeeDetailPage() {
       {tab === 'overview' && (
         <div className="space-y-6">
           {balance && (
-            <div className="rounded-2xl bg-gradient-to-br from-indigo-600 to-blue-700 text-white p-5">
+            <div className="rounded-2xl bg-gradient-to-br from-brand-600 to-brand-800 text-white p-5">
               <div className="flex items-center justify-between flex-wrap gap-3">
                 <div>
                   <p className="text-indigo-100 text-xs">Paid leave balance (auto carry-forward)</p>
@@ -205,7 +205,7 @@ export default function EmployeeDetailPage() {
           )}
           <div className="grid md:grid-cols-2 gap-6">
             <div className="card p-5">
-              <div className="flex items-center gap-2 mb-4"><Briefcase size={16} className="text-blue-600" /><h3 className="font-semibold text-gray-900">Work Details</h3></div>
+              <div className="flex items-center gap-2 mb-4"><Briefcase size={16} className="text-brand-600" /><h3 className="font-semibold text-gray-900">Work Details</h3></div>
               <InfoRow label="Role" value={emp.user.role.replace(/_/g, ' ')} />
               <InfoRow label="Position" value={emp.position} />
               <InfoRow label="Department" value={emp.department?.name} />
@@ -281,7 +281,7 @@ export default function EmployeeDetailPage() {
           {emp.idProofUrl && (
             <div className="mt-4">
               <p className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-1.5">Other ID Proof</p>
-              <a href={emp.idProofUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline">View file →</a>
+              <a href={emp.idProofUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-brand-600 hover:underline">View file →</a>
             </div>
           )}
         </div>

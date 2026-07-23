@@ -46,3 +46,18 @@ export async function getTeamScope(userId: string): Promise<TeamScope> {
 
   return { empId: me.id, visibleIds: Array.from(ids), canSeeTeam: ids.size > 1 }
 }
+
+/**
+ * Same team as getTeamScope, but returned as **User ids** — for records that
+ * reference users (leads, proposals) rather than employees.
+ */
+export async function getTeamUserIds(userId: string): Promise<{ userIds: string[]; canSeeTeam: boolean }> {
+  const scope = await getTeamScope(userId)
+  if (!scope.visibleIds.length) return { userIds: [userId], canSeeTeam: false }
+  const emps = await prisma.employee.findMany({
+    where: { id: { in: scope.visibleIds } },
+    select: { userId: true },
+  })
+  const userIds = Array.from(new Set([userId, ...emps.map(e => e.userId).filter(Boolean) as string[]]))
+  return { userIds, canSeeTeam: scope.canSeeTeam }
+}

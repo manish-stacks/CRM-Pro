@@ -20,7 +20,7 @@ function Section({ icon: Icon, title, description, children }: any) {
     <div className="card p-5">
       <div className="flex items-start gap-3 mb-5 pb-4 border-b border-gray-100">
         <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
-          <Icon size={18} className="text-blue-600" />
+          <Icon size={18} className="text-brand-600" />
         </div>
         <div>
           <h3 className="font-semibold text-gray-900">{title}</h3>
@@ -175,14 +175,14 @@ export default function ProfilePage() {
       {/* Avatar + Header */}
       <div className="card p-5 flex items-center gap-5">
         <div className="relative">
-          <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-3xl font-bold overflow-hidden">
+          <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-brand-500 to-brand-600 flex items-center justify-center text-white text-3xl font-bold overflow-hidden">
             {form.avatar ? <img src={form.avatar} alt="" className="w-full h-full object-cover" /> : (profile?.name?.[0] || '?')}
           </div>
           
           <button
             onClick={() => avatarRef.current?.click()}
             disabled={avatarUploading}
-            className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-white border-2 border-gray-200 flex items-center justify-center hover:border-blue-500 disabled:opacity-50"
+            className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-white border-2 border-gray-200 flex items-center justify-center hover:border-brand-500 disabled:opacity-50"
           >
             {avatarUploading ? <Loader2 size={13} className="animate-spin" /> : <Camera size={13} className="text-gray-700" />}
           </button>
@@ -217,16 +217,16 @@ export default function ProfilePage() {
                 maxLength={6}
               />
               <button onClick={verifyEmailOtp} disabled={verifyingOtp}
-                className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold disabled:opacity-50">
+                className="px-3 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold disabled:opacity-50">
                 {verifyingOtp ? <Loader2 size={12} className="animate-spin" /> : 'Verify'}
               </button>
-              <button onClick={sendEmailOtp} disabled={sendingOtp} className="text-xs text-blue-600 hover:underline">
+              <button onClick={sendEmailOtp} disabled={sendingOtp} className="text-xs text-brand-600 hover:underline">
                 Resend
               </button>
             </div>
           )}
           <div className="flex flex-wrap items-center gap-2 mt-2">
-            <span className="badge bg-blue-100 text-blue-700">{profile?.role?.replace(/_/g, ' ')}</span>
+            <span className="badge bg-brand-100 text-brand-700">{profile?.role?.replace(/_/g, ' ')}</span>
             {emp?.employeeId && <span className="badge bg-slate-100 text-slate-700">{emp.employeeId}</span>}
             {emp?.department && <span className="badge bg-purple-100 text-purple-700">{emp.department.name}</span>}
           </div>

@@ -15,11 +15,18 @@ import { logLogin } from '@/lib/audit'
 import { completeLogin } from '@/lib/loginSession'
 import { generateOtp, hashOtp, OTP_TTL_MS } from '@/lib/otp'
 import { sendMail, wrapEmailHtml } from '@/lib/mailer'
+import { isMobileBrowserUA, MOBILE_BLOCK_MESSAGE } from '@/lib/mobileGuard'
 
 const ADMIN_ROLES = ['ADMIN', 'SUPER_ADMIN']
 
 export async function POST(req: NextRequest) {
   try {
+    // Desktop-only: phones / tablets / iOS browsers must use the mobile app.
+    // (The RN app sends x-client-platform: mobile-app and uses /api/mobile/auth/login.)
+    if (req.headers.get('x-client-platform') !== 'mobile-app' && isMobileBrowserUA(req.headers.get('user-agent'))) {
+      return NextResponse.json({ error: MOBILE_BLOCK_MESSAGE }, { status: 403 })
+    }
+
     const { email, password, latitude, longitude, location } = await req.json()
 
     if (!email || !password) {

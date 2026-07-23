@@ -80,6 +80,8 @@ export async function GET(req: NextRequest) {
             department: { select: { name: true, color: true } },
           },
         },
+        // Who approved / rejected it (approval trail)
+        approver: { select: { id: true, name: true, role: true, avatar: true } },
       },
       skip, take: limit,
       orderBy: { createdAt: 'desc' },

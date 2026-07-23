@@ -117,7 +117,7 @@ export default function TicketDetailPage() {
               {ticket.category && <span className="badge bg-gray-100 text-gray-700 text-xs">{ticket.category}</span>}
             </div>
             <h1 className="text-xl font-bold text-gray-900">{ticket.subject}</h1>
-            <Link href={`/clients/${ticket.client.id}`} className="text-sm text-blue-600 hover:underline flex items-center gap-1 mt-1">
+            <Link href={`/clients/${ticket.client.id}`} className="text-sm text-brand-600 hover:underline flex items-center gap-1 mt-1">
               <Building2 size={12} /> {ticket.client.clientName} ({ticket.client.companyName})
             </Link>
           </div>
@@ -135,7 +135,7 @@ export default function TicketDetailPage() {
           {/* Original */}
           <div className="card p-5">
             <div className="flex items-center gap-3 mb-2">
-              <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">
+              <div className="w-9 h-9 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-xs font-bold">
                 {ticket.user?.avatar ? <img src={ticket.user.avatar} className="w-full h-full rounded-full object-cover" /> : getInitials(ticket.user?.name || 'X')}
               </div>
               <div>
@@ -154,9 +154,9 @@ export default function TicketDetailPage() {
                 const isFromClient = r.body?.startsWith('[FROM CLIENT]')
                 const bodyClean = isFromClient ? r.body.replace('[FROM CLIENT] ', '') : r.body
                 return (
-                  <div key={r.id} className={`card p-4 ${isInternal ? 'bg-yellow-50 border-yellow-200' : isFromClient ? 'bg-blue-50 border-blue-200' : ''}`}>
+                  <div key={r.id} className={`card p-4 ${isInternal ? 'bg-yellow-50 border-yellow-200' : isFromClient ? 'bg-brand-50 border-blue-200' : ''}`}>
                     <div className="flex items-center gap-3 mb-2">
-                      <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">
+                      <div className="w-8 h-8 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-xs font-bold">
                         {getInitials(r.user?.name || 'X')}
                       </div>
                       <div className="flex-1">
@@ -228,7 +228,7 @@ export default function TicketDetailPage() {
             <h3 className="font-semibold text-sm text-gray-900 mb-3">Assigned To</h3>
             {ticket.assignedTo ? (
               <div className="flex items-center gap-2">
-                <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-sm font-bold">
+                <div className="w-9 h-9 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-sm font-bold">
                   {getInitials(ticket.assignedTo.name)}
                 </div>
                 <div>
@@ -246,7 +246,7 @@ export default function TicketDetailPage() {
               <p><span className="text-gray-500 text-xs">Phone:</span> {ticket.client.phone}</p>
               {ticket.client.email && <p><span className="text-gray-500 text-xs">Email:</span> {ticket.client.email}</p>}
             </div>
-            <Link href={`/clients/${ticket.client.id}`} className="text-xs text-blue-600 hover:underline mt-2 inline-block">
+            <Link href={`/clients/${ticket.client.id}`} className="text-xs text-brand-600 hover:underline mt-2 inline-block">
               View client profile →
             </Link>
           </div>

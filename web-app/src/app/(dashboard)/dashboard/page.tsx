@@ -7,12 +7,17 @@ import { Users, Target, FileText, DollarSign, Clock, UserCheck, LogIn, LogOut, W
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import api from '@/lib/axios'
-import { getCurrentGeo } from '@/lib/geolocation'
+import { getCurrentGeo, withAccuracy } from '@/lib/geolocation'
 import { FIELD_LABELS } from '@/lib/profileCompletion'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
 
-const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899']
+const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316', '#84cc16', '#6366f1']
+const STATUS_COLORS: Record<string, string> = {
+  NEW: '#8b5cf6', RINGING: '#3b82f6', CALLBACK: '#06b6d4', FOLLOW_UP: '#f59e0b',
+  MEETING_SCHEDULED: '#ef4444', CONVERTED: '#10b981', NOT_INTERESTED: '#ec4899',
+}
+const getLeadColor = (status: string, i: number) => STATUS_COLORS[status?.toUpperCase()?.replace(/\s+/g, '_')] || COLORS[i % COLORS.length]
 const WORK_MODES = ['WFO', 'WFH', 'FIELD']
 export default function DashboardPage() {
   const { user } = useAuth()
@@ -62,23 +67,40 @@ export default function DashboardPage() {
 
   const handlePunch = async (workMode: string = 'WFO') => {
     setPunching(true)
+    const locToast = toast.loading('Getting your exact location...')
     try {
       const action = todayAttendance?.punchIn && !todayAttendance?.punchOut ? 'punch_out' : 'punch_in'
       let geo: any = {}
       try {
-        const g = await getCurrentGeo({ reverseGeocode: true, timeoutMs: 8000 })
+        // Same best-fix strategy as the Attendance page: never use a cached fix,
+        // keep refining for up to 20s and take the most accurate reading.
+        const g = await getCurrentGeo({
+          reverseGeocode: true,
+          timeoutMs: 20000,
+          highAccuracy: true,
+          desiredAccuracyM: 60,
+          warnAccuracyM: 500,
+          maxAgeMs: 0,
+        })
         if (!g.error) geo = g
+        else toast(`Punching without location — ${g.error}`, { icon: '📍' })
       } catch { /* ignore */ }
+      toast.dismiss(locToast)
+      if (geo.lowAccuracy) {
+        toast(`Location is approximate (±${Math.round(geo.accuracy || 0)}m). Enable precise location / GPS for an exact address.`, { icon: '⚠️', duration: 6000 })
+      }
       const res = await api.post('/attendance', {
         action,
         workMode,
-        latitude: geo.latitude,
-        longitude: geo.longitude,
-        address: geo.address,
+        latitude: geo.latitude ?? null,
+        longitude: geo.longitude ?? null,
+        accuracy: geo.accuracy ?? null,
+        address: withAccuracy(geo.address, geo.accuracy) ?? null,
       })
       setTodayAttendance(res.data.data)
       toast.success(action === 'punch_in' ? '✅ Punched In!' : '👋 Punched Out!')
     } catch (e: any) {
+      toast.dismiss(locToast)
       toast.error(e.response?.data?.error || 'Failed')
     } finally { setPunching(false) }
   }
@@ -115,38 +137,49 @@ export default function DashboardPage() {
     <div className="space-y-6">
 
       {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
+      <div
+        className="animate-rise relative overflow-hidden rounded-2xl px-6 py-6 flex items-start justify-between bg-rose-50"
+        style={{
+          backgroundImage: "url('/images/city-skyline.png')",
+          backgroundRepeat: 'no-repeat',
+          backgroundPosition: 'center right',
+          backgroundSize: 'contain',
+        }}
+      >
+        <div className="relative">
           <h1 className="text-2xl font-bold text-gray-900">{greeting()}, {user?.name?.split(' ')[0]}! 👋</h1>
           <p className="text-gray-500 text-sm mt-0.5">{time.toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
         </div>
-        <div className="text-right">
-          <p className="text-3xl font-bold text-gray-900 tabular-nums">{time.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</p>
+        <div className="relative text-right flex items-center gap-3">
+          <div className="w-11 h-11 rounded-full bg-white flex items-center justify-center shadow-sm flex-shrink-0">
+            <Clock className="text-rose-400" size={20} />
+          </div>
+          <div>
+            <p className="text-2xl font-bold tabular-nums text-gray-900">{time.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</p>
+            <p className="text-xs text-gray-500 text-right">India Standard Time (IST)</p>
+          </div>
         </div>
       </div>
 
       {/* Profile completion — nudge/block until required details are filled */}
       {profileCompletion && profileCompletion.percent < 100 && (
-        <div className={`card p-5 border-l-4 ${profileCompletion.percent < 90 ? 'border-l-red-500 bg-red-50/40' : 'border-l-amber-400 bg-amber-50/40'}`}>
-          <div className="flex items-start justify-between gap-4 flex-wrap">
-            <div className="flex items-start gap-4">
-              <div className={`relative w-14 h-14 flex-shrink-0 rounded-full grid place-items-center ${profileCompletion.percent < 90 ? 'bg-red-100' : 'bg-amber-100'}`}
+        <div className="card p-5 rounded-2xl bg-white shadow-sm">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex items-center gap-4">
+              <div
+                className="relative w-14 h-14 flex-shrink-0 rounded-full grid place-items-center"
                 style={{
-                  background: `conic-gradient(${profileCompletion.percent < 90 ? '#ef4444' : '#f59e0b'} ${profileCompletion.percent * 3.6}deg, ${profileCompletion.percent < 90 ? '#fee2e2' : '#fef3c7'} 0deg)`,
-                }}>
+                  background: `conic-gradient(#ef4444 ${profileCompletion.percent * 3.6}deg, #fde2e2 0deg)`,
+                }}
+              >
                 <div className="w-11 h-11 rounded-full bg-white grid place-items-center">
-                  <span className={`text-xs font-bold ${profileCompletion.percent < 90 ? 'text-red-600' : 'text-amber-600'}`}>{profileCompletion.percent}%</span>
+                  <span className="text-xs font-bold text-red-500">{profileCompletion.percent}%</span>
                 </div>
               </div>
               <div>
-                <div className="flex items-center gap-1.5">
-                  {profileCompletion.percent < 90
-                    ? <AlertTriangle size={16} className="text-red-500" />
-                    : <CheckCircle2 size={16} className="text-amber-500" />}
-                  <p className="font-semibold text-gray-900">
-                    {profileCompletion.percent < 90 ? 'Complete your profile to check in' : 'Almost there — finish your profile'}
-                  </p>
-                </div>
+                <p className="font-semibold text-gray-900">
+                  {profileCompletion.percent < 90 ? 'Complete your profile to check in' : 'Almost there — finish your profile'}
+                </p>
                 <p className="text-sm text-gray-500 mt-0.5">
                   {profileCompletion.percent < 90
                     ? `Your profile is only ${profileCompletion.percent}% complete. You need at least 90% to punch in.`
@@ -160,34 +193,40 @@ export default function DashboardPage() {
                 )}
               </div>
             </div>
-            <Link href="/profile"
-              className={`flex-shrink-0 px-4 py-2 rounded-lg text-sm font-semibold text-white transition-colors ${profileCompletion.percent < 90 ? 'bg-red-600 hover:bg-red-700' : 'bg-amber-500 hover:bg-amber-600'}`}>
-              Complete Now →
-            </Link>
+
+            <div className="flex items-center gap-4 flex-shrink-0">
+              <Link
+                href="/profile"
+                className="px-5 py-2.5 rounded-full text-sm font-semibold text-white bg-rose-500 hover:bg-rose-700 transition-colors whitespace-nowrap"
+              >
+                Complete Now →
+              </Link>
+              <img src="/images/profile-clipboard.png" alt="" className="w-14 h-14 object-contain hidden sm:block" />
+            </div>
           </div>
         </div>
       )}
 
       {/* Attendance punch card */}
-      <div className="card p-6">
+      <div className="animate-rise stagger-1 p-6 rounded-2xl bg-white shadow-sm">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
           <div>
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Today</p>
             <p className="text-lg font-bold text-gray-900">{formatDate(time)}</p>
-            <p className="text-3xl font-bold text-gray-900 tabular-nums mt-2">
-              {time.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-            </p>
+
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide my-1">Status</p>
+            <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-semibold ${isPunchedIn ? 'bg-emerald-100 text-emerald-700' :
+              isPunchedOut ? 'bg-gray-100 text-gray-700' :
+                'bg-rose-50 text-rose-500'
+              }`}>
+              <span className="relative w-2 h-2 rounded-full bg-current">
+                {isPunchedIn && <span className="pulse-ring absolute inset-0 text-emerald-500" />}
+              </span>
+              {isPunchedIn ? 'Working' : isPunchedOut ? 'Day Ended' : 'Not Punched In'}
+            </div>
           </div>
 
           <div>
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Status</p>
-            <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-semibold ${isPunchedIn ? 'bg-green-100 text-green-700' :
-                isPunchedOut ? 'bg-gray-100 text-gray-700' :
-                  'bg-slate-100 text-slate-600'
-              }`}>
-              <span className="w-2 h-2 rounded-full bg-current" />
-              {isPunchedIn ? 'Working' : isPunchedOut ? 'Day Ended' : 'Not Punched In'}
-            </div>
             {todayAttendance?.punchIn && (
               <p className="text-sm text-gray-600 mt-3 tabular-nums">
                 {isPunchedOut ? `Worked: ${todayAttendance.hoursWorked?.toFixed(2)}h` : `Working: ${fmtDuration(workedSecs)}`}
@@ -211,7 +250,7 @@ export default function DashboardPage() {
                         key={mode}
                         onClick={() => handlePunch(mode)}
                         disabled={punching}
-                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-white border border-gray-300 hover:border-green-500 hover:bg-green-50 text-xs font-semibold text-gray-700 hover:text-green-700 transition-all disabled:opacity-50"
+                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-full bg-white border border-gray-200 hover:border-rose-300 hover:bg-rose-50 hover:-translate-y-0.5 text-xs font-semibold text-gray-700 hover:text-rose-500 transition-all duration-200 disabled:opacity-50"
                       >
                         {mode === 'WFO' ? <Briefcase size={13} /> : mode === 'WFH' ? <Home size={13} /> : <MapPin size={13} />}
                         {mode}
@@ -222,7 +261,7 @@ export default function DashboardPage() {
                 <button
                   onClick={() => handlePunch()}
                   disabled={punching}
-                  className={`flex items-center justify-center gap-2 px-5 py-3 rounded-lg font-semibold text-sm transition-all shadow-sm ${isPunchedIn ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-green-600 hover:bg-green-700 text-white'
+                  className={`flex items-center justify-center gap-2 px-5 py-3 rounded-full font-semibold text-sm transition-all duration-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 ${isPunchedIn ? 'bg-gray-700 hover:bg-gray-800 text-white' : 'bg-rose-500 hover:bg-rose-700 text-white'
                     } disabled:opacity-50`}
                 >
                   {punching ? <Loader2 size={16} className="animate-spin" /> :
@@ -247,28 +286,29 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* My leave balance (auto carry-forward, capped) */}
-      {leaveBalance && (
-        <div className="card p-4 flex items-center justify-between gap-4 flex-wrap">
+      {/* My leave balance (auto carry-forward, capped) — employees see this inside CelebrationWidget instead */}
+      {leaveBalance && user?.role !== 'SUPER_ADMIN' && user?.role !== 'EMPLOYEE' && (
+        <div className="card card-glow hover-lift animate-rise stagger-2 p-4 flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-indigo-100 flex items-center justify-center">
-              <CalendarCheck size={22} className="text-indigo-600" />
+            <div className="w-12 h-12 rounded-xl bg-brand-100 flex items-center justify-center">
+              <CalendarCheck size={22} className="text-brand-600" />
             </div>
             <div>
               <p className="font-semibold text-gray-900">Paid Leave Balance</p>
               <p className="text-sm text-gray-500">
                 Carried forward + accrued · max {leaveBalance.maxCap} · {leaveBalance.monthlyAccrual}/month
+                {leaveBalance.wasReset && leaveBalance.countingFrom && <> · from {leaveBalance.countingFrom}</>}
               </p>
             </div>
           </div>
           <div className="flex items-center gap-5 text-center">
             <div>
-              <p className="text-2xl font-bold text-indigo-600">{leaveBalance.available}</p>
+              <p className="text-2xl font-bold text-brand-600">{leaveBalance.available}</p>
               <p className="text-[11px] text-gray-400">Available</p>
             </div>
             <div><p className="text-lg font-bold text-gray-700">{leaveBalance.taken}</p><p className="text-[11px] text-gray-400">Taken</p></div>
             {leaveBalance.lapsed > 0 && <div><p className="text-lg font-bold text-amber-500">{leaveBalance.lapsed}</p><p className="text-[11px] text-gray-400">Lapsed</p></div>}
-            <Link href="/leaves" className="text-xs text-indigo-600 hover:underline whitespace-nowrap">Details →</Link>
+            <Link href="/leaves" className="text-xs text-brand-600 hover:underline whitespace-nowrap">Details →</Link>
           </div>
         </div>
       )}
@@ -280,55 +320,55 @@ export default function DashboardPage() {
         </div>
       ) : (
         <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-          <StatCard label="Employees" value={stats?.totalEmployees || 0} icon={Users} color="text-blue-600" />
-          <StatCard label="Leads" value={stats?.totalLeads || 0} icon={Target} color="text-purple-600" />
-          <StatCard label="Clients" value={stats?.totalClients || 0} icon={UserCheck} color="text-green-600" />
-          <StatCard label="Proposals" value={stats?.totalProposals || 0} icon={FileText} color="text-indigo-600" />
-          <StatCard label="Pending Leaves" value={stats?.pendingLeaves || 0} icon={Clock} color="text-yellow-600" />
-          <StatCard label="Month Revenue" value={formatCurrency(stats?.monthRevenue || 0)} icon={DollarSign} color="text-emerald-600" />
+          <div className="animate-rise stagger-1"><StatCard label="Employees" value={stats?.totalEmployees || 0} icon={Users} color="text-brand-600" /></div>
+          <div className="animate-rise stagger-2"><StatCard label="Leads" value={stats?.totalLeads || 0} icon={Target} color="text-purple-600" /></div>
+          <div className="animate-rise stagger-3"><StatCard label="Clients" value={stats?.totalClients || 0} icon={UserCheck} color="text-green-600" /></div>
+          <div className="animate-rise stagger-4"><StatCard label="Proposals" value={stats?.totalProposals || 0} icon={FileText} color="text-indigo-600" /></div>
+          <div className="animate-rise stagger-5"><StatCard label="Pending Leaves" value={stats?.pendingLeaves || 0} icon={Clock} color="text-yellow-600" /></div>
+          <div className="animate-rise stagger-6"><StatCard label="Month Revenue" value={formatCurrency(stats?.monthRevenue || 0)} icon={DollarSign} color="text-brand-600" /></div>
         </div>
       ))}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Revenue chart */}
         {showBiz && (
-          <div className="card p-5 lg:col-span-2">
+          <div className="card card-glow hover-lift animate-rise stagger-1 p-5 lg:col-span-2">
             <h3 className="font-semibold text-gray-900 mb-4">Revenue Trend</h3>
             <ResponsiveContainer width="100%" height={220}>
               <AreaChart data={data?.revenueChart || []}>
                 <defs>
                   <linearGradient id="rev" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.15} />
-                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                    <stop offset="5%" stopColor="#be123c" stopOpacity={0.2} />
+                    <stop offset="95%" stopColor="#be123c" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="month" tick={{ fill: '#9ca3af', fontSize: 12 }} />
                 <YAxis tick={{ fill: '#9ca3af', fontSize: 11 }} tickFormatter={v => `₹${(v / 1000).toFixed(0)}k`} />
                 <Tooltip formatter={(v: any) => formatCurrency(v)} />
-                <Area type="monotone" dataKey="revenue" stroke="#3b82f6" fill="url(#rev)" strokeWidth={2} dot={false} />
+                <Area type="monotone" dataKey="revenue" stroke="#be123c" fill="url(#rev)" strokeWidth={2.5} dot={false} animationDuration={900} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
         )}
 
         {/* Celebration widget */}
-        <div className={showBiz ? '' : 'lg:col-span-3'}>
-          <CelebrationWidget />
+        <div className={`animate-rise stagger-2 ${showBiz ? '' : 'lg:col-span-3'}`}>
+          <CelebrationWidget leaveBalance={user?.role === 'EMPLOYEE' ? leaveBalance : null} />
         </div>
       </div>
 
       {showBiz && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Lead pipeline */}
-          <div className="card p-5">
+          <div className="card card-glow hover-lift animate-rise stagger-1 p-5">
             <h3 className="font-semibold text-gray-900 mb-4">Lead Pipeline</h3>
             {(data?.leadsByStatus || []).length > 0 ? (
               <div className="flex items-center gap-4">
                 <ResponsiveContainer width="100%" height={180}>
                   <PieChart>
                     <Pie data={data?.leadsByStatus || []} cx="50%" cy="50%" innerRadius={50} outerRadius={80} dataKey="count" nameKey="status" paddingAngle={3}>
-                      {(data?.leadsByStatus || []).map((_: any, i: number) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                      {(data?.leadsByStatus || []).map((s: any, i: number) => <Cell key={i} fill={getLeadColor(s.status, i)} />)}
                     </Pie>
                     <Tooltip />
                   </PieChart>
@@ -336,7 +376,7 @@ export default function DashboardPage() {
                 <div className="space-y-1.5 flex-shrink-0">
                   {(data?.leadsByStatus || []).map((s: any, i: number) => (
                     <div key={s.status} className="flex items-center gap-2 text-sm">
-                      <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
+                      <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: getLeadColor(s.status, i) }} />
                       <span className="text-gray-600">{s.status.replace('_', ' ')}</span>
                       <span className="font-bold text-gray-900 ml-auto">{s.count}</span>
                     </div>
@@ -347,19 +387,19 @@ export default function DashboardPage() {
           </div>
 
           {/* Recent leads */}
-          <div className="card overflow-hidden">
+          <div className="card card-glow hover-lift animate-rise stagger-2 overflow-hidden">
             <div className="card-header flex items-center justify-between">
               <h3 className="font-semibold text-gray-900">Recent Leads</h3>
-              <Link href="/leads" className="text-xs text-blue-600 hover:underline">View all</Link>
+              <Link href="/leads" className="text-xs text-brand-600 hover:underline">View all</Link>
             </div>
             <div className="divide-y divide-gray-50">
               {(data?.recentLeads || []).slice(0, 5).map((lead: any) => (
-                <div key={lead.id} className="flex items-center justify-between px-5 py-3">
+                <div key={lead.id} className="flex items-center justify-between px-5 py-3 transition-colors duration-150 hover:bg-brand-50/40">
                   <div>
                     <p className="text-sm font-medium text-gray-900">{lead.clientName}</p>
                     <p className="text-xs text-gray-400">{lead.source} · {lead.createdBy?.name}</p>
                   </div>
-                  <span className={`badge ${lead.status === 'NEW' ? 'bg-blue-100 text-blue-700' :
+                  <span className={`badge ${lead.status === 'NEW' ? 'bg-brand-100 text-brand-700' :
                     lead.status === 'CONVERTED' ? 'bg-green-100 text-green-700' :
                       'bg-yellow-100 text-yellow-700'
                     }`}>{lead.status}</span>
@@ -375,10 +415,10 @@ export default function DashboardPage() {
 
       {/* My Projects — heads & team members */}
       {(user?.role === 'MANAGER' || user?.role === 'EMPLOYEE') && myProjects.length > 0 && (
-        <div className="card p-5">
+        <div className="card card-glow hover-lift animate-rise p-5">
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-semibold text-gray-900">🗂️ My Projects</h3>
-            <Link href="/projects" className="text-xs text-blue-600 hover:underline">Manage →</Link>
+            <Link href="/projects" className="text-xs text-brand-600 hover:underline">Manage →</Link>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {Object.values(myProjects.reduce((acc: any, p: any) => {
@@ -388,10 +428,10 @@ export default function DashboardPage() {
               return acc
             }, {})).map((g: any) => (
               <Link key={g.service.id} href={`/clients/${g.service.client.id}`}
-                className="border border-gray-200 rounded-xl p-3 hover:border-blue-300 hover:bg-blue-50/40 transition-colors">
+                className="border border-gray-200 rounded-xl p-3 hover:border-brand-300 hover:bg-brand-50/40 hover:-translate-y-0.5 transition-all duration-200">
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-semibold text-gray-900 truncate">{g.service.serviceName}</p>
-                  <span className={`badge text-[10px] ${g.isHead ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                  <span className={`badge text-[10px] ${g.isHead ? 'bg-purple-100 text-purple-700' : 'bg-brand-100 text-brand-700'}`}>
                     {g.isHead ? 'Head' : 'Member'}
                   </span>
                 </div>
@@ -405,7 +445,7 @@ export default function DashboardPage() {
 
       {/* Expiring services */}
       {(data?.expiringServices || []).length > 0 && (
-        <div className="card p-5">
+        <div className="card card-glow hover-lift animate-rise p-5">
           <h3 className="font-semibold text-gray-900 mb-3">⚠️ Services Expiring Soon</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {data.expiringServices.map((svc: any) => {

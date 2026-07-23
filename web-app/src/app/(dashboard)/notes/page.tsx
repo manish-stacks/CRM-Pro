@@ -7,7 +7,7 @@ import toast from 'react-hot-toast'
 
 const COLORS: Record<string, string> = {
   yellow: 'bg-yellow-50 border-yellow-200',
-  blue: 'bg-blue-50 border-blue-200',
+  blue: 'bg-brand-50 border-blue-200',
   green: 'bg-emerald-50 border-emerald-200',
   pink: 'bg-pink-50 border-pink-200',
   purple: 'bg-purple-50 border-purple-200',

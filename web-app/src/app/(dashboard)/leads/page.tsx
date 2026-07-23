@@ -46,7 +46,7 @@ export default function LeadsPage() {
   const [loading, setLoading] = useState(true)
   const [showFilter, setShowFilter] = useState(false)
   const [filters, setFilters] = useState({
-    status: '', source: '', assignedToId: '', meetingAssignedToId: '', search: '', dateFrom: '', dateTo: '',
+    status: '', source: '', assignedToId: '', meetingAssignedToId: '', createdById: '', search: '', dateFrom: '', dateTo: '',
   })
   const [telecallers, setTelecallers] = useState<any[]>([])
   const [marketingPersons, setMarketingPersons] = useState<any[]>([])
@@ -188,7 +188,7 @@ export default function LeadsPage() {
     const s = STATUSES.find(x => x.key === status)
     if (!s) return <Badge status={status} />
     const cls = {
-      blue: 'bg-blue-100 text-blue-700', amber: 'bg-amber-100 text-amber-700',
+      blue: 'bg-brand-100 text-brand-700', amber: 'bg-amber-100 text-amber-700',
       yellow: 'bg-yellow-100 text-yellow-700', cyan: 'bg-cyan-100 text-cyan-700',
       purple: 'bg-purple-100 text-purple-700', emerald: 'bg-emerald-100 text-emerald-700',
       slate: 'bg-slate-100 text-slate-700', red: 'bg-red-100 text-red-700',
@@ -202,7 +202,7 @@ export default function LeadsPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Leads</h1>
           <p className="text-sm text-gray-500 mt-1">
-            {canSeeAll ? 'All leads across the team' : user?.role === 'MARKETING_EXECUTIVE' ? 'Meetings assigned to you' : 'Your assigned leads'}
+            {canSeeAll ? 'All leads across the team' : user?.role === 'MARKETING_EXECUTIVE' ? 'Meetings assigned to you + leads you added' : 'Leads assigned to you + leads you added'}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -230,10 +230,10 @@ export default function LeadsPage() {
             <span className="text-xs text-gray-500">{total} total</span>
             <button
               onClick={() => setShowFilter(!showFilter)}
-              className={`btn-secondary btn-sm ${activeFilterCount > 0 ? 'border-blue-500 text-blue-600' : ''}`}
+              className={`btn-secondary btn-sm ${activeFilterCount > 0 ? 'border-brand-500 text-brand-600' : ''}`}
             >
               <Filter size={13} /> Filters
-              {activeFilterCount > 0 && <span className="ml-1 bg-blue-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">{activeFilterCount}</span>}
+              {activeFilterCount > 0 && <span className="ml-1 bg-brand-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">{activeFilterCount}</span>}
             </button>
           </div>
         </div>
@@ -260,12 +260,18 @@ export default function LeadsPage() {
                 {marketingPersons.map((u: any) => <option key={u.id} value={u.id}>{u.name}</option>)}
               </select>
             )}
+            {canSeeAll && (
+              <select value={filters.createdById} onChange={e => { setFilters(p => ({...p, createdById: e.target.value})); setPage(1) }} className="input">
+                <option value="">Added By: All</option>
+                {[...telecallers, ...marketingPersons].map((u: any) => <option key={u.id} value={u.id}>{u.name}</option>)}
+              </select>
+            )}
             <input type="date" className="input text-xs" placeholder="From"
               value={filters.dateFrom} onChange={e => { setFilters(p => ({...p, dateFrom: e.target.value})); setPage(1) }} />
             <input type="date" className="input text-xs" placeholder="To"
               value={filters.dateTo} onChange={e => { setFilters(p => ({...p, dateTo: e.target.value})); setPage(1) }} />
             {activeFilterCount > 0 && (
-              <button onClick={() => { setFilters({status:'',source:'',assignedToId:'',meetingAssignedToId:'',search:'',dateFrom:'',dateTo:''}); setPage(1) }}
+              <button onClick={() => { setFilters({status:'',source:'',assignedToId:'',meetingAssignedToId:'',createdById:'',search:'',dateFrom:'',dateTo:''}); setPage(1) }}
                 className="text-xs text-red-600 hover:underline flex items-center gap-1 col-span-full">
                 <X size={12} /> Clear all
               </button>
@@ -307,7 +313,7 @@ export default function LeadsPage() {
                   <td className="text-sm">
                     {l.assignedTo ? (
                       <div className="flex items-center gap-1.5">
-                        <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">
+                        <div className="w-6 h-6 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-xs font-bold">
                           {getInitials(l.assignedTo.name)}
                         </div>
                         <div>
@@ -394,7 +400,7 @@ export default function LeadsPage() {
             it works with the file from <span className="font-medium">Export</span> too.
           </p>
 
-          <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-gray-300 rounded-xl py-8 cursor-pointer hover:border-blue-400 hover:bg-blue-50/30 transition-colors">
+          <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-gray-300 rounded-xl py-8 cursor-pointer hover:border-blue-400 hover:bg-brand-50/30 transition-colors">
             <FileSpreadsheet size={28} className="text-gray-400" />
             <span className="text-sm text-gray-600">
               {importFileName ? importFileName : 'Click to choose a file'}

@@ -12,7 +12,8 @@ const STATUSES = ['DRAFT', 'SENT', 'VIEWED', 'ACCEPTED', 'REJECTED', 'EXPIRED']
 
 export default function ProposalsPage() {
   const { user, isAtLeast } = useAuth()
-  const canCreate = ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'MARKETING_EXECUTIVE', 'TELECALLER'].includes(user?.role || '')
+  // Admin, telecalling head (MANAGER) and Marketing Executive only
+  const canCreate = ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'MARKETING_EXECUTIVE'].includes(user?.role || '')
 
   const [proposals, setProposals] = useState<any[]>([])
   const [total, setTotal] = useState(0)
@@ -69,15 +70,16 @@ export default function ProposalsPage() {
                 <th>Amount</th>
                 <th>Status</th>
                 <th>Valid Until</th>
+                <th>Added By</th>
                 <th>Created</th>
                 <th className="text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={8} className="text-center py-8"><Loader2 className="animate-spin inline text-gray-400" /></td></tr>
+                <tr><td colSpan={9} className="text-center py-8"><Loader2 className="animate-spin inline text-gray-400" /></td></tr>
               ) : proposals.length === 0 ? (
-                <tr><td colSpan={8}><EmptyState icon={<FileText size={40} />} title="No proposals" description="Create one to get started" /></td></tr>
+                <tr><td colSpan={9}><EmptyState icon={<FileText size={40} />} title="No proposals" description="Create one to get started" /></td></tr>
               ) : proposals.map(p => (
                 <tr key={p.id} className="hover:bg-slate-50">
                   <td className="font-mono text-xs">{p.proposalNumber}</td>
@@ -89,6 +91,12 @@ export default function ProposalsPage() {
                   <td className="font-bold tabular-nums">{formatCurrency(p.finalAmount)}</td>
                   <td><Badge status={p.status} /></td>
                   <td className="text-xs text-gray-500">{p.validUntil ? formatDate(p.validUntil) : '—'}</td>
+                  <td className="text-xs">
+                    <p className="font-medium text-gray-800">{p.createdBy?.name || '—'}</p>
+                    {p.createdBy?.role && (
+                      <p className="text-gray-500">{p.createdBy.role.replace(/_/g, ' ')}</p>
+                    )}
+                  </td>
                   <td className="text-xs text-gray-500">{formatDate(p.createdAt)}</td>
                   <td className="text-right">
                     <Link href={`/proposals/${p.id}`} className="btn-ghost btn-sm !p-1.5"><Eye size={13} /></Link>

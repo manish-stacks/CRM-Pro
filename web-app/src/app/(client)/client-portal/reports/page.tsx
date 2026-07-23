@@ -163,7 +163,7 @@ export default function ReportsPage() {
                   <p className="font-semibold text-gray-900">{r.title}</p>
                   <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">{r.reportType}</span>
                   {r.reportPeriod && <span className="text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">{r.reportPeriod}</span>}
-                  {r.clientService && <span className="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded">{r.clientService.serviceName}</span>}
+                  {r.clientService && <span className="text-[10px] bg-brand-50 text-brand-700 px-1.5 py-0.5 rounded">{r.clientService.serviceName}</span>}
                 </div>
                 {r.description && <p className="text-sm text-gray-600 mt-1">{r.description}</p>}
                 {r.content && <div className="text-sm text-gray-800 mt-2 whitespace-pre-wrap bg-slate-50 p-3 rounded-xl">{r.content}</div>}

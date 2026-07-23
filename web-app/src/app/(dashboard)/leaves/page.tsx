@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '@/hooks/useAuth'
 import api from '@/lib/axios'
 import { Button, Input, Select, Textarea, Modal, EmptyState, Pagination, Badge } from '@/components/ui'
-import { formatDate, getInitials } from '@/lib/utils'
+import { formatDate, formatDateTime, getInitials } from '@/lib/utils'
 import {
   Plus, Calendar, Filter, X, Check, Ban, Clock, CalendarDays, Loader2, Search,
   Eye
@@ -142,7 +142,7 @@ export default function LeavesPage() {
 
       {/* My leave balance (auto carry-forward, capped) */}
       {balance && (
-        <div className="rounded-2xl bg-gradient-to-br from-indigo-600 to-blue-700 text-white p-5">
+        <div className="rounded-2xl bg-gradient-to-br from-brand-600 to-brand-800 text-white p-5">
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div>
               <p className="text-indigo-100 text-xs">Available paid leaves</p>
@@ -169,11 +169,11 @@ export default function LeavesPage() {
           </div>
           <button
             onClick={() => setShowFilter(!showFilter)}
-            className={`btn-secondary btn-sm ${activeFilterCount > 0 ? 'border-blue-500 text-blue-600' : ''}`}
+            className={`btn-secondary btn-sm ${activeFilterCount > 0 ? 'border-brand-500 text-brand-600' : ''}`}
           >
             <Filter size={13} /> Filters
             {activeFilterCount > 0 && (
-              <span className="ml-1 bg-blue-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">{activeFilterCount}</span>
+              <span className="ml-1 bg-brand-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">{activeFilterCount}</span>
             )}
           </button>
         </div>
@@ -229,14 +229,15 @@ export default function LeavesPage() {
                 <th>Days</th>
                 <th>Reason</th>
                 <th>Status</th>
+                <th>Actioned By</th>
                 {canApprove && <th className="text-right">Actions</th>}
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={canApprove ? 8 : 6} className="text-center py-8 text-gray-400">Loading...</td></tr>
+                <tr><td colSpan={canApprove ? 9 : 7} className="text-center py-8 text-gray-400">Loading...</td></tr>
               ) : leaves.length === 0 ? (
-                <tr><td colSpan={canApprove ? 8 : 6}>
+                <tr><td colSpan={canApprove ? 9 : 7}>
                   <EmptyState icon={<Calendar size={48} />} title="No leaves" description="No leave requests match" />
                 </td></tr>
               ) : leaves.map((l: any) => (
@@ -244,7 +245,7 @@ export default function LeavesPage() {
                   {canApprove && (
                     <td>
                       <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold">
+                        <div className="w-8 h-8 rounded-full bg-brand-600 flex items-center justify-center text-white text-xs font-bold">
                           {getInitials(l.employee?.user?.name || '?')}
                         </div>
                         <div>
@@ -279,7 +280,7 @@ export default function LeavesPage() {
                     {l.duration === 'SHORT_HOURLY' ? `${l.hourlyHours}h` : `${l.days}d`}
                   </td>
                   <td className="text-xs text-gray-700 max-w-xs">
-                    <button onClick={() => setReasonModal(l)} className="text-left hover:text-blue-600 truncate block max-w-[220px] underline decoration-dotted">
+                    <button onClick={() => setReasonModal(l)} className="text-left hover:text-brand-600 truncate block max-w-[220px] underline decoration-dotted">
                       {l.reason?.length > 40 ? l.reason.slice(0, 40) + '…' : (l.reason || '—')}
                     </button>
                   </td>
@@ -287,6 +288,24 @@ export default function LeavesPage() {
                     <Badge status={l.status} />
                     {l.status === 'REJECTED' && l.rejectionReason && (
                       <p className="text-xs text-red-600 mt-1" title={l.rejectionReason}>Reason: {l.rejectionReason.slice(0, 30)}...</p>
+                    )}
+                  </td>
+                  <td className="text-xs">
+                    {l.approvedBy || l.approver ? (
+                      <div>
+                        <p className="font-medium text-gray-800">{l.approver?.name || '—'}</p>
+                        <p className="text-gray-500">
+                          <span className={`inline-block px-1.5 py-0.5 rounded font-semibold mr-1 ${
+                            l.approverType === 'ADMIN' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
+                          }`}>
+                            {l.approverType === 'ADMIN' ? 'Admin' : 'Team Lead'}
+                          </span>
+                          {l.approverNote || ''}
+                        </p>
+                        {l.approvedAt && <p className="text-gray-400 mt-0.5">{formatDate(l.approvedAt)}</p>}
+                      </div>
+                    ) : (
+                      <span className="text-gray-300">—</span>
                     )}
                   </td>
                   {canApprove && (
@@ -333,6 +352,16 @@ export default function LeavesPage() {
             <div className="bg-slate-50 rounded-xl p-4 text-sm text-gray-800 whitespace-pre-wrap max-h-[50vh] overflow-y-auto">
               {reasonModal.reason || '—'}
             </div>
+            {(reasonModal.approver || reasonModal.approvedBy) && (
+              <div className="rounded-lg bg-gray-50 border border-gray-200 px-3 py-2 text-xs text-gray-600">
+                <span className="font-semibold text-gray-800">
+                  {reasonModal.status === 'APPROVED' ? 'Approved' : reasonModal.status === 'REJECTED' ? 'Rejected' : 'Actioned'} by {reasonModal.approver?.name || '—'}
+                </span>
+                {reasonModal.approverNote && <> · {reasonModal.approverNote}</>}
+                {reasonModal.approverType && <> · {reasonModal.approverType === 'ADMIN' ? 'Admin' : 'Team Lead'}</>}
+                {reasonModal.approvedAt && <> · {formatDateTime(reasonModal.approvedAt)}</>}
+              </div>
+            )}
             {reasonModal.status === 'REJECTED' && reasonModal.rejectionReason && (
               <div className="bg-red-50 rounded-xl p-3 text-sm text-red-700">
                 <b>Rejection reason:</b> {reasonModal.rejectionReason}
@@ -352,7 +381,7 @@ export default function LeavesPage() {
                 {DURATIONS.map(d => (
                   <button key={d.key} type="button"
                     onClick={() => setForm(p => ({ ...p, duration: d.key }))}
-                    className={`flex flex-col items-center gap-1 py-2 rounded-lg border-2 text-xs font-medium ${form.duration === d.key ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                    className={`flex flex-col items-center gap-1 py-2 rounded-lg border-2 text-xs font-medium ${form.duration === d.key ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-gray-200 text-gray-600 hover:border-gray-300'
                       }`}>
                     <d.icon size={16} />
                     {d.label.split(' ')[0]}

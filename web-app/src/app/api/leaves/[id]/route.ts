@@ -32,9 +32,29 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     // Managers (team leads) can only approve/reject leaves of their own team
     // (dept they head + direct reports). Admins can act on anyone.
-    if (!['SUPER_ADMIN', 'ADMIN'].includes(session.role)) {
+    const isAdmin = ['SUPER_ADMIN', 'ADMIN'].includes(session.role)
+    if (!isAdmin) {
       const scope = await getTeamScope(session.userId)
       if (!scope.visibleIds.includes(leave.employeeId)) return errorResponse('Forbidden', 403)
+    }
+
+    // ---- Approval trail: record WHO acted and in WHAT capacity -------------
+    // Admin  = SUPER_ADMIN / ADMIN acting company-wide
+    // TEAM_LEAD = department head or reporting manager of this employee
+    const approverType = isAdmin ? 'ADMIN' : 'TEAM_LEAD'
+    let approverNote: string | null = null
+    if (!isAdmin) {
+      const me = await prisma.employee.findFirst({ where: { userId: session.userId }, select: { id: true } })
+      if (me) {
+        const headedDept = await prisma.department.findFirst({
+          where: { managerId: me.id, employees: { some: { id: leave.employeeId } } },
+          select: { name: true },
+        })
+        if (headedDept) approverNote = `Head of ${headedDept.name}`
+        else approverNote = 'Reporting Manager'
+      }
+    } else {
+      approverNote = session.role === 'SUPER_ADMIN' ? 'Super Admin' : 'Admin'
     }
 
     const newStatus = action === 'approve' ? 'APPROVED' : 'REJECTED'
@@ -45,7 +65,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         status: newStatus,
         approvedBy: session.userId,
         approvedAt: new Date(),
+        approverRole: session.role,
+        approverType,
+        approverNote,
         rejectionReason: action === 'reject' ? rejectionReason : null,
+      },
+      include: {
+        approver: { select: { id: true, name: true, role: true, avatar: true } },
       },
     })
 
@@ -94,6 +120,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           <p>Your <b>${leave.leaveType}</b> leave request for <b>${dateRange}</b> has been
           <b style="color:${approved ? '#16a34a' : '#dc2626'}">${approved ? 'APPROVED' : 'REJECTED'}</b>.</p>
           ${!approved && rejectionReason ? `<p style="margin:4px 0;"><b>Reason:</b> ${rejectionReason}</p>` : ''}
+          <p style="margin:4px 0;color:#64748b;font-size:13px;">Actioned by <b>${session.name || 'Management'}</b>${approverNote ? ` (${approverNote})` : ''}.</p>
         `),
         referenceType: 'LEAVE',
         referenceId: id,
@@ -123,7 +150,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       action: newStatus,
       entityType: 'Leave',
       entityId: id,
-      metadata: { rejectionReason, employeeId: leave.employeeId },
+      metadata: { rejectionReason, employeeId: leave.employeeId, approverType, approverRole: session.role, approverNote },
     })
 
     return successResponse(updated)

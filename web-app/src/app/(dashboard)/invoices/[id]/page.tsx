@@ -198,7 +198,7 @@ export default function InvoiceDetailPage() {
                   <p className="text-xs text-gray-500">
                     {formatDate(p.paidAt)}
                     {p.reference && <> · Ref: {p.reference}</>}
-                    {p.source === 'CLIENT_PORTAL' && <> · <span className="text-blue-600">via Client Portal</span></>}
+                    {p.source === 'CLIENT_PORTAL' && <> · <span className="text-brand-600">via Client Portal</span></>}
                   </p>
                 </div>
               </div>
@@ -217,7 +217,7 @@ export default function InvoiceDetailPage() {
       {/* Record Payment Modal */}
       <Modal open={modal === 'pay'} onClose={() => setModal('none')} title="Record Payment">
         <div className="space-y-3">
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm">
+          <div className="bg-brand-50 border border-blue-200 rounded-lg p-3 text-sm">
             <p><b>Invoice:</b> {invoice.invoiceNumber}</p>
             <p><b>Amount Due:</b> {formatCurrency(invoice.dueAmount)}</p>
           </div>
@@ -248,7 +248,7 @@ export default function InvoiceDetailPage() {
 
       <Modal open={modal === 'send'} onClose={() => setModal('none')} title="Send Invoice">
         <div className="space-y-4">
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm">
+          <div className="bg-brand-50 border border-blue-200 rounded-lg p-3 text-sm">
             <p>Send invoice <b>{invoice.invoiceNumber}</b> to <b>{invoice.client?.clientName}</b> via email + WhatsApp.</p>
           </div>
           <div className="flex justify-end gap-2">
