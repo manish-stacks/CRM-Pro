@@ -1,7 +1,7 @@
 // src/lib/notify.ts
 // Create in-app notifications for one or more users
 import { prisma } from './prisma'
-import { sendExpoPush } from './push'
+import { sendPushToUsers } from './push'
 
 type NotifyInput = {
   userIds: string | string[]
@@ -31,25 +31,20 @@ export async function notify(input: NotifyInput) {
       })),
     })
 
-    // Mobile push (best-effort) to any of these users with a registered device
-    const withTokens = await prisma.user.findMany({
-      where: { id: { in: users }, expoPushToken: { not: null } },
-      select: { expoPushToken: true },
+    // Mobile push (best-effort) to every registered device of these users.
+    // sendPushToUsers() looks up BOTH the staff device (User.fcmToken) and the
+    // client-portal device (Client.fcmToken where Client.userId = this user) —
+    // client devices used to store a token that nothing ever sent to.
+    //
+    // IMPORTANT: this MUST be awaited. Previously it was fire-and-forget, so on
+    // serverless/PM2-clustered production the response returned and the request
+    // context was torn down before the HTTP call actually went out — which is
+    // why meeting-assign pushes never reached the device.
+    await sendPushToUsers(users, {
+      title: input.title,
+      body: input.message,
+      data: { link: input.link || '', type: input.type || 'info', ...(input.metadata || {}) },
     })
-    if (withTokens.length) {
-      // IMPORTANT: this MUST be awaited. Previously it was fire-and-forget, so on
-      // serverless/PM2-clustered production the response returned and the request
-      // context was torn down before the Expo HTTP call actually went out — which
-      // is why meeting-assign pushes never reached the device.
-      await sendExpoPush(
-        withTokens.map(u => u.expoPushToken),
-        {
-          title: input.title,
-          body: input.message,
-          data: { link: input.link || '', type: input.type || 'info', ...(input.metadata || {}) },
-        },
-      )
-    }
   } catch (e) {
     console.error('Notify failed:', e)
   }

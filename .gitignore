@@ -43,3 +43,5 @@ Thumbs.db
 # Uploads (local dev)
 /public/uploads
 /uploads
+/credential
+web-app/credential/firebase-service-account.json

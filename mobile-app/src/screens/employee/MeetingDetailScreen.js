@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { Picker } from '@react-native-picker/picker';
 import { useTheme } from '../../context/ThemeContext';
 import ScreenWrapper from '../../components/ScreenWrapper';
 import { EmployeeAPI } from '../../services/employee.api';
@@ -58,8 +59,13 @@ export default function MeetingDetailScreen({ route, navigation }) {
   const [proposals, setProposals] = useState([]);
   const [showProposal, setShowProposal] = useState(false);
   const [propTitle, setPropTitle] = useState('');
-  const [propItems, setPropItems] = useState([{ service_name: '', quantity: '1', unit_price: '' }]);
+  const [propItems, setPropItems] = useState([{ service_name: '', quantity: '1', unit_price: '', catalog_id: null }]);
   const [savingProposal, setSavingProposal] = useState(false);
+  const [packages, setPackages] = useState([]); // service catalog, same source as web's "/services" dropdown
+
+  useEffect(() => {
+    EmployeeAPI.getPackages().then(r => setPackages(r.data?.data || [])).catch(() => {});
+  }, []);
 
   const fetchDetail = useCallback(async () => {
     try {
@@ -99,13 +105,29 @@ export default function MeetingDetailScreen({ route, navigation }) {
 
   const openProposalModal = () => {
     setPropTitle(`Proposal for ${data.client_name}`);
-    setPropItems([{ service_name: '', quantity: '1', unit_price: '' }]);
+    setPropItems([{ service_name: '', quantity: '1', unit_price: '', catalog_id: null }]);
     setShowProposal(true);
   };
   const updatePropItem = (idx, field, val) => {
     setPropItems(propItems.map((it, i) => i === idx ? { ...it, [field]: val } : it));
   };
-  const addPropItem = () => setPropItems([...propItems, { service_name: '', quantity: '1', unit_price: '' }]);
+  // Picking a catalog item auto-fills name + price, same as the web proposal builder.
+  // Picking "Custom item" (value null) just clears the link and leaves fields editable.
+  const pickCatalogItem = (idx, catalogId) => {
+    if (!catalogId) {
+      setPropItems(propItems.map((it, i) => i === idx ? { ...it, catalog_id: null } : it));
+      return;
+    }
+    const pkg = packages.find(p => p.id === catalogId);
+    if (!pkg) return;
+    setPropItems(propItems.map((it, i) => i === idx ? {
+      ...it,
+      catalog_id: catalogId,
+      service_name: pkg.package_name,
+      unit_price: String(pkg.price ?? ''),
+    } : it));
+  };
+  const addPropItem = () => setPropItems([...propItems, { service_name: '', quantity: '1', unit_price: '', catalog_id: null }]);
   const removePropItem = (idx) => setPropItems(propItems.filter((_, i) => i !== idx));
   const propTotal = propItems.reduce((sum, it) => sum + (Number(it.quantity) || 0) * (Number(it.unit_price) || 0), 0);
 
@@ -151,6 +173,21 @@ export default function MeetingDetailScreen({ route, navigation }) {
     try {
       await EmployeeAPI.markMeetingDone(meetingId);
       Alert.alert('Meeting Done', 'Now you can close the deal — Deal Done or Lost.');
+      fetchDetail();
+    } catch (e) {
+      Alert.alert('Error', e.message || 'Failed to update');
+    } finally { setSaving(false); }
+  };
+
+  const submitNoAnswer = async () => {
+    setSaving(true);
+    try {
+      await EmployeeAPI.logMeetingActivity(meetingId, {
+        type: 'CALL',
+        title: 'Call Not Picked / No Answer',
+        description: 'Client did not answer the call.',
+      });
+      Alert.alert('Updated', 'Logged as "Call Not Picked".');
       fetchDetail();
     } catch (e) {
       Alert.alert('Error', e.message || 'Failed to update');
@@ -291,6 +328,11 @@ export default function MeetingDetailScreen({ route, navigation }) {
                 <Ionicons name="chatbubble-ellipses-outline" size={18} color={colors.text2} />
                 <Text style={[s.actionRowTxt, { color: colors.text }]}>Log Call / Remark</Text>
                 <Ionicons name="chevron-forward" size={16} color={colors.text3} />
+              </TouchableOpacity>
+              <TouchableOpacity style={[s.actionRow, { borderColor: colors.border }]} onPress={submitNoAnswer} disabled={saving}>
+                <Ionicons name="call-outline" size={18} color="#F59E0B" />
+                <Text style={[s.actionRowTxt, { color: '#F59E0B' }]}>Client Didn't Pick Up (No Answer)</Text>
+                {saving ? <ActivityIndicator color="#F59E0B" size="small" /> : <Ionicons name="chevron-forward" size={16} color="#F59E0B" />}
               </TouchableOpacity>
               {data.status === 'MEETING_SCHEDULED' && (
                 <TouchableOpacity style={[s.dealBtn, { backgroundColor: '#14B8A6' }]} onPress={submitMeetingDone} disabled={saving}>
@@ -467,6 +509,19 @@ export default function MeetingDetailScreen({ route, navigation }) {
             <Text style={[s.fieldLabel, { marginTop: 16 }]}>ITEMS *</Text>
             {propItems.map((it, idx) => (
               <View key={idx} style={{ marginBottom: 10, borderWidth: 1.5, borderColor: colors.border, borderRadius: 10, padding: 10 }}>
+                <View style={[s.fieldWrap, { backgroundColor: colors.bg2, borderColor: colors.border, marginBottom: 8 }]}>
+                  <Ionicons name="layers-outline" size={16} color={colors.text3} />
+                  <Picker
+                    selectedValue={it.catalog_id}
+                    style={{ flex: 1, color: colors.text }}
+                    onValueChange={(val) => pickCatalogItem(idx, val)}
+                  >
+                    <Picker.Item label="— Custom item —" value={null} />
+                    {packages.map(p => (
+                      <Picker.Item key={p.id} label={`${p.package_name} — ₹${p.price}`} value={p.id} />
+                    ))}
+                  </Picker>
+                </View>
                 <View style={[s.fieldWrap, { backgroundColor: colors.bg2, borderColor: colors.border, marginBottom: 8 }]}>
                   <TextInput
                     style={{ flex: 1, fontSize: 14, paddingVertical: 10, color: colors.text }}

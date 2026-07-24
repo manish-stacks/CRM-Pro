@@ -8,7 +8,7 @@ import * as Notifications from 'expo-notifications';
 // Import the tracker so its background TaskManager task is registered at app launch.
 // (expo-task-manager requires the task to be defined in the global scope on start.)
 import './src/services/LocationTracker';
-import { setupAndroidChannel } from './src/services/push';
+import { setupAndroidChannel, listenForTokenRefresh } from './src/services/push';
 
 // Status bar icon color must follow the app's own manual dark-mode toggle
 // (ThemeContext), NOT the OS color scheme — "auto" was reading the device's
@@ -24,6 +24,11 @@ export default function App() {
 
   useEffect(() => {
     setupAndroidChannel();
+
+    // Firebase rotates the FCM registration token from time to time (app data
+    // cleared, restored backup, long inactivity). Without this listener the CRM
+    // keeps the stale token and every push to this phone silently disappears.
+    const stopTokenListener = listenForTokenRefresh();
 
     const route = (data) => {
       if (!navRef.current || !data) return;
@@ -68,7 +73,10 @@ export default function App() {
       })
       .catch(() => {});
 
-    return () => sub.remove();
+    return () => {
+      sub.remove();
+      stopTokenListener();
+    };
   }, []);
 
   return (

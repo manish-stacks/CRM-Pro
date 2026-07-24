@@ -22,7 +22,9 @@ export function AuthProvider({ children }) {
         setIsLoggedIn(true);
         setRole(savedRole);
         if (savedUser) setUser(JSON.parse(savedUser));
-        registerForPush().catch(() => {}); // refresh token on relaunch
+        // Re-register on relaunch. Only hits the network when the FCM token
+        // actually changed (registerForPush caches the last one it sent).
+        registerForPush().catch(() => {});
       }
       setLoading(false);
     });
@@ -51,8 +53,11 @@ export function AuthProvider({ children }) {
       setUser(userData);
       setRole(loginRole);
       setIsLoggedIn(true);
-      // Register this device for push notifications (fire-and-forget)
-      registerForPush().catch(() => {});
+      // Register this device for push notifications.
+      // force = true: the token may already be cached from the PREVIOUS account
+      // on this phone, and it must now be attached to the account that just
+      // logged in — otherwise notifications keep going to the old user.
+      registerForPush(true).catch(() => {});
       return true;
     } catch (error) {
       Alert.alert('Login Failed', error.message || 'Invalid credentials');

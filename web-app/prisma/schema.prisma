@@ -31,7 +31,16 @@ model User {
   disabledAt       DateTime?
   disabledReason   String?
   lastLoginAt      DateTime?
-  expoPushToken    String?   // mobile push (Expo/FCM)
+  // ---- Mobile push ----
+  // fcmToken is the native Firebase registration token sent by the app (primary).
+  // expoPushToken is kept for older installs / iOS builds without a Firebase iOS
+  // app, and is used only when fcmToken is empty.
+  // NOTE: @db.Text is required — FCM tokens are far longer than MySQL's default
+  // VARCHAR(191) that Prisma would otherwise use, and would be truncated.
+  fcmToken         String?   @db.Text
+  expoPushToken    String?   // legacy Expo push token
+  pushPlatform     String?   // "android" | "ios"
+  pushTokenAt      DateTime? // last time the device registered
 
   // Password-reset OTP (staff forgot-password flow)
   resetOtp         String?   // Hashed OTP
@@ -722,7 +731,11 @@ model Client {
   gstNo                String?
   onboardingDate       DateTime?       @db.Date
   status               String          @default("ACTIVE") // ACTIVE, INACTIVE, CHURNED
-  expoPushToken        String?         // mobile push (Expo/FCM)
+  // ---- Mobile push (client-portal app) ----
+  fcmToken             String?         @db.Text
+  expoPushToken        String?         // legacy Expo push token
+  pushPlatform         String?         // "android" | "ios"
+  pushTokenAt          DateTime?
   image                String?         // Cloudinary URL
 
   // Portal login (separate from User model for legacy support)
