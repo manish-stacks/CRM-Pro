@@ -50,22 +50,58 @@ const fStyles = StyleSheet.create({
   },
 });
 
+/* ---------- PERSON PICKER (Telecaller / Marketing Person / Reporting Person) ---------- */
+function PersonPicker({ label, icon, colors, value, onValueChange, options }) {
+  return (
+    <View style={{ marginBottom: 16 }}>
+      <Text style={{ fontSize: 12, fontWeight: '700', color: colors.text2, marginBottom: 8, letterSpacing: 0.5 }}>
+        {label}
+      </Text>
+      <View style={[fStyles.wrap, { backgroundColor: colors.bg2, borderColor: colors.border }]}>
+        {icon && <Ionicons name={icon} size={18} color={colors.text3} />}
+        <Picker selectedValue={value} style={{ flex: 1, color: colors.text }} onValueChange={onValueChange}>
+          <Picker.Item label={`Select ${label.toLowerCase()}`} value={null} />
+          {options.map(o => (
+            <Picker.Item key={o.id} label={o.name} value={o.id} />
+          ))}
+        </Picker>
+      </View>
+    </View>
+  );
+}
+
 /* ---------- MAIN ---------- */
 export default function AddClientScreen({ navigation }) {
 
   const { colors } = useTheme();
 
-  /* CLIENT */
+  const todayStr = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+
+  /* CLIENT — same fields as the web "Add New Client" form */
   const [form, setForm] = useState({
-    name: '',
+    companyName: '',
+    clientName: '',
     phone: '',
+    altPhone: '',
     email: '',
-    company: '',
-    address: ''
+    onboardingDate: todayStr,
+    address: '',
+    city: '',
+    state: '',
+    pincode: '',
+    gstApplicable: false,
+    gstNo: '',
+    telecallerId: null,
+    marketingPersonId: null,
+    sendWelcome: true,
   });
 
   const [loading, setLoading] = useState(false);
   const [clientCreated, setClientCreated] = useState(null);
+
+  /* Dropdown options for Telecaller / Marketing Person (includes their team head) */
+  const [telecallers, setTelecallers] = useState([]);
+  const [marketingPeople, setMarketingPeople] = useState([]);
 
   /* PACKAGE */
   const [packages, setPackages] = useState([]);
@@ -80,9 +116,10 @@ export default function AddClientScreen({ navigation }) {
 
   const [assigning, setAssigning] = useState(false);
 
-  /* ---------- FETCH PACKAGES ---------- */
+  /* ---------- FETCH PACKAGES + PEOPLE ---------- */
   useEffect(() => {
     fetchPackages();
+    fetchPeople();
   }, []);
 
   const fetchPackages = async () => {
@@ -94,13 +131,25 @@ export default function AddClientScreen({ navigation }) {
     }
   };
 
+  const fetchPeople = async () => {
+    try {
+      const res = await EmployeeAPI.getUsersByRole('TELECALLER,MARKETING_EXECUTIVE,MANAGER');
+      const users = res.data?.data || [];
+      const heads = users.filter(u => u.role === 'MANAGER').map(u => ({ ...u, name: `${u.name} (Head)` }));
+      setTelecallers([...users.filter(u => u.role === 'TELECALLER'), ...heads]);
+      setMarketingPeople([...users.filter(u => u.role === 'MARKETING_EXECUTIVE'), ...heads]);
+    } catch (e) {
+      console.log('Users-by-role error:', e);
+    }
+  };
+
   /* ---------- HELPERS ---------- */
   const set = (key) => (val) => setForm(f => ({ ...f, [key]: val }));
   const setS = (key) => (val) => setService(s => ({ ...s, [key]: val }));
 
   const validateForm = () => {
-    if (!form.name.trim()) return Alert.alert('Error', 'Name required');
-    if (!form.phone.trim()) return Alert.alert('Error', 'Phone required');
+    if (!form.clientName.trim()) { Alert.alert('Error', 'Client name required'); return false; }
+    if (!form.phone.trim()) { Alert.alert('Error', 'Phone required'); return false; }
     return true;
   };
 
@@ -156,7 +205,12 @@ export default function AddClientScreen({ navigation }) {
           onPress: () => {
             setShowService(false);
             setClientCreated(null);
-            setForm({ name: '', phone: '', email: '', company: '', address: '' });
+            setForm({
+              companyName: '', clientName: '', phone: '', altPhone: '', email: '',
+              onboardingDate: todayStr, address: '', city: '', state: '', pincode: '',
+              gstApplicable: false, gstNo: '', telecallerId: null, marketingPersonId: null,
+              sendWelcome: true,
+            });
           }
         }
       ]);
@@ -205,11 +259,54 @@ export default function AddClientScreen({ navigation }) {
                 </Text>
               </View>
 
-              <Field label="FULL NAME *" icon="person-outline" value={form.name} onChangeText={set('name')} />
-              <Field label="PHONE *" icon="call-outline" value={form.phone} onChangeText={set('phone')} />
-              <Field label="EMAIL" icon="mail-outline" value={form.email} onChangeText={set('email')} />
-              <Field label="COMPANY" icon="business-outline" value={form.company} onChangeText={set('company')} />
+              <Field label="COMPANY NAME" icon="business-outline" value={form.companyName} onChangeText={set('companyName')} />
+              <Field label="CLIENT NAME *" icon="person-outline" value={form.clientName} onChangeText={set('clientName')} />
+              <Field label="PHONE *" icon="call-outline" keyboardType="phone-pad" value={form.phone} onChangeText={set('phone')} />
+              <Field label="ALT PHONE" icon="call-outline" keyboardType="phone-pad" value={form.altPhone} onChangeText={set('altPhone')} />
+              <Field label="EMAIL" icon="mail-outline" keyboardType="email-address" autoCapitalize="none" value={form.email} onChangeText={set('email')} />
+              <Field label="ONBOARDING DATE (YYYY-MM-DD)" icon="calendar-outline" value={form.onboardingDate} onChangeText={set('onboardingDate')} />
               <Field label="ADDRESS" icon="location-outline" value={form.address} onChangeText={set('address')} />
+              <Field label="CITY" icon="business-outline" value={form.city} onChangeText={set('city')} />
+              <Field label="STATE" icon="map-outline" value={form.state} onChangeText={set('state')} />
+              <Field label="PINCODE" icon="location-outline" keyboardType="number-pad" value={form.pincode} onChangeText={set('pincode')} />
+
+              {/* GST APPLICABLE */}
+              <View style={{ marginBottom: 16 }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: colors.text2, marginBottom: 8, letterSpacing: 0.5 }}>GST APPLICABLE</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 20 }}>
+                  <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }} onPress={() => set('gstApplicable')(false)}>
+                    <Ionicons name={!form.gstApplicable ? 'radio-button-on' : 'radio-button-off'} size={18} color={colors.primary} />
+                    <Text style={{ color: colors.text, fontSize: 14 }}>No</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }} onPress={() => set('gstApplicable')(true)}>
+                    <Ionicons name={form.gstApplicable ? 'radio-button-on' : 'radio-button-off'} size={18} color={colors.primary} />
+                    <Text style={{ color: colors.text, fontSize: 14 }}>Yes</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+              {form.gstApplicable && (
+                <Field label="GST NO" icon="document-text-outline" value={form.gstNo} onChangeText={set('gstNo')} />
+              )}
+
+              {/* TELECALLER / MARKETING PERSON (dropdowns include the team head) */}
+              <PersonPicker label="TELECALLER" icon="call-outline" colors={colors}
+                value={form.telecallerId} onValueChange={set('telecallerId')} options={telecallers} />
+              <PersonPicker label="MARKETING PERSON" icon="briefcase-outline" colors={colors}
+                value={form.marketingPersonId} onValueChange={set('marketingPersonId')} options={marketingPeople} />
+
+              {/* SEND WELCOME MESSAGE */}
+              <TouchableOpacity
+                onPress={() => set('sendWelcome')(!form.sendWelcome)}
+                style={[s.welcomeBox, { backgroundColor: colors.primary + '10', borderColor: colors.primary + '40' }]}
+              >
+                <Ionicons name={form.sendWelcome ? 'checkbox' : 'square-outline'} size={20} color={colors.primary} />
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 13 }}>Send Welcome Message</Text>
+                  <Text style={{ color: colors.text3, fontSize: 11, marginTop: 2 }}>
+                    Auto-generate portal password + send credentials via email + WhatsApp
+                  </Text>
+                </View>
+              </TouchableOpacity>
 
               <TouchableOpacity onPress={handleCreate} disabled={loading}>
                 <LinearGradient colors={[colors.gradStart, colors.gradEnd]} style={s.btn}>
@@ -311,6 +408,8 @@ const styles = (c) => StyleSheet.create({
 
   successBanner: { flexDirection: 'row', padding: 12, borderWidth: 1.5, borderRadius: 12, marginBottom: 20 },
   successTxt: { marginLeft: 10 },
+
+  welcomeBox: { flexDirection: 'row', alignItems: 'center', padding: 12, borderWidth: 1.5, borderRadius: 12, marginBottom: 16 },
 
   skipBtn: { alignItems: 'center', marginTop: 10 }
 });

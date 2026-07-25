@@ -32,9 +32,9 @@ const NAV: NavItem[] = [
   },
   {
     label: 'CRM', icon: Briefcase, children: [
-      { label: 'Leads', href: '/leads', icon: Target, roles: ['SUPER_ADMIN', 'ADMIN', 'TELECALLER'] },
+      { label: 'Leads', href: '/leads', icon: Target, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'TELECALLER'] },
       { label: 'My Meetings', href: '/marketing', icon: Video, roles: ['SUPER_ADMIN', 'ADMIN', 'MARKETING_EXECUTIVE'] },
-      { label: 'Proposals', href: '/proposals', icon: FileText, roles: ['SUPER_ADMIN', 'ADMIN', 'MARKETING_EXECUTIVE', 'TELECALLER'] },
+      { label: 'Proposals', href: '/proposals', icon: FileText, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'MARKETING_EXECUTIVE', 'TELECALLER'] },
       { label: 'Invoices', href: '/invoices', icon: CreditCard, roles: ['SUPER_ADMIN', 'ADMIN', 'MARKETING_EXECUTIVE'] },
       { label: 'Clients', href: '/clients', icon: Users2, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'TELECALLER', 'MARKETING_EXECUTIVE'] },
       { label: 'Projects', href: '/projects', icon: Briefcase },
@@ -55,7 +55,7 @@ const NAV: NavItem[] = [
       { label: 'Reports', href: '/reports', icon: BarChart3, roles: ['SUPER_ADMIN', 'ADMIN'] },
     ]
   },
-  { label: 'Visit Sheet', href: '/visits', icon: MapPinned, roles: ['SUPER_ADMIN', 'ADMIN'] },
+  { label: 'Visit Sheet', href: '/visits', icon: MapPinned, roles: ['SUPER_ADMIN', 'ADMIN', 'MARKETING_EXECUTIVE'] },
   { label: 'Field Tracking', href: '/tracking', icon: MapPin, roles: ['SUPER_ADMIN', 'ADMIN'] },
   { label: 'Notifications', href: '/notifications', icon: Bell },
   { label: 'Reminders', href: '/reminders', icon: AlarmClock },

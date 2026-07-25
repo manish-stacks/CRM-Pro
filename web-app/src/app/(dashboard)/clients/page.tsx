@@ -42,7 +42,7 @@ export default function ClientsPage() {
     companyName: '', clientName: '', phone: '', altPhone: '', email: '',
     address: '', state: '', city: '', pincode: '',
     gstApplicable: false, gstNo: '',
-    telecallerId: '', marketingPersonId: '', reportingPersonId: '',
+    telecallerId: '', marketingPersonId: '',
     onboardingDate: new Date().toISOString().split('T')[0],
     sendWelcome: true,
   })
@@ -74,7 +74,7 @@ export default function ClientsPage() {
       companyName: '', clientName: '', phone: '', altPhone: '', email: '',
       address: '', state: '', city: '', pincode: '',
       gstApplicable: false, gstNo: '',
-      telecallerId: '', marketingPersonId: '', reportingPersonId: '',
+      telecallerId: '', marketingPersonId: '',
       onboardingDate: new Date().toISOString().split('T')[0],
       sendWelcome: true,
     })
@@ -344,12 +344,10 @@ export default function ClientsPage() {
                 <Input label="GST Number" value={form.gstNo} onChange={e => setForm(p => ({ ...p, gstNo: e.target.value.toUpperCase() }))} placeholder="22ABCDE1234F1Z5" />
               )}
             </div>
-            <div className="grid grid-cols-3 gap-3">
-              <Select label="Telecaller" value={form.telecallerId} onChange={e => setForm(p => ({ ...p, telecallerId: e.target.value }))} options={users.filter(u => u.role === 'TELECALLER').map(u => ({ value: u.id, label: u.name }))} />
+            <div className="grid grid-cols-2 gap-3">
+              <Select label="Telecaller" value={form.telecallerId} onChange={e => setForm(p => ({ ...p, telecallerId: e.target.value }))} options={users.filter(u => u.role === 'TELECALLER' || u.role === 'MANAGER').map(u => ({ value: u.id, label: u.role === 'MANAGER' ? `${u.name} (Head)` : u.name }))} />
 
-              <Select label="Marketing Person" value={form.marketingPersonId} onChange={e => setForm(p => ({ ...p, marketingPersonId: e.target.value }))} options={users.filter(u => u.role === 'MARKETING_EXECUTIVE').map(u => ({ value: u.id, label: u.name }))} />
-
-              <Select label="Reporting Person" value={form.reportingPersonId} onChange={e => setForm(p => ({ ...p, reportingPersonId: e.target.value }))} options={users.filter(u => u.role === 'MANAGER').map(u => ({ value: u.id, label: u.name }))} />
+              <Select label="Marketing Person" value={form.marketingPersonId} onChange={e => setForm(p => ({ ...p, marketingPersonId: e.target.value }))} options={users.filter(u => u.role === 'MARKETING_EXECUTIVE' || u.role === 'MANAGER').map(u => ({ value: u.id, label: u.role === 'MANAGER' ? `${u.name} (Head)` : u.name }))} />
 
             </div>
             <label className="flex items-center gap-2 bg-brand-50 border border-blue-200 rounded-lg p-3 cursor-pointer">

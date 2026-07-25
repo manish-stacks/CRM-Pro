@@ -34,6 +34,8 @@ export const EmployeeAPI = {
   // params: { range, date, dateFrom, dateTo, status, expiry, search }
   getClients: (params) => AxiosInstance.get(`/mobile/clients${qs(params)}`),
   createClient: (data) => AxiosInstance.post('/mobile/clients', data),
+  // roles: comma-separated, e.g. 'TELECALLER,MANAGER'
+  getUsersByRole: (roles) => AxiosInstance.get(`/users/by-role?roles=${roles}`),
   getClientById: (id) => AxiosInstance.get(`/mobile/clients/${id}`),
 
   // Packages + service assignment
@@ -50,6 +52,8 @@ export const EmployeeAPI = {
     return AxiosInstance.get(`/mobile/proposals${q}`)
   },
   createProposal: (data) => AxiosInstance.post('/mobile/proposals', data),
+  // "Save & Send to Client" — emails + WhatsApps the proposal, same as the web builder.
+  sendProposal: (id, data) => AxiosInstance.post(`/proposals/${id}/send`, data),
   getInvoices: (clientId) => AxiosInstance.get(`/mobile/invoices${clientId ? `?clientId=${clientId}` : ''}`),
   createInvoice: (data) => AxiosInstance.post('/mobile/invoices', data),
 

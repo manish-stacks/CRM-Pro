@@ -60,7 +60,13 @@ export default function MeetingDetailScreen({ route, navigation }) {
   const [showProposal, setShowProposal] = useState(false);
   const [propTitle, setPropTitle] = useState('');
   const [propItems, setPropItems] = useState([{ service_name: '', quantity: '1', unit_price: '', catalog_id: null }]);
+  const [propDiscount, setPropDiscount] = useState('0');
+  const [propDiscountType, setPropDiscountType] = useState('FIXED'); // FIXED (₹) or PERCENT (%)
+  const [propGstApplicable, setPropGstApplicable] = useState(false);
+  const [propGstRate, setPropGstRate] = useState('18');
   const [savingProposal, setSavingProposal] = useState(false);
+  const [sendingProposalId, setSendingProposalId] = useState(null); // for "Save & Send to Client"
+  const [downloadingId, setDownloadingId] = useState(null); // proposal.id currently generating its PDF link
   const [packages, setPackages] = useState([]); // service catalog, same source as web's "/services" dropdown
 
   useEffect(() => {
@@ -106,6 +112,10 @@ export default function MeetingDetailScreen({ route, navigation }) {
   const openProposalModal = () => {
     setPropTitle(`Proposal for ${data.client_name}`);
     setPropItems([{ service_name: '', quantity: '1', unit_price: '', catalog_id: null }]);
+    setPropDiscount('0');
+    setPropDiscountType('FIXED');
+    setPropGstApplicable(false);
+    setPropGstRate('18');
     setShowProposal(true);
   };
   const updatePropItem = (idx, field, val) => {
@@ -129,9 +139,22 @@ export default function MeetingDetailScreen({ route, navigation }) {
   };
   const addPropItem = () => setPropItems([...propItems, { service_name: '', quantity: '1', unit_price: '', catalog_id: null }]);
   const removePropItem = (idx) => setPropItems(propItems.filter((_, i) => i !== idx));
-  const propTotal = propItems.reduce((sum, it) => sum + (Number(it.quantity) || 0) * (Number(it.unit_price) || 0), 0);
 
-  const submitProposal = async () => {
+  // Same live-calculation as the web proposal builder: subtotal → discount → GST → total.
+  const propTotals = (() => {
+    const subtotal = propItems.reduce((sum, it) => sum + (Number(it.quantity) || 0) * (Number(it.unit_price) || 0), 0);
+    const discountNum = Number(propDiscount) || 0;
+    const discountAmount = propDiscountType === 'PERCENT' ? subtotal * (discountNum / 100) : discountNum;
+    const afterDiscount = Math.max(0, subtotal - discountAmount);
+    const gstRateNum = Number(propGstRate) || 0;
+    const gstAmount = propGstApplicable ? afterDiscount * (gstRateNum / 100) : 0;
+    const totalAmount = afterDiscount + gstAmount;
+    return { subtotal, discountAmount, afterDiscount, gstAmount, totalAmount };
+  })();
+
+  // sendAfter = true → "Save & Send to Client" (creates the proposal, then
+  // immediately emails/WhatsApps it, same as the web builder's Save & Send).
+  const submitProposal = async (sendAfter = false) => {
     const valid = propItems.filter(it => it.service_name.trim() && Number(it.unit_price) > 0);
     if (!propTitle.trim()) { Alert.alert('Error', 'Title is required'); return; }
     if (valid.length === 0) { Alert.alert('Error', 'Add at least one item with a name and price'); return; }
@@ -140,6 +163,10 @@ export default function MeetingDetailScreen({ route, navigation }) {
       const res = await EmployeeAPI.createProposal({
         leadId: meetingId,
         title: propTitle,
+        discount: Number(propDiscount) || 0,
+        discountType: propDiscountType,
+        gstApplicable: !!propGstApplicable,
+        gstRate: Number(propGstRate) || 18,
         items: valid.map(it => ({
           serviceName: it.service_name,
           description: it.service_name,
@@ -147,12 +174,42 @@ export default function MeetingDetailScreen({ route, navigation }) {
           unitPrice: Number(it.unit_price) || 0,
         })),
       });
+      const proposalId = res.data?.data?.id;
       setShowProposal(false);
-      Alert.alert('Proposal Created', `${res.data?.data?.proposal_number || ''} saved successfully.`);
+
+      if (sendAfter && proposalId) {
+        setSendingProposalId(proposalId);
+        try {
+          await EmployeeAPI.sendProposal(proposalId, { viaEmail: true, viaWhatsapp: true });
+          Alert.alert('Sent', `${res.data?.data?.proposal_number || ''} saved and sent to the client.`);
+        } catch (e) {
+          Alert.alert('Saved, but not sent', `${res.data?.data?.proposal_number || ''} was saved, but sending failed: ${e.message || 'Unknown error'}`);
+        } finally {
+          setSendingProposalId(null);
+        }
+      } else {
+        Alert.alert('Proposal Created', `${res.data?.data?.proposal_number || ''} saved successfully.`);
+      }
       fetchProposals();
     } catch (e) {
       Alert.alert('Error', e.message || 'Failed to create proposal');
     } finally { setSavingProposal(false); }
+  };
+
+  // Fetches the public PDF share link for a proposal and opens it — the
+  // device's browser/PDF viewer handles the actual "download / save".
+  const downloadProposal = async (proposal) => {
+    setDownloadingId(proposal.id);
+    try {
+      const res = await EmployeeAPI.getProposalShareLink(proposal.id);
+      const url = res.data?.data?.url;
+      if (!url) throw new Error('No PDF link returned');
+      await Linking.openURL(url);
+    } catch (e) {
+      Alert.alert('Error', e.message || 'Could not open the proposal PDF');
+    } finally {
+      setDownloadingId(null);
+    }
   };
 
   const submitActivity = async () => {
@@ -314,7 +371,19 @@ export default function MeetingDetailScreen({ route, navigation }) {
                     <Text style={[s.actTitle, { color: colors.text }]}>{p.title}</Text>
                     <Text style={[s.actTitle, { color: colors.text }]}>₹{Number(p.final_amount || 0).toLocaleString('en-IN')}</Text>
                   </View>
-                  <Text style={[s.actMeta, { color: colors.text3 }]}>{p.proposal_number} · {p.status}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
+                    <Text style={[s.actMeta, { color: colors.text3 }]}>{p.proposal_number} · {p.status}</Text>
+                    <TouchableOpacity
+                      onPress={() => downloadProposal(p)}
+                      disabled={downloadingId === p.id}
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 4, paddingHorizontal: 8 }}
+                    >
+                      {downloadingId === p.id
+                        ? <ActivityIndicator size="small" color={colors.primary} />
+                        : <Ionicons name="download-outline" size={16} color={colors.primary} />}
+                      <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '700' }}>Download</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               ))}
             </View>
@@ -565,15 +634,94 @@ export default function MeetingDetailScreen({ route, navigation }) {
               <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 13 }}>Add another item</Text>
             </TouchableOpacity>
 
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.border }}>
-              <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text2 }}>Total</Text>
-              <Text style={{ fontSize: 16, fontWeight: '800', color: colors.text }}>₹{propTotal.toLocaleString('en-IN')}</Text>
+            {/* Discount */}
+            <Text style={[s.fieldLabel, { marginTop: 16 }]}>DISCOUNT</Text>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <View style={[s.fieldWrap, { flex: 1, backgroundColor: colors.bg2, borderColor: colors.border }]}>
+                <TextInput
+                  style={{ flex: 1, fontSize: 14, paddingVertical: 10, color: colors.text }}
+                  keyboardType="numeric"
+                  value={propDiscount}
+                  onChangeText={setPropDiscount}
+                  placeholder="0"
+                  placeholderTextColor={colors.text3}
+                />
+              </View>
+              <View style={[s.fieldWrap, { width: 110, backgroundColor: colors.bg2, borderColor: colors.border }]}>
+                <Picker
+                  selectedValue={propDiscountType}
+                  style={{ flex: 1, color: colors.text }}
+                  onValueChange={setPropDiscountType}
+                >
+                  <Picker.Item label="₹ Fixed" value="FIXED" />
+                  <Picker.Item label="% Percent" value="PERCENT" />
+                </Picker>
+              </View>
             </View>
 
-            <TouchableOpacity onPress={submitProposal} disabled={savingProposal} style={{ marginTop: 20 }}>
+            {/* GST Applicable */}
+            <Text style={[s.fieldLabel, { marginTop: 16 }]}>GST APPLICABLE</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+              <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }} onPress={() => setPropGstApplicable(false)}>
+                <Ionicons name={!propGstApplicable ? 'radio-button-on' : 'radio-button-off'} size={18} color={colors.primary} />
+                <Text style={{ color: colors.text, fontSize: 14 }}>No</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }} onPress={() => setPropGstApplicable(true)}>
+                <Ionicons name={propGstApplicable ? 'radio-button-on' : 'radio-button-off'} size={18} color={colors.primary} />
+                <Text style={{ color: colors.text, fontSize: 14 }}>Yes</Text>
+              </TouchableOpacity>
+              {propGstApplicable && (
+                <View style={[s.fieldWrap, { flex: 1, backgroundColor: colors.bg2, borderColor: colors.border }]}>
+                  <TextInput
+                    style={{ flex: 1, fontSize: 14, paddingVertical: 10, color: colors.text }}
+                    keyboardType="numeric"
+                    value={propGstRate}
+                    onChangeText={setPropGstRate}
+                    placeholder="18"
+                    placeholderTextColor={colors.text3}
+                  />
+                  <Text style={{ color: colors.text3, fontSize: 13 }}>%</Text>
+                </View>
+              )}
+            </View>
+
+            {/* Live totals — subtotal → discount → GST → total, same as web */}
+            <View style={{ marginTop: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.border, gap: 6 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <Text style={{ fontSize: 13, color: colors.text2 }}>Subtotal</Text>
+                <Text style={{ fontSize: 13, fontWeight: '600', color: colors.text }}>₹{propTotals.subtotal.toLocaleString('en-IN')}</Text>
+              </View>
+              {propTotals.discountAmount > 0 && (
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text style={{ fontSize: 13, color: '#EF4444' }}>Discount{propDiscountType === 'PERCENT' ? ` (${propDiscount}%)` : ''}</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: '#EF4444' }}>−₹{propTotals.discountAmount.toLocaleString('en-IN')}</Text>
+                </View>
+              )}
+              {propGstApplicable && (
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text style={{ fontSize: 13, color: colors.text2 }}>GST ({propGstRate}%)</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: colors.text }}>₹{propTotals.gstAmount.toLocaleString('en-IN')}</Text>
+                </View>
+              )}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4, paddingTop: 8, borderTopWidth: 1, borderTopColor: colors.border }}>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text2 }}>Total</Text>
+                <Text style={{ fontSize: 16, fontWeight: '800', color: colors.text }}>₹{propTotals.totalAmount.toLocaleString('en-IN')}</Text>
+              </View>
+            </View>
+
+            <TouchableOpacity onPress={() => submitProposal(true)} disabled={savingProposal || !!sendingProposalId} style={{ marginTop: 20 }}>
               <LinearGradient colors={[colors.gradStart, colors.gradEnd]} style={s.submitBtn} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
-                {savingProposal ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 }}>Save Proposal</Text>}
+                {savingProposal || sendingProposalId
+                  ? <ActivityIndicator color="#fff" />
+                  : <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 }}>Save & Send to Client</Text>}
               </LinearGradient>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => submitProposal(false)}
+              disabled={savingProposal || !!sendingProposalId}
+              style={[s.fieldWrap, { justifyContent: 'center', marginTop: 10, marginBottom: 30, backgroundColor: colors.bg2, borderColor: colors.border, paddingVertical: 12 }]}
+            >
+              <Text style={{ color: colors.text, fontWeight: '700', fontSize: 14 }}>Save Proposal (Draft)</Text>
             </TouchableOpacity>
           </ScrollView>
         </View>

@@ -2,25 +2,32 @@
 // Admin/Manager: edit or delete a scheduled visit.
 import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireAuth } from '@/lib/auth'
+import { requireAuth, hasMinRole } from '@/lib/auth'
 import { successResponse, errorResponse, notFoundResponse } from '@/lib/api'
 import { logFromRequest } from '@/lib/audit'
 import { Notifications } from '@/lib/notify'
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const auth = await requireAuth(req, 'MANAGER')
+  const auth = await requireAuth(req)
   if (auth instanceof Response) return auth
   const session = (auth as any).session
+  if (!['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'MARKETING_EXECUTIVE'].includes(session.role)) {
+    return errorResponse('Forbidden', 403)
+  }
+  const isAdmin = hasMinRole(session.role, 'MANAGER')
 
   const existing = await prisma.clientVisit.findUnique({ where: { id } })
   if (!existing) return notFoundResponse('Visit')
+  // A MARKETING_EXECUTIVE may only edit their own visits.
+  if (!isAdmin && existing.userId !== session.userId) return errorResponse('Forbidden', 403)
 
   const body = await req.json().catch(() => ({}))
   const { userId, clientId, clientName, purpose, notes, scheduledDate, scheduledTime, location, status } = body
 
   const data: any = {}
   if (userId && userId !== existing.userId) {
+    if (!isAdmin) return errorResponse('Only admin/manager can reassign a visit')
     const target = await prisma.user.findUnique({ where: { id: userId }, select: { role: true, isActive: true } })
     if (!target) return errorResponse('User not found', 404)
     if (!target.isActive) return errorResponse('Cannot assign a visit to a disabled user')

@@ -97,11 +97,11 @@ export default function ProposalDetailPage() {
               <Send size={13} /> Send to Client
             </button>
           )}
-          {canConvert && (
+          {/* {canConvert && (
             <button onClick={() => setModal('convert')} className="btn-primary btn-sm !bg-emerald-600 hover:!bg-emerald-700">
               <ArrowRight size={13} /> Convert to Invoice
             </button>
-          )}
+          )} */}
           <button onClick={copyShareLink} className="btn-secondary btn-sm" title="Copy share link">
             <Copy size={13} /> Share Link
           </button>
@@ -110,7 +110,6 @@ export default function ProposalDetailPage() {
           </a>
         </div>
       </div>
-
       <div className="card p-5">
         <h3 className="font-semibold text-gray-900 mb-3">Line Items</h3>
         <div className="table-wrapper">

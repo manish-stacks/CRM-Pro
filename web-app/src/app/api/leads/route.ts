@@ -82,6 +82,18 @@ export async function GET(req: NextRequest) {
         { createdById: session.userId },
       ],
     })
+  } else if (session.role === 'MANAGER') {
+    // A MANAGER is a team lead (e.g. a telecalling TL) — there can be more
+    // than one, so scope to their own team (dept they head + direct reports),
+    // not every lead company-wide.
+    const team = await getTeamUserIds(session.userId)
+    and.push({
+      OR: [
+        { assignedToId: { in: team.userIds } },
+        { createdById: { in: team.userIds } },
+        { meetingAssignedToId: { in: team.userIds } },
+      ],
+    })
   } else if (session.role === 'EMPLOYEE') {
     // Regular employees see nothing — UNLESS they head a department / have
     // direct reports (a team lead on an EMPLOYEE role), in which case they
@@ -97,7 +109,7 @@ export async function GET(req: NextRequest) {
       ],
     })
   }
-  // MANAGER (telecaller TL), ADMIN, SUPER_ADMIN see all (respecting filters)
+  // ADMIN, SUPER_ADMIN see all (respecting filters)
 
   // Filters — only for roles allowed to look at other people's leads
   if (assignedToId && canFilterOthers) and.push({ assignedToId })

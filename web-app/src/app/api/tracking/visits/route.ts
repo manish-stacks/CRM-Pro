@@ -5,7 +5,7 @@
 //        the exec gets an in-app + FCM/Expo push notification.
 import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireAuth } from '@/lib/auth'
+import { requireAuth, hasMinRole } from '@/lib/auth'
 import { successResponse, errorResponse, getPaginationParams } from '@/lib/api'
 import { logFromRequest } from '@/lib/audit'
 import { Notifications } from '@/lib/notify'
@@ -21,12 +21,18 @@ function dayRange(d: Date) {
 }
 
 export async function GET(req: NextRequest) {
-  const auth = await requireAuth(req, 'MANAGER')
+  const auth = await requireAuth(req)
   if (auth instanceof Response) return auth
+  const session = (auth as any).session
+  // Admin/Manager see everyone's sheet; a MARKETING_EXECUTIVE sees only their own.
+  if (!['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'MARKETING_EXECUTIVE'].includes(session.role)) {
+    return errorResponse('Forbidden', 403)
+  }
+  const isAdmin = hasMinRole(session.role, 'MANAGER')
 
   const { searchParams } = new URL(req.url)
   const { skip, limit } = getPaginationParams(searchParams)
-  const userId = searchParams.get('userId')
+  const userId = isAdmin ? searchParams.get('userId') : session.userId
   const status = searchParams.get('status')
   const range = searchParams.get('range')      // today | upcoming | overdue | week | month
   const dateFrom = searchParams.get('dateFrom')
@@ -97,12 +103,19 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await requireAuth(req, 'MANAGER')
+  const auth = await requireAuth(req)
   if (auth instanceof Response) return auth
   const session = (auth as any).session
+  if (!['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'MARKETING_EXECUTIVE'].includes(session.role)) {
+    return errorResponse('Forbidden', 403)
+  }
+  const isAdmin = hasMinRole(session.role, 'MANAGER')
 
   const body = await req.json().catch(() => ({}))
-  const { userId, clientId, clientName, purpose, notes, scheduledDate, scheduledTime, location } = body
+  // A MARKETING_EXECUTIVE can only ever schedule a visit for themselves —
+  // admin/manager can assign to any exec (or themselves).
+  const userId = isAdmin ? body.userId : session.userId
+  const { clientId, clientName, purpose, notes, scheduledDate, scheduledTime, location } = body
 
   if (!userId) return errorResponse('Marketing executive (userId) is required')
   if (!scheduledDate) return errorResponse('Visit date is required')

@@ -174,9 +174,9 @@ export async function POST(req: NextRequest) {
         image: image || null,
         assignedToId: assignedToId || null,
         marketingPersonId: marketingPersonId || salesPersonId ||
-          (session.role === 'MARKETING_EXECUTIVE' ? session.userId : null),
+          (session.role === 'MARKETING_EXECUTIVE' || session.role === 'ADMIN' || session.role === 'SUPER_ADMIN' ? session.userId : null),
         telecallerId: telecallerId || telesalesId ||
-          (session.role === 'TELECALLER' ? session.userId : null),
+          (session.role === 'TELECALLER' || session.role === 'ADMIN' || session.role === 'SUPER_ADMIN' ? session.userId : null),
         reportingPersonId: reportingPersonId || null,
         leadId: leadId || null,
         createdById: session.userId,

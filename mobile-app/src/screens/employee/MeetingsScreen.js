@@ -38,6 +38,7 @@ const TABS = [
   { key: 'tomorrow', label: 'Tomorrow', params: { range: 'tomorrow' } },
   { key: 'upcoming', label: 'Upcoming', params: { range: 'upcoming' } },
   { key: 'week', label: 'Next 7 days', params: { range: 'week' } },
+  { key: 'done', label: 'Meeting Done', params: { status: 'meeting_done' } },
   { key: 'all', label: 'All', params: {} },
   { key: 'past', label: 'Past', params: { range: 'past' } },
 ];
@@ -263,7 +264,7 @@ export default function MeetingsScreen({ route, navigation }) {
       ) : null}
 
       {/* Filter tabs */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ maxHeight: 50 }} contentContainerStyle={s.tabsWrap}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ maxHeight: 44 }} contentContainerStyle={s.tabsWrap}>
         {TABS.map(t => {
           const active = !pickedDate && tab === t.key;
           const n = badgeFor(t.key);
@@ -288,7 +289,8 @@ export default function MeetingsScreen({ route, navigation }) {
         <View style={s.center}><ActivityIndicator size="large" color={colors.primary} /></View>
       ) : (
         <FlatList
-          data={meetings}
+          data={meetings}proposals
+          style={{ flex: 1 }}
           keyExtractor={(m) => m.id}
           renderItem={({ item }) => (
             <MeetingCard
@@ -330,7 +332,7 @@ const s = StyleSheet.create({
   iconBtn: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5 },
   searchWrap: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1.5, borderRadius: 12, paddingHorizontal: 14 },
   activeFilter: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1.5 },
-  tabsWrap: { paddingHorizontal: 16, gap: 8, paddingBottom: 10 },
+  tabsWrap: { paddingHorizontal: 16, gap: 8 },
   tabBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1.5 },
   tabTxt: { fontSize: 13, fontWeight: '600' },
   tabBadge: { minWidth: 18, paddingHorizontal: 5, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },

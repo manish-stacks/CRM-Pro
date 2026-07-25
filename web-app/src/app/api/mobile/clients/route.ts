@@ -6,6 +6,7 @@ import { requireMobileEmployee, ok, fail } from '@/lib/mobileAuth'
 import { generateClientCode } from '@/lib/idgen'
 import { logFromRequest } from '@/lib/audit'
 import { istDayRange, todayDateOnly, getISTDateParts } from '@/lib/attendanceDate'
+import { activateClientPortal } from '@/lib/welcomeFlow'
 
 const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000
 
@@ -126,29 +127,52 @@ export async function POST(req: NextRequest) {
 
   let body: any = {}
   try { body = await req.json() } catch { return fail('Invalid body') }
-  const { name, phone, email, company, address } = body
+  const {
+    companyName, clientName, phone, altPhone, email,
+    address, city, state, pincode,
+    gstApplicable, gstNo, onboardingDate,
+    telecallerId, marketingPersonId, reportingPersonId,
+    sendWelcome = false,
+  } = body
 
-  if (!name?.trim()) return fail('Name is required')
+  if (!clientName?.trim()) return fail('Client name is required')
   if (!phone?.trim()) return fail('Phone is required')
 
   const client = await prisma.client.create({
     data: {
       clientCode: await generateClientCode(),
-      clientName: name.trim(),
-      companyName: (company || name).trim(),
+      clientName: clientName.trim(),
+      companyName: (companyName || clientName).trim(),
       phone: phone.trim(),
-      email: email?.trim() || null,
+      altPhone: altPhone?.trim() || null,
+      email: email?.trim() ? email.trim().toLowerCase() : null,
       address: address?.trim() || null,
+      city: city?.trim() || null,
+      state: state?.trim() || null,
+      pincode: pincode?.trim() || null,
+      gstApplicable: !!gstApplicable,
+      gstNo: gstNo?.trim() || null,
+      onboardingDate: onboardingDate ? new Date(onboardingDate) : new Date(),
       status: 'ACTIVE',
-      marketingPersonId: session.userId,
-      reportingPersonId: session.userId,
+      marketingPersonId: marketingPersonId || (session.role === 'MARKETING_EXECUTIVE' || session.role === 'ADMIN' || session.role === 'SUPER_ADMIN' ? session.userId : null),
+      telecallerId: telecallerId || (session.role === 'TELECALLER' || session.role === 'ADMIN' || session.role === 'SUPER_ADMIN' ? session.userId : null),
+      reportingPersonId: reportingPersonId || null,
+      createdById: session.userId,
     },
   })
 
   await logFromRequest(req, {
     userId: session.userId, action: 'CREATE', entityType: 'Client', entityId: client.id,
-    metadata: { via: 'mobile', clientName: client.clientName },
+    metadata: { via: 'mobile', clientName: client.clientName, sendWelcome },
   })
+
+  // Same "Send Welcome Message" flow as the web form: auto-generate portal
+  // password + email/WhatsApp credentials. Best-effort — doesn't block the response.
+  let welcome = null
+  if (sendWelcome) {
+    try { welcome = await activateClientPortal(client.id) }
+    catch (e: any) { welcome = { error: e?.message || 'Welcome failed' } }
+  }
 
   return ok({
     id: client.id,
@@ -156,5 +180,6 @@ export async function POST(req: NextRequest) {
     company: client.companyName,
     phone: client.phone,
     client_code: client.clientCode,
+    welcome,
   })
 }

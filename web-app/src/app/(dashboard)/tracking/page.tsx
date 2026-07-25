@@ -8,6 +8,32 @@ import { MapPin, Navigation, Users2, Loader2, Clock, Battery, RefreshCw, Route }
 import toast from 'react-hot-toast'
 import { loadGoogleMaps, GOOGLE_MAPS_KEY } from '@/lib/googleMaps'
 
+// Ping coordinates are raw GPS points recorded every so often — connecting
+// them with a straight polyline cuts across blocks/parks instead of
+// following the street. Google's Roads API snaps + interpolates the path
+// onto the real road network so the drawn route looks like an actual drive.
+// Falls back to the raw path if the API errors out (e.g. not enabled on the key).
+async function snapPathToRoads(path: { lat: number; lng: number }[]): Promise<{ lat: number; lng: number }[] | null> {
+  if (path.length < 2) return null
+  try {
+    // Roads API accepts up to 100 points per request.
+    const pointsParam = path.slice(0, 100).map(p => `${p.lat},${p.lng}`).join('|')
+    const url = `https://roads.googleapis.com/v1/snapToRoads?path=${encodeURIComponent(pointsParam)}&interpolate=true&key=${GOOGLE_MAPS_KEY}`
+    const res = await fetch(url)
+    const json = await res.json()
+    if (json.error) {
+      // e.g. "Roads API" not enabled on this key/project, or billing off.
+      console.error('Roads API snap failed:', json.error.status, json.error.message)
+      return null
+    }
+    if (!json.snappedPoints?.length) return null
+    return json.snappedPoints.map((p: any) => ({ lat: p.location.latitude, lng: p.location.longitude }))
+  } catch (e) {
+    console.error('Roads API snap request failed:', e)
+    return null
+  }
+}
+
 // Load Google Maps JS API at runtime
 function useGoogleMaps() {
   const [ready, setReady] = useState(false)
@@ -118,8 +144,15 @@ export default function TrackingPage() {
         const pings = r.data.data.pings || []
         if (pings.length > 0) {
           const path = pings.map((p: any) => ({ lat: p.latitude, lng: p.longitude }))
+          // Snap the breadcrumb trail onto actual roads for the drawn line;
+          // markers below still use the real recorded points.
+          const snapped = await snapPathToRoads(path)
+          const linePath = snapped && snapped.length >= 2 ? snapped : path
+          if (!snapped) {
+            toast('Route line is not road-snapped — check console (Roads API may not be enabled on this key)', { icon: '⚠️', duration: 6000 })
+          }
           const line = new g.maps.Polyline({
-            path, strokeColor: '#2563eb', strokeWeight: 4, strokeOpacity: 0.75,
+            path: linePath, strokeColor: '#2563eb', strokeWeight: 4, strokeOpacity: 0.75,
             map: mapInstance.current,
           })
           overlaysRef.current.push(line)
