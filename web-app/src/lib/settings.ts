@@ -8,6 +8,12 @@ type Cache = { at: number; value: any }
 const cache = new Map<string, Cache>()
 const TTL_MS = 60_000 // 60s
 
+// Overloads: passing a defaultValue guarantees a non-undefined return —
+// this is what was missing, so every Settings.xyz(50)-style call across the
+// app (payroll %, thresholds, etc.) was typed as "possibly undefined" even
+// though it can never actually be undefined at runtime.
+export async function getSetting<T = string>(key: string, defaultValue: T): Promise<T>
+export async function getSetting<T = string>(key: string): Promise<T | undefined>
 export async function getSetting<T = string>(key: string, defaultValue?: T): Promise<T | undefined> {
   const now = Date.now()
   const hit = cache.get(key)
