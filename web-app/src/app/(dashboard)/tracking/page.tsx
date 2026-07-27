@@ -34,6 +34,18 @@ async function snapPathToRoads(path: { lat: number; lng: number }[]): Promise<{ 
   }
 }
 
+// Straight-line distance between two points, in km (good enough for a
+// breadcrumb trail's total-distance estimate — doesn't need road-accuracy).
+function haversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
+  const R = 6371
+  const dLat = (b.lat - a.lat) * Math.PI / 180
+  const dLng = (b.lng - a.lng) * Math.PI / 180
+  const la1 = a.lat * Math.PI / 180
+  const la2 = b.lat * Math.PI / 180
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(la1) * Math.cos(la2) * Math.sin(dLng / 2) ** 2
+  return 2 * R * Math.asin(Math.sqrt(h))
+}
+
 // Load Google Maps JS API at runtime
 function useGoogleMaps() {
   const [ready, setReady] = useState(false)
@@ -54,6 +66,7 @@ export default function TrackingPage() {
   const [selectedUser, setSelectedUser] = useState<string>('')
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10))
   const [routeData, setRouteData] = useState<any>(null)
+  const [routeStats, setRouteStats] = useState<any>(null)
   const [routeLoading, setRouteLoading] = useState(false)
   const [people, setPeople] = useState<any[]>([])
 
@@ -61,6 +74,11 @@ export default function TrackingPage() {
   const mapInstance = useRef<any>(null)
   const overlaysRef = useRef<any[]>([])
   const infoRef = useRef<any>(null)
+  const boundsRef = useRef<any>(null)
+
+  const recenter = () => {
+    if (mapInstance.current && boundsRef.current) mapInstance.current.fitBounds(boundsRef.current, 60)
+  }
 
   const clearOverlays = () => {
     overlaysRef.current.forEach((o: any) => o.setMap && o.setMap(null))
@@ -111,11 +129,24 @@ export default function TrackingPage() {
     const bounds = new g.maps.LatLngBounds()
     withLoc.forEach(u => {
       const pos = { lat: u.lastPing.latitude, lng: u.lastPing.longitude }
+      // Moving staff get a soft brand-colored pulse ring under the pin —
+      // a quiet motion cue instead of a static dot for everyone.
+      if (u.lastPing.isMoving) {
+        overlaysRef.current.push(new g.maps.Circle({
+          center: pos, radius: 80, map: mapInstance.current,
+          fillColor: '#e11d48', fillOpacity: 0.12, strokeColor: '#e11d48', strokeOpacity: 0.25, strokeWeight: 1,
+        }))
+      }
       const marker = new g.maps.Marker({
         position: pos,
         map: mapInstance.current,
         title: u.name,
         label: { text: getInitials(u.name), color: '#fff', fontSize: '10px', fontWeight: 'bold' },
+        icon: {
+          path: g.maps.SymbolPath.CIRCLE, scale: 15,
+          fillColor: u.lastPing.isMoving ? '#e11d48' : '#64748b', fillOpacity: 1,
+          strokeColor: '#fff', strokeWeight: 2,
+        },
       })
       marker.addListener('click', () => {
         infoRef.current.setContent(
@@ -126,6 +157,7 @@ export default function TrackingPage() {
       overlaysRef.current.push(marker)
       bounds.extend(pos)
     })
+    boundsRef.current = withLoc.length > 0 ? bounds : null
     if (withLoc.length > 0) {
       mapInstance.current.fitBounds(bounds, 60)
       if (withLoc.length === 1) mapInstance.current.setZoom(15)
@@ -152,23 +184,37 @@ export default function TrackingPage() {
             toast('Route line is not road-snapped — check console (Roads API may not be enabled on this key)', { icon: '⚠️', duration: 6000 })
           }
           const line = new g.maps.Polyline({
-            path: linePath, strokeColor: '#2563eb', strokeWeight: 4, strokeOpacity: 0.75,
-            map: mapInstance.current,
+            path: linePath, strokeColor: '#e11d48', strokeWeight: 5, strokeOpacity: 0.95,
+            map: mapInstance.current, zIndex: 2,
           })
-          overlaysRef.current.push(line)
+          // Soft glow underneath the main line — same trick the delivery-app
+          // rider maps use to make the route pop off the street grid.
+          const glow = new g.maps.Polyline({
+            path: linePath, strokeColor: '#e11d48', strokeWeight: 12, strokeOpacity: 0.18,
+            map: mapInstance.current, zIndex: 1,
+          })
+          overlaysRef.current.push(glow, line)
 
           const bounds = new g.maps.LatLngBounds()
           path.forEach((pt: any) => bounds.extend(pt))
 
-          // Start marker (green)
+          // Start marker — pin styled like a "check-in" flag
           overlaysRef.current.push(new g.maps.Marker({
-            position: path[0], map: mapInstance.current, title: 'Start (Check-in)',
-            icon: { path: g.maps.SymbolPath.CIRCLE, scale: 7, fillColor: '#16a34a', fillOpacity: 1, strokeColor: '#fff', strokeWeight: 2 },
+            position: path[0], map: mapInstance.current, title: 'Start (Check-in)', zIndex: 3,
+            icon: {
+              path: 'M12 0C7.6 0 4 3.6 4 8c0 6 8 16 8 16s8-10 8-16c0-4.4-3.6-8-8-8z',
+              fillColor: '#16a34a', fillOpacity: 1, strokeColor: '#fff', strokeWeight: 1.5,
+              scale: 1.1, anchor: new g.maps.Point(12, 24),
+            },
           }))
-          // Latest marker (red)
+          // Latest position — brand-colored pin so it reads as "where they are now"
           overlaysRef.current.push(new g.maps.Marker({
-            position: path[path.length - 1], map: mapInstance.current, title: 'Latest',
-            icon: { path: g.maps.SymbolPath.CIRCLE, scale: 7, fillColor: '#dc2626', fillOpacity: 1, strokeColor: '#fff', strokeWeight: 2 },
+            position: path[path.length - 1], map: mapInstance.current, title: 'Latest position', zIndex: 4,
+            icon: {
+              path: 'M12 0C7.6 0 4 3.6 4 8c0 6 8 16 8 16s8-10 8-16c0-4.4-3.6-8-8-8z',
+              fillColor: '#e11d48', fillOpacity: 1, strokeColor: '#fff', strokeWeight: 1.5,
+              scale: 1.1, anchor: new g.maps.Point(12, 24),
+            },
           }))
           // Visit markers
           ;(r.data.data.visits || []).forEach((v: any) => {
@@ -188,7 +234,20 @@ export default function TrackingPage() {
             }
           })
           mapInstance.current.fitBounds(bounds, 60)
+          boundsRef.current = bounds
+
+          // Route summary — distance walked/driven, elapsed time, stops made.
+          const distanceKm = path.slice(1).reduce((sum: number, pt: any, i: number) => sum + haversineKm(path[i], pt), 0)
+          const firstT = new Date(pings[0].recordedAt)
+          const lastT = new Date(pings[pings.length - 1].recordedAt)
+          const durationMins = Math.max(0, Math.round((lastT.getTime() - firstT.getTime()) / 60000))
+          setRouteStats({
+            distanceKm, durationMins,
+            stops: (r.data.data.visits || []).length,
+            lastUpdate: lastT,
+          })
         } else {
+          setRouteStats(null)
           toast('No location data for this day', { icon: 'ℹ️' })
         }
       }
@@ -246,7 +305,7 @@ export default function TrackingPage() {
               </button>
             </div>
           )}
-          <div className="card overflow-hidden">
+          <div className="card overflow-hidden relative">
             <div ref={mapRef} style={{ height: '540px', width: '100%', background: '#e5e7eb' }}>
               {!mapsReady && (
                 <div className="h-full flex flex-col items-center justify-center gap-2 text-center px-4">
@@ -266,6 +325,42 @@ export default function TrackingPage() {
                 </div>
               )}
             </div>
+
+            {/* Recenter — snap back to the fitted bounds after panning/zooming around */}
+            {mapsReady && (
+              <button
+                onClick={recenter}
+                title="Recenter"
+                className="absolute top-3 right-3 w-9 h-9 rounded-full bg-white shadow-md border border-gray-200 flex items-center justify-center text-gray-600 hover:text-brand-600 hover:border-brand-200 transition-colors"
+              >
+                <Navigation size={15} />
+              </button>
+            )}
+
+            {/* Route summary — same weight as a rider-app "arriving in" card,
+                tuned to what actually matters for a completed/in-progress route. */}
+            {tab === 'route' && routeStats && (
+              <div className="absolute left-3 bottom-3 right-3 sm:right-auto sm:min-w-[260px] bg-white/95 backdrop-blur rounded-xl shadow-lg border border-gray-100 px-4 py-3 flex items-center gap-4">
+                <div>
+                  <p className="text-[11px] text-gray-400 font-medium">Distance covered</p>
+                  <p className="text-lg font-bold text-gray-900">{routeStats.distanceKm.toFixed(1)} km</p>
+                </div>
+                <div className="h-8 w-px bg-gray-100" />
+                <div>
+                  <p className="text-[11px] text-gray-400 font-medium">Duration</p>
+                  <p className="text-lg font-bold text-gray-900">
+                    {routeStats.durationMins >= 60
+                      ? `${Math.floor(routeStats.durationMins / 60)}h ${routeStats.durationMins % 60}m`
+                      : `${routeStats.durationMins}m`}
+                  </p>
+                </div>
+                <div className="h-8 w-px bg-gray-100" />
+                <div>
+                  <p className="text-[11px] text-gray-400 font-medium">Stops</p>
+                  <p className="text-lg font-bold text-gray-900">{routeStats.stops}</p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

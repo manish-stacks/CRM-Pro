@@ -88,7 +88,7 @@ export default function ReportsPage() {
             <div className="relative flex-1 min-w-[180px]">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
-                className="w-full pl-8 pr-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-indigo-500"
+                className="w-full pl-8 pr-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-brand-500"
                 placeholder="Search reports..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
@@ -97,7 +97,7 @@ export default function ReportsPage() {
 
             {types.length > 0 && (
               <select
-                className="border border-gray-200 rounded-xl px-2.5 py-2 text-sm focus:outline-none focus:border-indigo-500"
+                className="border border-gray-200 rounded-xl px-2.5 py-2 text-sm focus:outline-none focus:border-brand-500"
                 value={typeFilter}
                 onChange={e => setTypeFilter(e.target.value)}
               >
@@ -108,7 +108,7 @@ export default function ReportsPage() {
 
             {services.length > 0 && (
               <select
-                className="border border-gray-200 rounded-xl px-2.5 py-2 text-sm focus:outline-none focus:border-indigo-500"
+                className="border border-gray-200 rounded-xl px-2.5 py-2 text-sm focus:outline-none focus:border-brand-500"
                 value={serviceFilter}
                 onChange={e => setServiceFilter(e.target.value)}
               >
@@ -130,7 +130,7 @@ export default function ReportsPage() {
             <div className="flex items-center gap-1.5 text-xs text-gray-500 pl-1"><Calendar size={13} /> Date range</div>
             <input
               type="date"
-              className="border border-gray-200 rounded-xl px-2.5 py-1.5 text-sm focus:outline-none focus:border-indigo-500"
+              className="border border-gray-200 rounded-xl px-2.5 py-1.5 text-sm focus:outline-none focus:border-brand-500"
               value={dateFrom}
               max={dateTo || undefined}
               onChange={e => setDateFrom(e.target.value)}
@@ -138,13 +138,13 @@ export default function ReportsPage() {
             <span className="text-gray-400 text-sm">to</span>
             <input
               type="date"
-              className="border border-gray-200 rounded-xl px-2.5 py-1.5 text-sm focus:outline-none focus:border-indigo-500"
+              className="border border-gray-200 rounded-xl px-2.5 py-1.5 text-sm focus:outline-none focus:border-brand-500"
               value={dateTo}
               min={dateFrom || undefined}
               onChange={e => setDateTo(e.target.value)}
             />
             {hasActiveFilters && (
-              <button onClick={clearFilters} className="text-xs text-indigo-600 hover:underline ml-1">Clear filters</button>
+              <button onClick={clearFilters} className="text-xs text-brand-600 hover:underline ml-1">Clear filters</button>
             )}
           </div>
         </div>
@@ -173,7 +173,7 @@ export default function ReportsPage() {
                   </a>
                 )} */}
                 {r.fileUrl && (
-                  <a href={r.fileUrl} target="_blank" rel="noreferrer" className="text-sm text-indigo-600 hover:underline mt-2 inline-flex items-center gap-1"><Download size={13} /> View attachment</a>
+                  <a href={r.fileUrl} target="_blank" rel="noreferrer" className="text-sm text-brand-600 hover:underline mt-2 inline-flex items-center gap-1"><Download size={13} /> View attachment</a>
                 )}
                 <p className="text-xs text-gray-400 mt-2">By {r.uploadedBy?.name} · {new Date(r.reportDate).toLocaleDateString('en-IN')}</p>
               </div>

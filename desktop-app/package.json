@@ -8,6 +8,7 @@
     "dist": "npm run build && electron-builder"
   },
   "dependencies": {
+    "dotenv": "^16.4.5",
     "electron-store": "^8.2.0",
     "electron-updater": "^6.8.9"
   },

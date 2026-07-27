@@ -61,20 +61,23 @@ export default function ClientsPage() {
 
   useEffect(() => { fetchClients() }, [fetchClients])
   useEffect(() => {
-    if (isAtLeast('MANAGER')) {
+    if (canCreate) {
       api.get('/services?limit=200').then(r => setCatalog(r.data.data || [])).catch(() => {})
       api.get('/users/by-role?roles=TELECALLER,MARKETING_EXECUTIVE,MANAGER,EMPLOYEE')
         .then(r => setUsers(r.data.data || []))
         .catch(() => { })
     }
-  }, [isAtLeast])
+  }, [canCreate])
 
   const openAdd = () => {
     setForm({
       companyName: '', clientName: '', phone: '', altPhone: '', email: '',
       address: '', state: '', city: '', pincode: '',
       gstApplicable: false, gstNo: '',
-      telecallerId: '', marketingPersonId: '',
+      // A marketing exec / telecaller adding their own client doesn't need to
+      // pick themselves — pre-fill it, same as the mobile app.
+      telecallerId: user?.role === 'TELECALLER' ? (user.id || '') : '',
+      marketingPersonId: user?.role === 'MARKETING_EXECUTIVE' ? (user.id || '') : '',
       onboardingDate: new Date().toISOString().split('T')[0],
       sendWelcome: true,
     })

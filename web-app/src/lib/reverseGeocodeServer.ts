@@ -70,7 +70,9 @@ export async function reverseGeocodeForPunch(
   accuracy?: number | null,
   timeoutMs = 3500,
 ): Promise<string | null> {
-  const base = (await google(lat, lng, timeoutMs)) || (await nominatim(lat, lng, timeoutMs))
+  // Free provider first (OSM Nominatim, no billing) — Google is only tried
+  // if Nominatim fails/times out, so normal operation costs nothing here.
+  const base = (await nominatim(lat, lng, timeoutMs)) || (await google(lat, lng, timeoutMs))
   if (!base) return null
 
   if (!accuracy || !isFinite(accuracy)) return base

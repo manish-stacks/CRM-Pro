@@ -19,7 +19,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const invoice = await prisma.invoice.findFirst({
     where: { id, clientId: session.clientId },
-    include: { client: { select: { clientName: true, phone: true } } },
+    include: { client: { select: { clientName: true, phone: true, marketingPersonId: true } } },
   })
   if (!invoice) return NextResponse.json({ error: 'Invoice not found' }, { status: 404 })
 
@@ -35,6 +35,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       data: {
         invoiceId: id,
         clientId: session.clientId,
+        // Client-portal payment: attribute to the exec who owns this client
+        // so it shows up correctly in the Daily Collection report instead of "unassigned".
+        collectedById: invoice.client.marketingPersonId || null,
         amount: payAmount,
         method,
         reference: reference || null,

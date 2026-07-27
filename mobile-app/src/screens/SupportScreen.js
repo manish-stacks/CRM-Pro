@@ -11,6 +11,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { Modal, TextInput } from 'react-native';
+import { Picker } from '@react-native-picker/picker';
 import ScreenWrapper from '../components/ScreenWrapper';
 import TicketCard from '../components/TicketCard';
 import { useAuth } from '../context/AuthContext';
@@ -32,6 +33,8 @@ export default function SupportScreen({ navigation }) {
   const [modalVisible, setModalVisible] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [clientServiceId, setClientServiceId] = useState('');
+  const [services, setServices] = useState([]);
   const [tickets, setTickets] = useState([]);
   const [user, setUser] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -40,6 +43,7 @@ export default function SupportScreen({ navigation }) {
   useEffect(() => {
     fetchTickets();
     loadUser();
+    ClientAPI.getServices().then(res => setServices(res?.data?.data || [])).catch(() => {});
   }, []);
 
   // Poll for updates only while this screen is focused (stops when the user
@@ -93,11 +97,13 @@ export default function SupportScreen({ navigation }) {
       await AxiosInstance.post('/client-portal/tickets', {
         subject: title,
         description,
+        clientServiceId: clientServiceId || undefined,
       });
 
       setModalVisible(false);
       setTitle('');
       setDescription('');
+      setClientServiceId('');
 
       fetchTickets();
 
@@ -229,6 +235,22 @@ export default function SupportScreen({ navigation }) {
                       color: colors.text,
                     }}
                   />
+
+                  {/* Which service (drives who it's auto-assigned to) */}
+                  <View style={{
+                    borderWidth: 1.5,
+                    borderColor: colors.border,
+                    borderRadius: 10,
+                    marginTop: 12,
+                    overflow: 'hidden',
+                  }}>
+                    <Picker selectedValue={clientServiceId} onValueChange={setClientServiceId} style={{ color: colors.text }}>
+                      <Picker.Item label="Which service? (optional)" value="" />
+                      {services.map(sv => (
+                        <Picker.Item key={sv.id} label={sv.serviceName} value={sv.id} />
+                      ))}
+                    </Picker>
+                  </View>
 
                   {/* Buttons — ab ScrollView ke andar hain, keyboard ke saath
                       scroll ho jaate hain */}

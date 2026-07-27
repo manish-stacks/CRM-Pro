@@ -177,7 +177,7 @@ export default function ClientDetailPage() {
   // Tabs visible to everyone vs the restricted set (Proposals/Invoices/Payments)
   const ALL_TABS = [
     { key: 'services', label: 'Services', icon: Package, count: client._count?.services, restricted: false },
-    { key: 'proposals', label: 'Proposals', icon: FileText, count: client._count?.proposals, restricted: true },
+    // { key: 'proposals', label: 'Proposals', icon: FileText, count: client._count?.proposals, restricted: true },
     { key: 'invoices', label: 'Invoices', icon: FileText, count: client._count?.invoices, restricted: true },
     { key: 'payments', label: 'Payments', icon: CreditCard, count: null, restricted: true },
     { key: 'reports', label: 'Reports', icon: FileText, count: client._count?.reports, restricted: false },

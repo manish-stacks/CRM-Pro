@@ -16,7 +16,7 @@ export default function TicketsPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-bold text-gray-900">Support Tickets</h2>
-        <button onClick={() => setTicketModal(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm px-3.5 py-2 rounded-xl flex items-center gap-1.5 font-medium"><Plus size={14} /> Raise Ticket</button>
+        <button onClick={() => setTicketModal(true)} className="bg-brand-600 hover:bg-brand-700 text-white text-sm px-3.5 py-2 rounded-xl flex items-center gap-1.5 font-medium"><Plus size={14} /> Raise Ticket</button>
       </div>
       {tickets.length === 0 ? (
         <div className="bg-white rounded-2xl border border-gray-100 p-10 text-center">
@@ -45,7 +45,7 @@ export default function TicketsPage() {
                   {replyCount > 0 && (
                     <button
                       onClick={() => setOpenThreads((p: any) => ({ ...p, [t.id]: !p[t.id] }))}
-                      className="w-full flex items-center gap-1.5 px-4 py-2.5 text-xs font-semibold text-indigo-600 hover:bg-indigo-50/50 border-b border-gray-50"
+                      className="w-full flex items-center gap-1.5 px-4 py-2.5 text-xs font-semibold text-brand-600 hover:bg-brand-50/50 border-b border-gray-50"
                     >
                       <MessageSquare size={13} />
                       <span className="flex-1 text-left">{replyCount} {replyCount === 1 ? 'reply' : 'replies'}</span>
@@ -56,7 +56,7 @@ export default function TicketsPage() {
                     <div className="bg-slate-50 p-4 space-y-2">
                       {t.replies.map((r: any) => (
                         <div key={r.id} className="bg-white rounded-xl p-3 text-sm border border-gray-100">
-                          <p className="text-xs font-semibold text-indigo-600 mb-1">{r.user?.name}</p>
+                          <p className="text-xs font-semibold text-brand-600 mb-1">{r.user?.name}</p>
                           <p className="whitespace-pre-wrap text-gray-700">{r.body?.replace('[FROM CLIENT] ', '')}</p>
                         </div>
                       ))}
@@ -64,7 +64,7 @@ export default function TicketsPage() {
                   )}
                   {t.status !== 'CLOSED' && (
                     <div className="p-3 border-t border-gray-50 flex gap-2">
-                      <input type="text" className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-500"
+                      <input type="text" className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-brand-500"
                         placeholder="Write a reply..." value={ticketReply[t.id] || ''}
                         onChange={e => setTicketReply((p: any) => ({ ...p, [t.id]: e.target.value }))} />
                       <button onClick={async () => {
@@ -74,7 +74,7 @@ export default function TicketsPage() {
                           body: JSON.stringify({ body: ticketReply[t.id] }),
                         })
                         if (r.ok) { setTicketReply((p: any) => ({ ...p, [t.id]: '' })); setOpenThreads((p: any) => ({ ...p, [t.id]: true })); loadData(); toast.success('Reply sent') }
-                      }} className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 rounded-xl text-sm flex items-center"><Send size={14} /></button>
+                      }} className="bg-brand-600 hover:bg-brand-700 text-white px-3 rounded-xl text-sm flex items-center"><Send size={14} /></button>
                     </div>
                   )}
                 </div>

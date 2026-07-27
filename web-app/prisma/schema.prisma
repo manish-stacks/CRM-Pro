@@ -817,6 +817,7 @@ model ClientService {
   department        Department?         @relation(fields: [departmentId], references: [id])
   projectAssignment ProjectAssignment[]
   reports           ClientReport[]
+  supportTickets    SupportTicket[]
 
   @@index([status])
   @@index([expiryDate])
@@ -1015,6 +1016,7 @@ model SupportTicket {
   clientId     String
   userId       String    // Client-user or ClientPortal creator
   departmentId String?   // Which dept handles it
+  clientServiceId String? // Which of the client's services this is about — drives auto-assignment
   subject      String
   description  String    @db.Text
   category     String?   // Bug, Feature, Support, Billing
@@ -1027,6 +1029,7 @@ model SupportTicket {
   updatedAt    DateTime  @updatedAt
 
   client       Client      @relation(fields: [clientId], references: [id])
+  clientService ClientService? @relation(fields: [clientServiceId], references: [id])
   user         User        @relation("TicketCreator", fields: [userId], references: [id])
   department   Department? @relation(fields: [departmentId], references: [id])
   assignedTo   User?       @relation("TicketAssignee", fields: [assignedToId], references: [id])
@@ -1035,6 +1038,7 @@ model SupportTicket {
   @@index([status])
   @@index([clientId])
   @@index([assignedToId])
+  @@index([clientServiceId])
   @@map("support_tickets")
 }
 

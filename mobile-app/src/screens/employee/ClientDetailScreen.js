@@ -535,7 +535,7 @@ export default function ClientDetailScreen({ route, navigation }) {
           </View>
 
           {/* Proposals */}
-          <View style={[s.card, { borderColor: colors.border }]}>
+          <View style={[s.card, { borderColor: colors.border,display: 'none', }]}>
             <View style={s.cardHeader}>
               <Text style={[s.cardTitle, { color: colors.text }]}>Proposals ({proposals.length})</Text>
               <TouchableOpacity onPress={openProposalModal}>

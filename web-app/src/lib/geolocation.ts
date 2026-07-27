@@ -86,19 +86,17 @@ function getBestPosition(opts: GeoOptions): Promise<GeolocationPosition> {
   })
 }
 
-/** Google (via our own server) → OSM Nominatim fallback. Client-side; slow — avoid on punch. */
+/** Free OSM Nominatim first → Google (via our own server) only as last resort. Client-side; slow — avoid on punch. */
 async function reverseGeocode(lat: number, lng: number): Promise<string | undefined> {
-  const g = await reverseGeocodeGoogle(lat, lng)
-  if (g) return g
   try {
     const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`
     const res = await fetch(url, { headers: { 'Accept-Language': 'en' } })
-    if (!res.ok) return undefined
-    const data = await res.json()
-    return data.display_name as string | undefined
-  } catch {
-    return undefined
-  }
+    if (res.ok) {
+      const data = await res.json()
+      if (data.display_name) return data.display_name as string
+    }
+  } catch {}
+  return await reverseGeocodeGoogle(lat, lng)
 }
 
 export async function getCurrentGeo(opts: GeoOptions = {}): Promise<GeoResult> {

@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
 
 import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
 import { EmployeeAPI } from '../../services/employee.api';
 import ScreenWrapper from '../../components/ScreenWrapper';
 
@@ -74,6 +75,7 @@ function PersonPicker({ label, icon, colors, value, onValueChange, options }) {
 export default function AddClientScreen({ navigation }) {
 
   const { colors } = useTheme();
+  const { user } = useAuth();
 
   const todayStr = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
 
@@ -91,45 +93,25 @@ export default function AddClientScreen({ navigation }) {
     pincode: '',
     gstApplicable: false,
     gstNo: '',
-    telecallerId: null,
-    marketingPersonId: null,
+    // A marketing exec / telecaller adding their own client doesn't need to
+    // pick themselves — pre-fill it, same as the web form.
+    telecallerId: user?.role === 'TELECALLER' ? (user.id || null) : null,
+    marketingPersonId: user?.role === 'MARKETING_EXECUTIVE' ? (user.id || null) : null,
     sendWelcome: true,
   });
 
   const [loading, setLoading] = useState(false);
   const [clientCreated, setClientCreated] = useState(null);
+  const [showService, setShowService] = useState(false);
 
   /* Dropdown options for Telecaller / Marketing Person (includes their team head) */
   const [telecallers, setTelecallers] = useState([]);
   const [marketingPeople, setMarketingPeople] = useState([]);
 
-  /* PACKAGE */
-  const [packages, setPackages] = useState([]);
-  const [selectedPackage, setSelectedPackage] = useState(null);
-
-  /* SERVICE */
-  const [showService, setShowService] = useState(false);
-  const [service, setService] = useState({
-    price: '',
-    duration: ''
-  });
-
-  const [assigning, setAssigning] = useState(false);
-
-  /* ---------- FETCH PACKAGES + PEOPLE ---------- */
+  /* ---------- FETCH PEOPLE ---------- */
   useEffect(() => {
-    fetchPackages();
     fetchPeople();
   }, []);
-
-  const fetchPackages = async () => {
-    try {
-      const res = await EmployeeAPI.getPackages();
-      setPackages(res.data?.data || []);
-    } catch (e) {
-      console.log('Package error:', e);
-    }
-  };
 
   const fetchPeople = async () => {
     try {
@@ -145,7 +127,6 @@ export default function AddClientScreen({ navigation }) {
 
   /* ---------- HELPERS ---------- */
   const set = (key) => (val) => setForm(f => ({ ...f, [key]: val }));
-  const setS = (key) => (val) => setService(s => ({ ...s, [key]: val }));
 
   const validateForm = () => {
     if (!form.clientName.trim()) { Alert.alert('Error', 'Client name required'); return false; }
@@ -175,50 +156,6 @@ export default function AddClientScreen({ navigation }) {
       Alert.alert('Error', e.message || 'Failed');
     } finally {
       setLoading(false);
-    }
-  };
-
-  /* ---------- ASSIGN PACKAGE ---------- */
-  const handleAssignService = async () => {
-
-    if (!selectedPackage)
-      return Alert.alert('Error', 'Select package');
-
-    if (!service.price)
-      return Alert.alert('Error', 'Enter price');
-
-    setAssigning(true);
-
-    try {
-
-      await EmployeeAPI.assignService({
-        client_id: clientCreated?.id,
-        package_id: selectedPackage,
-        price: parseFloat(service.price),
-        duration: service.duration,
-      });
-
-      Alert.alert('Success', 'Service assigned!', [
-        { text: 'View Clients', onPress: () => navigation.navigate('Clients') },
-        {
-          text: 'Add Another',
-          onPress: () => {
-            setShowService(false);
-            setClientCreated(null);
-            setForm({
-              companyName: '', clientName: '', phone: '', altPhone: '', email: '',
-              onboardingDate: todayStr, address: '', city: '', state: '', pincode: '',
-              gstApplicable: false, gstNo: '', telecallerId: null, marketingPersonId: null,
-              sendWelcome: true,
-            });
-          }
-        }
-      ]);
-
-    } catch (e) {
-      Alert.alert('Error', e.message || 'Failed');
-    } finally {
-      setAssigning(false);
     }
   };
 
@@ -316,7 +253,7 @@ export default function AddClientScreen({ navigation }) {
             </>
           ) : (
             <>
-              {/* STEP 2 */}
+              {/* STEP 2 — client created; add services from the Client Detail page (same as everywhere else) */}
 
               <View style={[s.successBanner, { backgroundColor: colors.green + '15', borderColor: colors.green }]}>
                 <Ionicons name="checkmark-circle" size={20} color={colors.green} />
@@ -325,57 +262,9 @@ export default function AddClientScreen({ navigation }) {
                 </Text>
               </View>
 
-              <View style={s.stepRow}>
-                <View style={[s.step, { backgroundColor: colors.green }]}>
-                  <Ionicons name="checkmark" size={14} color="#fff" />
-                </View>
-                <View style={[s.stepLine, { backgroundColor: colors.primary }]} />
-                <View style={[s.step, { backgroundColor: colors.primary }]}>
-                  <Text style={s.stepTxt}>2</Text>
-                </View>
-                <Text style={[s.stepLabel, { color: colors.text2 }]}>
-                  Step 2 – Assign Package
-                </Text>
-              </View>
-
-              {/* PACKAGE DROPDOWN */}
-              <View style={{ marginBottom: 16 }}>
-                <Text style={{ fontSize: 12, fontWeight: '700', color: colors.text2, marginBottom: 8 }}>
-                  PACKAGE *
-                </Text>
-
-                <View style={[fStyles.wrap, { backgroundColor: colors.bg2, borderColor: colors.border }]}>
-                  <Ionicons name="layers-outline" size={18} color={colors.text3} />
-
-                  <Picker
-                    selectedValue={selectedPackage}
-                    style={{ flex: 1, color: colors.text }}
-                    onValueChange={(val) => {
-                      setSelectedPackage(val);
-
-                      const pkg = packages.find(p => p.id === val);
-                      if (pkg) {
-                        setService(s => ({
-                          ...s,
-                          price: pkg.price?.toString() || ''
-                        }));
-                      }
-                    }}
-                  >
-                    <Picker.Item label="Select Package" value={null} />
-                    {packages.map(p => (
-                      <Picker.Item key={p.id} label={p.package_name} value={p.id} />
-                    ))}
-                  </Picker>
-                </View>
-              </View>
-
-              <Field label="PRICE" icon="cash-outline" value={service.price} onChangeText={setS('price')} />
-              <Field label="DURATION" icon="calendar-outline" value={service.duration} onChangeText={setS('duration')} />
-
-              <TouchableOpacity onPress={handleAssignService} disabled={assigning}>
+              <TouchableOpacity onPress={() => navigation.replace('ClientDetail', { client: { id: clientCreated?.id } })}>
                 <LinearGradient colors={[colors.gradStart, colors.gradEnd]} style={s.btn}>
-                  {assigning ? <ActivityIndicator color="#fff" /> : <Text style={s.btnTxt}>Assign Package →</Text>}
+                  <Text style={s.btnTxt}>Add Service →</Text>
                 </LinearGradient>
               </TouchableOpacity>
 

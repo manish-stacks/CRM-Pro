@@ -14,7 +14,7 @@ export default function InvoicesPage() {
         <div className="space-y-3">
           {invoices.map((inv: any) => (
             <div key={inv.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center gap-4 flex-wrap">
-              <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-500"><FileText size={17} /></div>
+              <div className="w-10 h-10 rounded-xl bg-brand-50 flex items-center justify-center text-brand-500"><FileText size={17} /></div>
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-gray-900">{inv.invoiceNumber}</p>
                 <p className="text-xs text-gray-500">Total {fmt(inv.totalAmount)}{inv.paidAmount > 0 && <> · Paid {fmt(inv.paidAmount)}</>}{inv.dueDate && <> · Due date {new Date(inv.dueDate).toLocaleDateString('en-IN')}</>}</p>

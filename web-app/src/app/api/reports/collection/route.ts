@@ -118,6 +118,11 @@ export async function GET(req: NextRequest) {
     }),
   ])
 
+  // byExecMethod mein collectedById=null wale groups bhi aate hain (unassigned payments),
+  // lekin woh kisi exec row se match nahi karte isliye rows array mein kabhi nahi jud paate.
+  // Totals cards ko sahi (actual) amount dikhane ke liye unhe yahan explicitly jod rahe hain.
+  const unassignedMethods = byExecMethod.filter(g => g.collectedById === null)
+
   const blank = () => METHODS.reduce((a, m) => ({ ...a, [m]: 0 }), {} as Record<string, number>)
 
   const rows = execs.map(u => {
@@ -174,6 +179,16 @@ export async function GET(req: NextRequest) {
     },
     { methods: blank(), total: 0, txns: 0, visitsTotal: 0, visitsCompleted: 0, visitsPending: 0 }
   )
+
+  // Unassigned payments (collectedById null) ko bhi totals mein jodo — warna cards
+  // "actual" collected amount se kam dikhate hain jab koi client-portal/gateway payment
+  // kisi executive se link nahi hota.
+  unassignedMethods.forEach(g => {
+    const amt = g._sum.amount || 0
+    totals.methods[g.method] = (totals.methods[g.method] || 0) + amt
+    totals.total += amt
+    totals.txns += g._count._all
+  })
 
   return successResponse({
     range: { from: start.toISOString(), to: end.toISOString(), label },

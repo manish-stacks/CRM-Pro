@@ -190,7 +190,7 @@ export default function LoginPage() {
         <div>
           <div className="flex items-center gap-2.5">
             <div className="w-200 h-auto rounded-lg bg-white flex items-center justify-center p-2">
-              <img src="https://hoverbusinessservices.com/images/hbs-logo.png" alt="Hover CRM" className="h-14" />
+              <img src="./images/hbs-logo.png" alt="Hover CRM" className="h-14" />
             </div>
            
           </div>

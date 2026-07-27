@@ -1,5 +1,6 @@
 'use client'
 import React, { ReactNode, InputHTMLAttributes, SelectHTMLAttributes, TextareaHTMLAttributes, useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { ChevronLeft, ChevronRight, AlertCircle, Search, X, Loader2 } from 'lucide-react'
 
 // Badge
@@ -177,8 +178,17 @@ export function Textarea({ label, className = '', ...props }: TextareaProps) {
 export function Modal({ open, onClose, title, children, className = '' }: {
   open: boolean; onClose: () => void; title?: string; children: ReactNode; className?: string
 }) {
-  if (!open) return null
-  return (
+  // Render into document.body via a portal — a modal nested deep inside the
+  // page (e.g. inside <main>, which briefly gets an "animate-fade-in"
+  // transform) can otherwise get boxed into that ancestor's stacking
+  // context instead of covering the full viewport, making it appear
+  // squashed to one side instead of centered over everything (sidebar
+  // included).
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { setMounted(true) }, [])
+
+  if (!open || !mounted) return null
+  return createPortal(
     <div className="modal-overlay !mt-0" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className={`modal-content max-w-6xl ${className}`}>
         {title && (
@@ -189,7 +199,8 @@ export function Modal({ open, onClose, title, children, className = '' }: {
         )}
         <div className="p-6">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 

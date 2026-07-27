@@ -147,6 +147,12 @@ export async function POST(req: NextRequest) {
     const employee = await prisma.employee.findFirst({ where: { userId: session.userId } })
     if (!employee) return errorResponse('Employee profile not found')
 
+    // Field staff punch in/out from the mobile app only (exact GPS fix, free
+    // on-device geocoding). This web route stays open for every other role.
+    if ((action === 'punch_in' || action === 'punch_out') && session.role === 'MARKETING_EXECUTIVE') {
+      return errorResponse('Please use the HBS mobile app to punch in/out', 403)
+    }
+
     const today = todayDateOnly()
     const dev = deviceFromRequest(req)
 

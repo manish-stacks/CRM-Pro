@@ -22,7 +22,7 @@ function useClientPortalState() {
   const [reports, setReports] = useState<any[]>([])
   const [tickets, setTickets] = useState<any[]>([])
   const [ticketModal, setTicketModal] = useState(false)
-  const [ticketForm, setTicketForm] = useState({ subject: '', description: '', priority: 'MEDIUM', category: '' })
+  const [ticketForm, setTicketForm] = useState({ subject: '', description: '', priority: 'MEDIUM', clientServiceId: '' })
   const [ticketSaving, setTicketSaving] = useState(false)
   const [ticketReply, setTicketReply] = useState<Record<string, string>>({})
   const [openThreads, setOpenThreads] = useState<Record<string, boolean>>({})

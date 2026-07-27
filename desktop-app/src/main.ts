@@ -16,6 +16,13 @@ import { app, BrowserWindow, session, powerMonitor, dialog } from 'electron'
 import path from 'path'
 import Store from 'electron-store'
 import { autoUpdater } from "electron-updater";
+import dotenv from 'dotenv'
+
+// Load .env from the project root (dev: `npm start` runs from project root).
+// NOTE: for a packaged build, the .env file must be shipped alongside the
+// app (e.g. via electron-builder's "extraResources") since only dist/**/*
+// is bundled right now — otherwise this silently falls back to localhost.
+dotenv.config()
 
 // TODO: replace with your real backend URL, or set the API_BASE_URL env var
 // when launching the app (e.g. `API_BASE_URL=https://crm.yourcompany.com npm start`)

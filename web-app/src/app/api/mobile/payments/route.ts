@@ -102,6 +102,7 @@ export async function POST(req: NextRequest) {
       data: {
         invoiceId,
         clientId: invoice.clientId,
+        collectedById: session.userId,
         amount: payAmount,
         method,
         reference: reference || null,

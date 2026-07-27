@@ -75,6 +75,47 @@ export async function getEtas(
   destinations: { key: string; point?: LatLng | null; address?: string | null }[],
   mode: 'driving' | 'walking' | 'bicycling' | 'transit' = 'driving'
 ): Promise<EtaResult[]> {
+  // NOTE: Google Distance Matrix is intentionally NOT called here anymore —
+  // it was being re-fetched for the whole meetings list on every screen
+  // focus (no caching), which added up fast on billing. Every ETA below is
+  // the free haversine-line-distance × 1.35 road-winding-factor estimate.
+  // `mode` is accepted for API-compatibility but unused in the free path.
+  const out: EtaResult[] = destinations
+    .filter(d => !d.point && !d.address)
+    .map(d => ({ key: d.key, distanceMeters: null, distanceText: null, durationSecs: null, durationText: null, approx: true }))
+
+  const usable = destinations.filter(d => d.point || d.address)
+
+  const fallback = (d: typeof usable[number]): EtaResult => {
+    if (!d.point) {
+      // No coordinates yet (address hasn't been geocoded) — nothing free to
+      // estimate from, leave it null rather than guessing.
+      return { key: d.key, distanceMeters: null, distanceText: null, durationSecs: null, durationText: null, approx: true }
+    }
+    const a = approxEta(origin, d.point)
+    return {
+      key: d.key,
+      distanceMeters: a.meters,
+      distanceText: fmtDistance(a.meters),
+      durationSecs: a.secs,
+      durationText: fmtDuration(a.secs),
+      approx: true,
+    }
+  }
+
+  return [...out, ...usable.map(fallback)]
+}
+
+/* ── Old Google Distance Matrix implementation — kept here, commented out,
+   in case real traffic-aware ETAs are worth paying for again later. To
+   re-enable: rename this back to getEtas and rename the free version above
+   to something else, or add a feature flag.
+
+export async function getEtasGoogle(
+  origin: LatLng,
+  destinations: { key: string; point?: LatLng | null; address?: string | null }[],
+  mode: 'driving' | 'walking' | 'bicycling' | 'transit' = 'driving'
+): Promise<EtaResult[]> {
   const usable = destinations.filter(d => d.point || d.address)
   const out: EtaResult[] = destinations
     .filter(d => !d.point && !d.address)
@@ -142,3 +183,4 @@ export async function getEtas(
 
   return out
 }
+*/

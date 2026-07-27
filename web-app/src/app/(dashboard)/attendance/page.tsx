@@ -23,6 +23,7 @@ function DeviceIcon({ device }: { device?: string | null }) {
 
 export default function AttendancePage() {
   const { user, isAtLeast } = useAuth()
+  const isFieldExec = user?.role === 'MARKETING_EXECUTIVE'
   const canSeeAll = isAtLeast('MANAGER')
   const isAdminUser = isAtLeast('ADMIN')
 
@@ -266,47 +267,75 @@ export default function AttendancePage() {
           </div>
 
           <div className="flex flex-col gap-2">
-            {!isPunchedOut && (
+            {isFieldExec ? (
               <>
-                {!isPunchedIn && (
-                  <div className="flex gap-2">
-                    {WORK_MODES.map(mode => (
-                      <button
-                        key={mode}
-                        onClick={() => handlePunch(mode)}
-                        disabled={punching}
-                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-white border border-gray-300 hover:border-green-500 hover:bg-green-50 text-xs font-semibold text-gray-700 hover:text-green-700 transition-all disabled:opacity-50"
-                      >
-                        {mode === 'WFO' ? <Briefcase size={13} /> : mode === 'WFH' ? <Home size={13} /> : <MapPin size={13} />}
-                        {mode}
-                      </button>
-                    ))}
+                {!isPunchedOut && !today?.punchIn && (
+                  <div className="text-center bg-slate-50 border border-dashed border-gray-300 rounded-lg px-4 py-3">
+                    <Smartphone size={18} className="mx-auto text-gray-400 mb-1.5" />
+                    <p className="text-xs font-medium text-gray-600">Punch in from the mobile app</p>
+                    <p className="text-[11px] text-gray-400 mt-0.5">Field staff punch in/out from the HBS app — the phone's GPS gives an exact location fix.</p>
                   </div>
                 )}
-                <button
-                  onClick={() => handlePunch()}
-                  disabled={punching}
-                  className={`flex items-center justify-center gap-2 px-5 py-3 rounded-lg font-semibold text-sm transition-all shadow-sm ${
-                    isPunchedIn ? 'bg-gray-700 hover:bg-gray-800 text-white' : 'bg-gradient-to-r from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 text-white'
-                  } disabled:opacity-50`}
-                >
-                  {punching ? <Loader2 size={16} className="animate-spin" /> :
-                    isPunchedIn ? <><LogOut size={15} /> Punch Out</> :
-                    <><LogIn size={15} /> Punch In</>}
-                </button>
-                <p className="text-xs text-gray-500 text-center">
-                  <MapPin size={10} className="inline mr-0.5" />
-                  Location will be recorded
-                </p>
+                {today?.punchIn && !isPunchedOut && (
+                  <p className="text-xs text-gray-500 text-center bg-slate-50 rounded-lg px-3 py-2">
+                    <Smartphone size={11} className="inline mr-1" />
+                    Punch out from the mobile app when your day ends.
+                  </p>
+                )}
+                {isPunchedOut && (
+                  <div className="text-center">
+                    <p className="text-sm text-gray-500">✅ Day complete</p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {today.hoursWorked?.toFixed(2)}h · {today.status}
+                    </p>
+                  </div>
+                )}
               </>
-            )}
-            {isPunchedOut && (
-              <div className="text-center">
-                <p className="text-sm text-gray-500">✅ Day complete</p>
-                <p className="text-xs text-gray-400 mt-0.5">
-                  {today.hoursWorked?.toFixed(2)}h · {today.status}
-                </p>
-              </div>
+            ) : (
+              <>
+                {!isPunchedOut && (
+                  <>
+                    {!isPunchedIn && (
+                      <div className="flex gap-2">
+                        {WORK_MODES.map(mode => (
+                          <button
+                            key={mode}
+                            onClick={() => handlePunch(mode)}
+                            disabled={punching}
+                            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-white border border-gray-300 hover:border-green-500 hover:bg-green-50 text-xs font-semibold text-gray-700 hover:text-green-700 transition-all disabled:opacity-50"
+                          >
+                            {mode === 'WFO' ? <Briefcase size={13} /> : mode === 'WFH' ? <Home size={13} /> : <MapPin size={13} />}
+                            {mode}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <button
+                      onClick={() => handlePunch()}
+                      disabled={punching}
+                      className={`flex items-center justify-center gap-2 px-5 py-3 rounded-lg font-semibold text-sm transition-all shadow-sm ${
+                        isPunchedIn ? 'bg-gray-700 hover:bg-gray-800 text-white' : 'bg-gradient-to-r from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 text-white'
+                      } disabled:opacity-50`}
+                    >
+                      {punching ? <Loader2 size={16} className="animate-spin" /> :
+                        isPunchedIn ? <><LogOut size={15} /> Punch Out</> :
+                        <><LogIn size={15} /> Punch In</>}
+                    </button>
+                    <p className="text-xs text-gray-500 text-center">
+                      <MapPin size={10} className="inline mr-0.5" />
+                      Location will be recorded
+                    </p>
+                  </>
+                )}
+                {isPunchedOut && (
+                  <div className="text-center">
+                    <p className="text-sm text-gray-500">✅ Day complete</p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {today.hoursWorked?.toFixed(2)}h · {today.status}
+                    </p>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>
