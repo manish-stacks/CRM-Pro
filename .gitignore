@@ -12,7 +12,7 @@
 next-env.d.ts
 
 # Production
-/build
+/dist
 
 # Prisma
 prisma/migrations/dev.db*

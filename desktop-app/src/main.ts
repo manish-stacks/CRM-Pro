@@ -16,21 +16,22 @@ import { app, BrowserWindow, session, powerMonitor, dialog } from 'electron'
 import path from 'path'
 import Store from 'electron-store'
 import { autoUpdater } from "electron-updater";
-import dotenv from 'dotenv'
 
-// Load .env from the project root (dev: `npm start` runs from project root).
-// NOTE: for a packaged build, the .env file must be shipped alongside the
-// app (e.g. via electron-builder's "extraResources") since only dist/**/*
-// is bundled right now — otherwise this silently falls back to localhost.
-dotenv.config()
-
-// TODO: replace with your real backend URL, or set the API_BASE_URL env var
-// when launching the app (e.g. `API_BASE_URL=https://crm.yourcompany.com npm start`)
-const API_BASE = process.env.API_BASE_URL || 'http://localhost:3000'
+// Production backend URL is baked in directly so the packaged app works on
+// any machine without needing a .env file shipped alongside it. Setting the
+// API_BASE_URL environment variable before launch (e.g. for local dev) will
+// still override this.
+const API_BASE = process.env.API_BASE_URL || 'https://web-crm.hoverbusinessservices.com/'
 const PARTITION = 'persist:hbs-crm' // keeps the login session across app restarts, like a browser profile
 const SYNC_INTERVAL_MS = 60_000
 
 const store = new Store<{ sessionId?: string }>()
+
+// Blank white screen after the machine sleeps / the window sits idle for a
+// while is a known Electron+Chromium GPU-context bug. Disabling hardware
+// acceleration avoids it entirely (small tradeoff: slightly less smooth
+// scrolling/animations, not noticeable for a dashboard app like this).
+app.disableHardwareAcceleration()
 
 let mainWindow: BrowserWindow | null = null
 let idlePollTimer: NodeJS.Timeout | null = null
@@ -52,12 +53,33 @@ function createWindow() {
     height: 800,
     minWidth: 900,
     minHeight: 600,
+    icon: path.join(__dirname, '..', 'build', 'icon.png'),
     webPreferences: {
       partition: PARTITION,
     },
   })
   mainWindow.loadURL(API_BASE)
+
+  // Belt-and-suspenders on top of disableHardwareAcceleration(): if the
+  // renderer still ever goes blank/unresponsive (crashed, OOM-killed, or
+  // just stuck after a long sleep), reload it automatically instead of
+  // making the user hit Ctrl+R.
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    console.error('Renderer process gone:', details.reason)
+    mainWindow?.loadURL(API_BASE)
+  })
+
+  mainWindow.on('unresponsive', () => {
+    console.error('Window unresponsive, reloading')
+    mainWindow?.loadURL(API_BASE)
+  })
 }
+
+// When the OS wakes up from sleep, force a reload — this is the main
+// trigger for the "left it idle, came back to a white screen" symptom.
+powerMonitor.on('resume', () => {
+  mainWindow?.loadURL(API_BASE)
+})
 
 app.whenReady().then(() => {
   createWindow();

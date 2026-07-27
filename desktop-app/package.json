@@ -1,6 +1,6 @@
 {
-  "name": "employee-crm-desktop",
-  "version": "1.0.0",
+  "name": "HBS-CRM",
+  "version": "1.2.0",
   "main": "dist/main.js",
   "scripts": {
     "build": "tsc",
@@ -8,7 +8,6 @@
     "dist": "npm run build && electron-builder"
   },
   "dependencies": {
-    "dotenv": "^16.4.5",
     "electron-store": "^8.2.0",
     "electron-updater": "^6.8.9"
   },
@@ -26,18 +25,21 @@
     "publish": [
       {
         "provider": "github",
-        "owner": "YOUR_GITHUB_USERNAME",
-        "repo": "HBS-Tracker"
+        "owner": "manish-stacks",
+        "repo": "CRM-Pro"
       }
     ],
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "icon": "build/icon.ico"
     },
     "mac": {
-      "target": "dmg"
+      "target": "dmg",
+      "icon": "build/icon.icns"
     },
     "linux": {
-      "target": "AppImage"
+      "target": "AppImage",
+      "icon": "build/icon.png"
     }
   }
 }
