@@ -4,6 +4,7 @@ import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getRequestSession } from '@/lib/auth'
 import { successResponse, successStatusResponse, errorResponse, unauthorizedResponse } from '@/lib/api'
+import { notify } from '@/lib/notify'
 
 async function assertMember(groupId: string, userId: string) {
   return prisma.chatMember.findFirst({
@@ -68,7 +69,28 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   })
 
   // Bump group updatedAt
-  await prisma.chatGroup.update({ where: { id }, data: { updatedAt: new Date() } })
+  const group = await prisma.chatGroup.update({ where: { id }, data: { updatedAt: new Date() } })
+
+  // Notify every other active member — this is what powers the bell + the
+  // floating popup, so people get told about a reply even if they're not on
+  // the /chat page right now.
+  const otherMembers = await prisma.chatMember.findMany({
+    where: { chatGroupId: id, isActive: true, userId: { not: session.userId } },
+    select: { userId: true },
+  })
+  if (otherMembers.length) {
+    const preview = message.content?.trim()
+      ? (message.content.length > 80 ? message.content.slice(0, 80) + '…' : message.content)
+      : (message.attachmentName ? `📎 ${message.attachmentName}` : 'Sent an attachment')
+    await notify({
+      userIds: otherMembers.map(m => m.userId),
+      title: group.type === 'DIRECT' ? message.sender.name : (group.name || message.sender.name),
+      message: group.type === 'DIRECT' ? preview : `${message.sender.name}: ${preview}`,
+      type: 'chat',
+      link: `/chat?group=${id}`,
+      metadata: { screen: 'Chat', groupId: id, senderName: message.sender.name, senderAvatar: message.sender.avatar || null },
+    })
+  }
 
   return successStatusResponse(message, 201)
 }

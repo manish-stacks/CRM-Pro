@@ -4,7 +4,7 @@ import Link from 'next/link'
 import api from '@/lib/axios'
 import { Input, Select, EmptyState, Pagination, Badge } from '@/components/ui'
 import { formatDateTime, getInitials } from '@/lib/utils'
-import { Shield, Filter, Loader2, X } from 'lucide-react'
+import { Shield, Filter, Loader2, X, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 const ACTION_COLORS: Record<string, string> = {
@@ -37,6 +37,8 @@ export default function AuditLogsPage() {
   const [availableActions, setAvailableActions] = useState<string[]>([])
   const [availableTypes, setAvailableTypes] = useState<string[]>([])
   const [users, setUsers] = useState<any[]>([])
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [deleting, setDeleting] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -47,6 +49,7 @@ export default function AuditLogsPage() {
       const d = r.data.data
       setLogs(d.logs || [])
       setTotal(d.total || 0)
+      setSelected(new Set())
       if (d.actions?.length) setAvailableActions(d.actions)
       if (d.entityTypes?.length) setAvailableTypes(d.entityTypes)
     } catch { toast.error('Failed') }
@@ -57,6 +60,51 @@ export default function AuditLogsPage() {
   useEffect(() => {
     api.get('/users/by-role').then(r => setUsers(r.data.data || [])).catch(() => {})
   }, [])
+
+  const toggleSelected = (id: string) => {
+    setSelected(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+  const toggleSelectAll = () => {
+    setSelected(prev => prev.size === logs.length ? new Set() : new Set(logs.map(l => l.id)))
+  }
+
+  const deleteSelected = async () => {
+    if (selected.size === 0) return
+    if (!confirm(`Delete ${selected.size} selected log entr${selected.size === 1 ? 'y' : 'ies'}? This cannot be undone.`)) return
+    setDeleting(true)
+    try {
+      await api.delete('/audit-logs', { data: { ids: Array.from(selected) } })
+      toast.success('Deleted')
+      load()
+    } catch { toast.error('Delete failed') }
+    finally { setDeleting(false) }
+  }
+
+  const deleteAllMatching = async () => {
+    if (!confirm(`Delete ALL ${total} log entries matching the current filters? This cannot be undone.`)) return
+    setDeleting(true)
+    try {
+      const r = await api.delete('/audit-logs', { data: { filters } })
+      toast.success(`Deleted ${r.data.data.deleted} entries`)
+      load()
+    } catch { toast.error('Delete failed') }
+    finally { setDeleting(false) }
+  }
+
+  const deleteOne = async (id: string) => {
+    if (!confirm('Delete this log entry? This cannot be undone.')) return
+    setDeleting(true)
+    try {
+      await api.delete('/audit-logs', { data: { ids: [id] } })
+      toast.success('Deleted')
+      load()
+    } catch { toast.error('Delete failed') }
+    finally { setDeleting(false) }
+  }
 
   const activeCount = Object.values(filters).filter(v => v).length
 
@@ -90,31 +138,51 @@ export default function AuditLogsPage() {
         <input type="date" className="input text-xs" placeholder="To"
           value={filters.dateTo} onChange={e => { setFilters(p => ({...p, dateTo: e.target.value})); setPage(1) }} />
         {activeCount > 0 && (
-          <button onClick={() => { setFilters({ userId: '', action: '', entityType: '', dateFrom: '', dateTo: '' }); setPage(1) }}
-            className="text-xs text-red-600 hover:underline flex items-center gap-1 col-span-full">
-            <X size={12} /> Clear all
-          </button>
+          <div className="col-span-full flex items-center justify-between">
+            <button onClick={() => { setFilters({ userId: '', action: '', entityType: '', dateFrom: '', dateTo: '' }); setPage(1) }}
+              className="text-xs text-red-600 hover:underline flex items-center gap-1">
+              <X size={12} /> Clear all
+            </button>
+            <button onClick={deleteAllMatching} disabled={deleting || total === 0}
+              className="text-xs text-red-600 hover:underline flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed">
+              <Trash2 size={12} /> Delete all {total} matching
+            </button>
+          </div>
         )}
       </div>
+
+      {selected.size > 0 && (
+        <div className="card px-4 py-2.5 flex items-center justify-between bg-red-50 border-red-100">
+          <span className="text-sm text-red-700 font-medium">{selected.size} selected</span>
+          <button onClick={deleteSelected} disabled={deleting}
+            className="text-xs bg-red-600 text-white px-3 py-1.5 rounded-lg hover:bg-red-700 disabled:opacity-50 flex items-center gap-1.5">
+            {deleting ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />} Delete selected
+          </button>
+        </div>
+      )}
 
       <div className="card overflow-hidden">
         <div className="table-wrapper">
           <table>
             <thead>
               <tr>
+                <th className="w-8">
+                  <input type="checkbox" checked={logs.length > 0 && selected.size === logs.length} onChange={toggleSelectAll} />
+                </th>
                 <th>Time</th>
                 <th>User</th>
                 <th>Action</th>
                 <th>Entity</th>
                 <th>Details</th>
                 <th>IP</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={6} className="text-center py-8"><Loader2 className="animate-spin inline text-gray-400" /></td></tr>
+                <tr><td colSpan={8} className="text-center py-8"><Loader2 className="animate-spin inline text-gray-400" /></td></tr>
               ) : logs.length === 0 ? (
-                <tr><td colSpan={6}><EmptyState icon={<Shield size={40} />} title="No events" description="No audit entries match the filters" /></td></tr>
+                <tr><td colSpan={8}><EmptyState icon={<Shield size={40} />} title="No events" description="No audit entries match the filters" /></td></tr>
               ) : logs.map(l => {
                 const metaShort = l.metadata
                   ? (() => {
@@ -128,6 +196,7 @@ export default function AuditLogsPage() {
                   : ''
                 return (
                   <tr key={l.id} className="hover:bg-slate-50">
+                    <td><input type="checkbox" checked={selected.has(l.id)} onChange={() => toggleSelected(l.id)} /></td>
                     <td className="text-xs text-gray-500 whitespace-nowrap">{formatDateTime(l.createdAt)}</td>
                     <td>
                       {l.user ? (
@@ -149,6 +218,11 @@ export default function AuditLogsPage() {
                     </td>
                     <td className="text-xs text-gray-600 max-w-md truncate" title={metaShort}>{metaShort}</td>
                     <td className="text-xs text-gray-500 font-mono">{l.ipAddress || '—'}</td>
+                    <td>
+                      <button onClick={() => deleteOne(l.id)} className="text-gray-300 hover:text-red-600" title="Delete this entry">
+                        <Trash2 size={14} />
+                      </button>
+                    </td>
                   </tr>
                 )
               })}

@@ -12,7 +12,7 @@
 // Settings master switch and per-employee "tracker exempt" flag (see
 // /api/tracker/checkin in the web app) — this file never decides that on
 // its own.
-import { app, BrowserWindow, session, powerMonitor, dialog } from 'electron'
+import { app, BrowserWindow, session, powerMonitor, dialog, desktopCapturer, screen } from 'electron'
 import path from 'path'
 import Store from 'electron-store'
 import { autoUpdater } from "electron-updater";
@@ -21,9 +21,12 @@ import { autoUpdater } from "electron-updater";
 // any machine without needing a .env file shipped alongside it. Setting the
 // API_BASE_URL environment variable before launch (e.g. for local dev) will
 // still override this.
-const API_BASE = process.env.API_BASE_URL || 'https://web-crm.hoverbusinessservices.com/'
+const API_BASE = 'https://web-crm.hoverbusinessservices.com/' //"http://localhost:3000/"
 const PARTITION = 'persist:hbs-crm' // keeps the login session across app restarts, like a browser profile
 const SYNC_INTERVAL_MS = 60_000
+// Admin "View Screen" requests need to feel near-instant, so this polls a lot
+// more often than the attendance sync above — but only while logged in.
+const SCREENSHOT_POLL_MS = 5_000
 
 const store = new Store<{ sessionId?: string }>()
 
@@ -36,6 +39,7 @@ app.disableHardwareAcceleration()
 let mainWindow: BrowserWindow | null = null
 let idlePollTimer: NodeJS.Timeout | null = null
 let syncTimer: NodeJS.Timeout | null = null
+let screenshotPollTimer: NodeJS.Timeout | null = null
 let accumulatedIdleSeconds = 0
 let isTracking = false
 
@@ -73,6 +77,19 @@ function createWindow() {
     console.error('Window unresponsive, reloading')
     mainWindow?.loadURL(API_BASE)
   })
+
+  // Catch-all: whatever the exact trigger (some idle/blank cases aren't a
+  // clean lock or sleep event), check when the window regains focus whether
+  // the page actually rendered anything. An empty body after the app has
+  // had time to load means it's stuck blank — reload instead of leaving the
+  // user to hit refresh themselves.
+  mainWindow.on('focus', () => {
+    mainWindow?.webContents.executeJavaScript('document.body.innerText.trim().length', true)
+      .then(len => {
+        if (len === 0) mainWindow?.loadURL(API_BASE)
+      })
+      .catch(() => { })
+  })
 }
 
 // When the OS wakes up from sleep, force a reload — this is the main
@@ -81,9 +98,20 @@ powerMonitor.on('resume', () => {
   mainWindow?.loadURL(API_BASE)
 })
 
+// Leaving the machine idle usually triggers a screen LOCK long before it
+// triggers full sleep (Windows/macOS default lock timeouts are shorter
+// than sleep timeouts). Locking also drops the renderer's GPU context, same
+// as sleep does, but 'resume' never fires for a plain lock/unlock cycle —
+// only 'unlock-screen' does. Without this, "walked away, came back, locked
+// and unlocked, still white" was the gap the resume-only fix above missed.
+powerMonitor.on('unlock-screen', () => {
+  mainWindow?.loadURL(API_BASE)
+})
+
 app.whenReady().then(() => {
   createWindow();
   startSyncLoop();
+  startScreenshotPolling();
   if (app.isPackaged) {
     autoUpdater.checkForUpdatesAndNotify();
   }
@@ -91,25 +119,26 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   stopSyncLoop()
+  stopScreenshotPolling()
   if (process.platform !== 'darwin') app.quit()
 })
 
 autoUpdater.on("update-available", () => {
-    console.log("Update Available");
+  console.log("Update Available");
 });
 
 autoUpdater.on("error", (err) => {
-    console.error("Auto-update error:", err);
+  console.error("Auto-update error:", err);
 });
 
 autoUpdater.on("update-downloaded", () => {
-    dialog.showMessageBox({
-        type: 'info',
-        buttons: ['Restart Now', 'Later'],
-        message: 'A new version has been downloaded. Restart to apply the update?',
-    }).then((result) => {
-        if (result.response === 0) autoUpdater.quitAndInstall();
-    });
+  dialog.showMessageBox({
+    type: 'info',
+    buttons: ['Restart Now', 'Later'],
+    message: 'A new version has been downloaded. Restart to apply the update?',
+  }).then((result) => {
+    if (result.response === 0) autoUpdater.quitAndInstall();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -196,7 +225,7 @@ async function stopTracking(token?: string) {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ sessionId, idleSeconds: accumulatedIdleSeconds }),
-    }).catch(() => {})
+    }).catch(() => { })
   }
   store.delete('sessionId')
   currentSettings = null
@@ -216,4 +245,63 @@ function startIdlePolling() {
 function stopIdlePolling() {
   if (idlePollTimer) clearInterval(idlePollTimer)
   idlePollTimer = null
+}
+
+// ---------------------------------------------------------------------------
+// On-demand screenshot — admin clicks "View Screen" for this employee in the
+// web dashboard; that creates a PENDING request server-side. This polls for
+// one addressed to the logged-in user, captures a single full-screen image,
+// and uploads it. No continuous recording, no local copy kept, no dialog —
+// just a one-shot capture in response to an explicit admin action.
+// ---------------------------------------------------------------------------
+function startScreenshotPolling() {
+  if (screenshotPollTimer) return
+  screenshotPollTimer = setInterval(checkScreenshotRequest, SCREENSHOT_POLL_MS)
+}
+
+function stopScreenshotPolling() {
+  if (screenshotPollTimer) clearInterval(screenshotPollTimer)
+  screenshotPollTimer = null
+}
+
+async function checkScreenshotRequest() {
+  const token = await getAuthToken()
+  if (!token) return // not logged in — nothing to do
+  try {
+    const res = await fetch(`${API_BASE}/api/tracker/screenshot-request`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!res.ok) return
+    const json = await res.json().catch(() => null)
+    const pendingId = json?.data?.id
+    if (pendingId) await captureAndUploadScreenshot(pendingId, token)
+  } catch (err) {
+    console.error('Screenshot poll failed:', err)
+  }
+}
+
+async function captureAndUploadScreenshot(requestId: string, token: string) {
+  try {
+    const primary = screen.getPrimaryDisplay()
+    const sources = await desktopCapturer.getSources({
+      types: ['screen'],
+      thumbnailSize: {
+        width: Math.round(primary.size.width * primary.scaleFactor),
+        height: Math.round(primary.size.height * primary.scaleFactor),
+      },
+    })
+    const source = sources[0]
+    if (!source || source.thumbnail.isEmpty()) return
+
+    const dataUrl = source.thumbnail.toDataURL()
+    await fetch(`${API_BASE}/api/tracker/screenshot-request/${requestId}`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: dataUrl }),
+    })
+  } catch (err) {
+    // On macOS this most commonly means Screen Recording permission hasn't
+    // been granted to the app yet (System Settings → Privacy & Security).
+    console.error('Screenshot capture/upload failed:', err)
+  }
 }

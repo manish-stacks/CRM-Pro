@@ -7,7 +7,6 @@ import { Users, Target, FileText, DollarSign, Clock, UserCheck, LogIn, LogOut, W
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import api from '@/lib/axios'
-import { getCurrentGeo } from '@/lib/geolocation'
 import { FIELD_LABELS } from '@/lib/profileCompletion'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
@@ -19,6 +18,14 @@ const STATUS_COLORS: Record<string, string> = {
 }
 const getLeadColor = (status: string, i: number) => STATUS_COLORS[status?.toUpperCase()?.replace(/\s+/g, '_')] || COLORS[i % COLORS.length]
 const WORK_MODES = ['WFO', 'WFH', 'FIELD']
+// Fixed default location used for all web punch-ins (browser geolocation is
+// unreliable on desktop). The mobile app still sends the real GPS fix.
+const DEFAULT_PUNCH_LOCATION = {
+  latitude: 28.6959,
+  longitude: 77.1525,
+  address: 'NSP, Netaji Subhash Place, Pitampura, New Delhi',
+  accuracy: 0,
+}
 export default function DashboardPage() {
   const { user } = useAuth()
   const [data, setData] = useState<any>(null)
@@ -67,30 +74,12 @@ export default function DashboardPage() {
 
   const handlePunch = async (workMode: string = 'WFO') => {
     setPunching(true)
-    const locToast = toast.loading('Getting your location...')
     try {
       const action = todayAttendance?.punchIn && !todayAttendance?.punchOut ? 'punch_out' : 'punch_in'
-      let geo: any = {}
-      try {
-        // Coordinates only — address is resolved server-side (much faster).
-        const g = await getCurrentGeo({
-          reverseGeocode: false,
-          timeoutMs: 10000,
-          settleMs: 2500,
-          highAccuracy: true,
-          desiredAccuracyM: 100,
-          warnAccuracyM: 500,
-          maxAgeMs: 0,
-        })
-        if (!g.error) geo = g
-        else toast(`Punching without location — ${g.error}`, { icon: '📍' })
-      } catch { /* ignore */ }
-      toast.dismiss(locToast)
-      if (geo.ipLevel) {
-        toast('This PC has no GPS, so the location is a Wi-Fi/IP estimate and can be several km off. Punch from the mobile app for an exact address.', { icon: '⚠️', duration: 7000 })
-      } else if (geo.lowAccuracy) {
-        toast(`Location is approximate (±${Math.round(geo.accuracy || 0)}m).`, { icon: '⚠️', duration: 5000 })
-      }
+      // Web punch-in doesn't rely on browser geolocation (unreliable on desktop —
+      // no GPS, permission prompts, etc). Always use the fixed office default
+      // (NSP, Pitampura) instead; the mobile app still sends the real GPS fix.
+      const geo: any = DEFAULT_PUNCH_LOCATION
       const res = await api.post('/attendance', {
         action,
         workMode,
@@ -101,7 +90,6 @@ export default function DashboardPage() {
       setTodayAttendance(res.data.data)
       toast.success(action === 'punch_in' ? '✅ Punched In!' : '👋 Punched Out!')
     } catch (e: any) {
-      toast.dismiss(locToast)
       toast.error(e.response?.data?.error || 'Failed')
     } finally { setPunching(false) }
   }

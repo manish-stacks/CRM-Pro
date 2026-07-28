@@ -7,7 +7,7 @@ import { Bell, Check, X, ExternalLink, Loader2 } from 'lucide-react'
 const TYPE_ICONS: Record<string, string> = {
   info: 'ℹ️', success: '✅', warning: '⚠️', error: '❌',
   birthday: '🎂', anniversary: '🎊', lead: '📞', meeting: '🎯',
-  ticket: '🎫', payment: '💰', report: '📊',
+  ticket: '🎫', payment: '💰', report: '📊', chat: '💬',
 }
 
 function timeAgo(d: string | Date) {

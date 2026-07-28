@@ -44,6 +44,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       managedDept: { select: { id: true, name: true } },
       leaveBalance: true,
       reportingTo: { select: { id: true, employeeId: true, user: { select: { name: true } } } },
+      attendance: { orderBy: { date: 'desc' }, take: 20 },
     },
   })
   if (!emp) return notFoundResponse('Employee')

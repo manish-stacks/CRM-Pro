@@ -1,10 +1,11 @@
 'use client'
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useParams, useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
 import { Button, Badge, Modal, Input, Select, Textarea } from '@/components/ui'
 import { formatDate, formatCurrency, getInitials } from '@/lib/utils'
-import { ArrowLeft, User, Briefcase, CreditCard, FileText, Phone, Mail, Building2, Calendar, MapPin, Shield, Droplets, HeartPulse, KeyRound, Camera } from 'lucide-react'
+import { ArrowLeft, User, Briefcase, CreditCard, FileText, Phone, Mail, Building2, Calendar, MapPin, Shield, Droplets, HeartPulse, KeyRound, Camera, Monitor, Loader2, X, Clock, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import api from '@/lib/axios'
 import toast from 'react-hot-toast'
@@ -30,7 +31,7 @@ const emptyForm = {
 export default function EmployeeDetailPage() {
   const { id } = useParams()
   const router = useRouter()
-  const { isAtLeast } = useAuth()
+  const { isAtLeast, user } = useAuth()
   const [emp, setEmp] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState('overview')
@@ -62,6 +63,7 @@ export default function EmployeeDetailPage() {
   }, [])
 
   const toInputDate = (d: any) => d ? new Date(d).toISOString().split('T')[0] : ''
+
 
   const openEdit = () => {
     if (!emp) return
@@ -106,6 +108,78 @@ export default function EmployeeDetailPage() {
     } finally { setTrackerSaving(false) }
   }
 
+  // On-demand screen view — request one screenshot from the employee's
+  // desktop app right now, poll until it's fulfilled (or times out).
+  const [screenshotOpen, setScreenshotOpen] = useState(false)
+  const [screenshotLoading, setScreenshotLoading] = useState(false)
+  const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null)
+  const [screenshotError, setScreenshotError] = useState<string | null>(null)
+
+  // Screenshot history — recent ones only; the cron job auto-purges anything
+  // older than a week (see /api/cron/screenshot-cleanup), so this is a
+  // rolling window, not a permanent archive.
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [history, setHistory] = useState<any[]>([])
+  const [historyPreview, setHistoryPreview] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+
+  const deleteScreenshot = async (screenshotId: string) => {
+    if (!confirm('Delete this screenshot? This cannot be undone.')) return
+    setDeletingId(screenshotId)
+    try {
+      await api.delete(`/tracker/screenshot-request/history?id=${screenshotId}`)
+      setHistory(prev => prev.filter(h => h.id !== screenshotId))
+    } catch {
+      toast.error('Failed to delete screenshot')
+    } finally { setDeletingId(null) }
+  }
+
+  const openHistory = async () => {
+    setHistoryOpen(true)
+    setHistoryLoading(true)
+    try {
+      const r = await api.get(`/tracker/screenshot-request/history?employeeId=${id}`)
+      setHistory(r.data.data || [])
+    } catch {
+      toast.error('Failed to load screenshot history')
+    } finally { setHistoryLoading(false) }
+  }
+
+  const requestScreenshot = async () => {
+    setScreenshotOpen(true)
+    setScreenshotLoading(true)
+    setScreenshotUrl(null)
+    setScreenshotError(null)
+    try {
+      const r = await api.post('/tracker/screenshot-request', { employeeId: id })
+      const requestId = r.data.data.id
+      const start = Date.now()
+      const poll = async (): Promise<void> => {
+        if (Date.now() - start > 35_000) {
+          setScreenshotLoading(false)
+          setScreenshotError('Timed out — the desktop app may be closed or offline right now.')
+          return
+        }
+        const res = await api.get(`/tracker/screenshot-request/${requestId}`)
+        const d = res.data.data
+        if (d.status === 'FULFILLED') {
+          setScreenshotLoading(false)
+          setScreenshotUrl(d.imageUrl)
+        } else if (d.status === 'EXPIRED' || d.status === 'FAILED') {
+          setScreenshotLoading(false)
+          setScreenshotError('Could not get a screenshot — the desktop app may be closed or offline right now.')
+        } else {
+          setTimeout(poll, 2000)
+        }
+      }
+      poll()
+    } catch (e: any) {
+      setScreenshotLoading(false)
+      setScreenshotError(e.response?.data?.error || 'Failed to request screenshot')
+    }
+  }
+
   const genPassword = () => {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789@#$'
     let p = ''
@@ -140,7 +214,7 @@ export default function EmployeeDetailPage() {
   )
 
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-
+  // console.log('user', user)
   return (
     <div className="space-y-6 mx-auto">
       {/* Back + header */}
@@ -165,9 +239,22 @@ export default function EmployeeDetailPage() {
         </div>
         {isAtLeast('ADMIN') && (
           <div className="flex gap-2">
-            <Button variant="ghost" size="sm" onClick={toggleTrackerExempt} loading={trackerSaving}>
-              <Camera size={14} />{emp.trackerExempt ? 'Enable Tracker' : 'Exempt from Tracker'}
-            </Button>
+            {
+              user?.id === 'cmrdig055000kb9bozetvjdfv' && (
+                <>
+                  <Button variant="ghost" size="sm" onClick={requestScreenshot}>
+                    <Monitor size={14} />View Screen
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={openHistory}>
+                    <Clock size={14} />Screen History
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={toggleTrackerExempt} loading={trackerSaving}>
+                    <Camera size={14} />{emp.trackerExempt ? 'Enable Tracker' : 'Exempt from Tracker'}
+                  </Button>
+                </>
+              )
+            }
+
             <Button variant="ghost" size="sm" onClick={() => setPwdOpen(true)}><KeyRound size={14} />Change Password</Button>
             <Button variant="primary" size="sm" onClick={openEdit}>Edit</Button>
           </div>
@@ -422,6 +509,63 @@ export default function EmployeeDetailPage() {
           </div>
         </div>
       </Modal>
+
+      <Modal open={screenshotOpen} onClose={() => setScreenshotOpen(false)} title={`${emp.user.name}'s Screen`} className="!max-w-2xl">
+        <div className="min-h-[200px] flex items-center justify-center">
+          {screenshotLoading && (
+            <div className="flex flex-col items-center gap-2 text-gray-500 py-8">
+              <Loader2 size={28} className="animate-spin" />
+              <p className="text-sm">Getting a screenshot…</p>
+            </div>
+          )}
+          {!screenshotLoading && screenshotError && (
+            <div className="flex flex-col items-center gap-2 text-gray-500 py-8 text-center px-4">
+              <X size={28} className="text-red-400" />
+              <p className="text-sm">{screenshotError}</p>
+            </div>
+          )}
+          {!screenshotLoading && screenshotUrl && (
+            <img src={screenshotUrl} alt="Employee screen" className="w-full rounded-lg border border-gray-200" />
+          )}
+        </div>
+      </Modal>
+
+      <Modal open={historyOpen} onClose={() => setHistoryOpen(false)} title={`${emp.user.name} — Recent Screenshots`} className="!max-w-2xl">
+        <p className="text-xs text-gray-500 -mt-2 mb-3">Auto-deleted after 7 days — this only shows what's still around.</p>
+        {historyLoading && (
+          <div className="flex items-center justify-center py-10 text-gray-500"><Loader2 size={24} className="animate-spin" /></div>
+        )}
+        {!historyLoading && history.length === 0 && (
+          <p className="text-sm text-gray-500 text-center py-10">No screenshots yet.</p>
+        )}
+        {!historyLoading && history.length > 0 && (
+          <div className="grid grid-cols-3 gap-3 max-h-[60vh] overflow-y-auto">
+            {history.map(h => (
+              <div key={h.id} className="text-left relative group">
+                <button onClick={() => setHistoryPreview(h.imageUrl)} className="block w-full">
+                  <img src={h.imageUrl} className="w-full aspect-video object-cover rounded-lg border border-gray-200 hover:opacity-80 transition-opacity" />
+                </button>
+                <button
+                  onClick={() => deleteScreenshot(h.id)}
+                  disabled={deletingId === h.id}
+                  className="absolute top-1.5 right-1.5 bg-black/60 hover:bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-100"
+                  title="Delete screenshot"
+                >
+                  {deletingId === h.id ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                </button>
+                <p className="text-[11px] text-gray-500 mt-1">{formatDate(h.fulfilledAt)}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </Modal>
+
+      {historyPreview && createPortal(
+        <div className="fixed inset-0 !mt-0 bg-black/80 z-50 flex items-center justify-center p-6" onClick={() => setHistoryPreview(null)}>
+          <img src={historyPreview} className="max-w-full max-h-full rounded-lg" />
+        </div>,
+        document.body
+      )}
     </div>
   )
 }

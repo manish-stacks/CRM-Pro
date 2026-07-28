@@ -7,7 +7,7 @@ type NotifyInput = {
   userIds: string | string[]
   title: string
   message: string
-  type?: 'info' | 'success' | 'warning' | 'error' | 'birthday' | 'anniversary' | 'lead' | 'meeting' | 'ticket' | 'payment' | 'report'
+  type?: 'info' | 'success' | 'warning' | 'error' | 'birthday' | 'anniversary' | 'lead' | 'meeting' | 'ticket' | 'payment' | 'report' | 'chat'
   link?: string
   metadata?: Record<string, any>
 }

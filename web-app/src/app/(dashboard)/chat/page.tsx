@@ -28,6 +28,7 @@ export default function ChatPage() {
   const [users, setUsers] = useState<any[]>([])
   const [showNewChat, setShowNewChat] = useState(false)
   const [newChatForm, setNewChatForm] = useState({ type: 'DIRECT', name: '', memberIds: [] as string[] })
+  const [memberSearch, setMemberSearch] = useState('')
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const pollRef = useRef<any>(null)
@@ -390,7 +391,7 @@ export default function ChatPage() {
       </div>
 
       {/* New chat modal */}
-      <Modal open={showNewChat} onClose={() => setShowNewChat(false)} title="New Chat">
+      <Modal open={showNewChat} onClose={() => { setShowNewChat(false); setMemberSearch('') }} title="New Chat">
         <div className="space-y-3">
           <select value={newChatForm.type} onChange={e => setNewChatForm(p => ({...p, type: e.target.value}))} className="input w-full">
             <option value="DIRECT">Direct Message (1-1)</option>
@@ -402,8 +403,21 @@ export default function ChatPage() {
           )}
           <div>
             <label className="label">Select {newChatForm.type === 'DIRECT' ? 'person' : 'members'}</label>
+            <input
+              type="text"
+              value={memberSearch}
+              onChange={e => setMemberSearch(e.target.value)}
+              placeholder="Search by name or role..."
+              className="input w-full mb-2"
+            />
             <div className="max-h-60 overflow-y-auto border rounded-lg divide-y divide-gray-100">
-              {users.map(u => (
+              {users
+                .filter(u => {
+                  const q = memberSearch.trim().toLowerCase()
+                  if (!q) return true
+                  return u.name?.toLowerCase().includes(q) || u.role?.replace(/_/g, ' ').toLowerCase().includes(q)
+                })
+                .map(u => (
                 <label key={u.id} className="flex items-center gap-2 p-2 hover:bg-gray-50 cursor-pointer text-sm">
                   <input type={newChatForm.type === 'DIRECT' ? 'radio' : 'checkbox'}
                     name="members"

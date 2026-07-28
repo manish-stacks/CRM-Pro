@@ -46,6 +46,17 @@ export async function GET(req: NextRequest) {
     },
   })
   if (!user) return errorResponse('User not found', 404)
+
+  // Self-heal accounts affected by the old else-if bug: DOB got saved on User
+  // but never copied to Employee, so it kept showing as "missing".
+  if (user.employee && !user.employee.dateOfBirth && user.dateOfBirth) {
+    await prisma.employee.update({
+      where: { id: user.employee.id },
+      data: { dateOfBirth: user.dateOfBirth },
+    })
+    user.employee.dateOfBirth = user.dateOfBirth
+  }
+
   const profileCompletion = user.employee ? getProfileCompletion(user.employee) : null
   return successResponse({ ...user, readOnlyFields: READ_ONLY_FOR_USER, profileCompletion })
 }
@@ -60,9 +71,12 @@ export async function PUT(req: NextRequest) {
   const userData: Record<string, any> = {}
   const employeeData: Record<string, any> = {}
 
+  // NOTE: dateOfBirth is intentionally in both sets (kept on User for login/display,
+  // and on Employee since that's what profile-completion checks). It must be written
+  // to both, so this can't be an else-if.
   for (const [k, v] of Object.entries(body)) {
     if (USER_SELF_EDITABLE.has(k)) userData[k] = v === '' ? null : v
-    else if (EMPLOYEE_SELF_EDITABLE.has(k)) employeeData[k] = v === '' ? null : v
+    if (EMPLOYEE_SELF_EDITABLE.has(k)) employeeData[k] = v === '' ? null : v
   }
 
   // Coerce date fields

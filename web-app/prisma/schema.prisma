@@ -285,6 +285,7 @@ model Employee {
   leaveBalance      LeaveBalance?
   letters           Letter[]
   trackerSessions   TrackerSession[]
+  screenshotRequests ScreenshotRequest[]
 
   @@index([employeeId])
   @@index([departmentId])
@@ -330,6 +331,25 @@ model TrackerSession {
   @@index([employeeId, checkInAt])
   @@index([status])
   @@map("tracker_sessions")
+}
+
+// Admin-triggered "show me this employee's screen right now" request.
+// Desktop app polls for a PENDING one addressed to it, captures a single
+// screenshot, and uploads it — no persistent recording, one-shot only.
+model ScreenshotRequest {
+  id            String    @id @default(cuid())
+  employeeId    String
+  requestedById String
+  status        String    @default("PENDING") // PENDING, FULFILLED, EXPIRED, FAILED
+  imageUrl      String?
+  imagePublicId String?   // Cloudinary public_id — needed to actually delete the file, not just this row
+  requestedAt   DateTime  @default(now())
+  fulfilledAt   DateTime?
+
+  employee      Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId, status])
+  @@map("screenshot_requests")
 }
 
 model Attendance {
