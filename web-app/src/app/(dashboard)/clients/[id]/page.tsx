@@ -156,11 +156,11 @@ export default function ClientDetailPage() {
   }
 
   const setCustomPassword = async () => {
-    if (customPwd.trim().length < 6) { toast.error('Password kam se kam 6 characters'); return }
+    if (customPwd.trim().length < 6) { toast.error('Password must be at least 6 characters'); return }
     setSaving(true)
     try {
       await api.post(`/clients/${id}/portal-access`, { action: 'set', password: customPwd.trim() })
-      toast.success('Client ka password set ho gaya')
+      toast.success('Client password set successfully')
       setCustomPwd('')
       setModal('none')
       fetchClient()
@@ -598,9 +598,9 @@ function PaymentsSection({ clientId }: { clientId: string }) {
   const [form, setForm] = useState<any>({ invoiceId: '', amount: '', method: 'UPI', reference: '', paidAt: new Date().toISOString().slice(0, 10), nextDueDate: '', notes: '' })
 
   const load = () => {
-    api.get(`/payments?clientId=${clientId}&limit=50`).then(r => setPayments(r.data.data || [])).catch(() => {}).finally(() => setLoading(false))
+    api.get(`/payments?clientId=${clientId}&limit=50`).then(r => setPayments(r.data.data || [])).catch(() => { }).finally(() => setLoading(false))
     api.get(`/payments?type=invoices&clientId=${clientId}&limit=100`)
-      .then(r => setDueInvoices((r.data.data || []).filter((i: any) => (i.dueAmount || 0) > 0))).catch(() => {})
+      .then(r => setDueInvoices((r.data.data || []).filter((i: any) => (i.dueAmount || 0) > 0))).catch(() => { })
   }
   useEffect(() => { load() }, [clientId])
 
@@ -610,11 +610,11 @@ function PaymentsSection({ clientId }: { clientId: string }) {
   }
   const submit = async () => {
     if (!form.invoiceId) { toast.error('Select an invoice'); return }
-    if (!Number(form.amount)) { toast.error('Amount daalo'); return }
+    if (!Number(form.amount)) { toast.error('Enter an amount'); return }
     setSaving(true)
     try {
       await api.post('/payments', { type: 'payment', ...form, amount: Number(form.amount) })
-      toast.success('Payment collect ho gaya')
+      toast.success('Payment collected successfully')
       setModal(false); load()
     } catch (e: any) { toast.error(e.response?.data?.error || 'Failed') }
     finally { setSaving(false) }

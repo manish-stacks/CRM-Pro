@@ -7,7 +7,8 @@ import {
   LayoutDashboard, Users, Clock, Calendar, DollarSign, Building2,
   Target, FileText, Users2, CreditCard, BarChart3, Settings,
   Briefcase, Package, Bell, ChevronDown, ChevronRight, LogOut,
-  User, Menu, X, Video, UserCheck, Shield, MessageSquare, AlertCircle, MapPin, MapPinned, Wallet, AlarmClock, StickyNote, Mail
+  User, Menu, X, Video, UserCheck, Shield, MessageSquare, AlertCircle, MapPin, MapPinned, Wallet, AlarmClock, StickyNote, Mail,
+  MessageSquareCode
 } from 'lucide-react'
 
 interface NavItem {
@@ -41,9 +42,10 @@ const NAV: NavItem[] = [
       { label: 'Services', href: '/services', icon: Package, roles: ['SUPER_ADMIN', 'ADMIN'] },
     ]
   },
+  { label: 'Team Chat', href: '/chat', icon: MessageSquareCode },
   {
     label: 'Support', icon: MessageSquare, children: [
-      { label: 'Team Chat', href: '/chat', icon: MessageSquare },
+      
       { label: 'Client Tickets', href: '/tickets', icon: MessageSquare, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'EMPLOYEE', 'MARKETING_EXECUTIVE'] },
       { label: 'My Tickets', href: '/my-tickets', icon: AlertCircle },
     ]
@@ -60,7 +62,7 @@ const NAV: NavItem[] = [
   { label: 'Notifications', href: '/notifications', icon: Bell },
   { label: 'Reminders', href: '/reminders', icon: AlarmClock },
   { label: 'Sticky Notes', href: '/notes', icon: StickyNote },
-  { label: 'Custom Mail', href: '/compose-mail', icon: Mail },
+  { label: 'Custom Mail', href: '/compose-mail', icon: Mail, roles: ['SUPER_ADMIN', 'ADMIN'] },
   { label: 'Audit Log', href: '/audit-logs', icon: Shield, roles: ['SUPER_ADMIN', 'ADMIN'] },
   { label: 'Settings', href: '/settings', icon: Settings, roles: ['SUPER_ADMIN', 'ADMIN'] },
 ]

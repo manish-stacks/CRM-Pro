@@ -1,8 +1,8 @@
 // src/app/api/client-portal/payments/route.ts
 // Client can see their invoices + ALL payments made on them (including PARTIAL),
-// aur har payment ka public receipt link.
+// and a public receipt link for every payment.
 //
-//   GET                 -> invoices (payments ke saath, har payment pe receipt_url)
+//   GET                 -> invoices (with payments, receipt_url on every payment)
 //   GET ?type=payments  -> flat payment list (app ki "Payments Received" list)
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'

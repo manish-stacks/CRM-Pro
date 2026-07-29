@@ -1,25 +1,9 @@
-// src/app/api/mobile/meetings/route.ts
-// Meetings assigned to the logged-in marketing executive.
-// A "meeting" is a Lead with status MEETING_SCHEDULED whose meetingAssignedToId
-// is this user.
-//
-// Filters (app ki tabs isi pe chalti hain):
-//   ?range=today | tomorrow | upcoming | week | past | all
-//   ?date=YYYY-MM-DD        (exact date)
-//   ?dateFrom=&dateTo=      (custom range)
-//   ?status=meeting_scheduled|converted|closed|not_interested
-//   ?search=
-// ETA (Zomato style):
-//   ?lat=&lng=  bhejo to har meeting pe distance + traffic-aware ETA aayega.
 import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireMobileEmployee, ok } from '@/lib/mobileAuth'
 import { getEtas, geocodeAddress } from '@/lib/distance'
 import { istDayRange, getISTDateParts } from '@/lib/attendanceDate'
 
-// meetingDate is a real timestamp (not @db.Date) — bound each day using the
-// true UTC instants of IST midnight, resolved via IST explicitly (not the
-// server process's ambient timezone).
 function dayRange(dateStr?: string | null) {
   return istDayRange(dateStr)
 }
@@ -112,7 +96,7 @@ export async function GET(req: NextRequest) {
   const addrOf = (l: any) =>
     l.meetingLocation || [l.address, l.city, l.state].filter(Boolean).join(', ') || null
 
-  // ---- Lazy geocode: pehli baar address ko lat/lng me convert kar ke save kar do ----
+  // ---- Lazy geocode: on first run, convert the address to lat/lng and save it ----
   const needGeo = leads.filter(l => (l.meetingLat == null || l.meetingLng == null) && addrOf(l))
   if (needGeo.length && !isNaN(lat) && !isNaN(lng)) {
     await Promise.all(

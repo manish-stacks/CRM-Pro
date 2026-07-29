@@ -74,7 +74,12 @@ export default function TicketsPage() {
           <h1 className="text-2xl font-bold text-gray-900">Support Tickets</h1>
           <p className="text-sm text-gray-500 mt-1">Client-raised issues and requests</p>
         </div>
-        <Button onClick={() => setModal('create')}><Plus size={14} /> New Ticket</Button>
+        {
+          isAtLeast('ADMIN') && (
+            <Button onClick={() => setModal('create')}><Plus size={14} /> New Ticket</Button>
+          )
+        }
+
       </div>
 
       <div className="card">

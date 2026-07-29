@@ -303,7 +303,7 @@ export default function PaymentsPage() {
               No pending invoice found (only invoices with balance due are shown). Create a full-amount invoice first to make a part payment.
               <button type="button" onClick={() => { setShowPmtModal(false); setInvForm({ clientId: '', dueDate: '', notes: '', items: [{ description: '', quantity: 1, unitPrice: '', total: 0 }] }); setShowInvModal(true) }}
                 className="mt-2 block w-full text-center bg-brand-600 hover:bg-brand-700 text-white rounded-lg py-2 text-sm font-medium">
-                + New Invoice banao
+                + Create New Invoice
               </button>
             </div>
           )}

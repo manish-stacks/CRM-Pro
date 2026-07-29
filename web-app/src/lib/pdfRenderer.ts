@@ -257,7 +257,7 @@ async function renderHtmlToPdf(bodyHtml: string, title: string, bodyStyles: stri
   try {
     return await pdfOnce(bodyHtml, title, bodyStyles, opts)
   } catch (err) {
-    // stale/crashed browser — ek baar reset kar ke retry
+    // stale/crashed browser — reset once and retry
     try { const b = await browserPromise; await b?.close() } catch { }
     browserPromise = null
     return await pdfOnce(bodyHtml, title, bodyStyles, opts)

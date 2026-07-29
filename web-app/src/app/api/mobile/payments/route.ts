@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
     orderBy: { paidAt: 'desc' },
   })
 
-  // Har payment ka public receipt link ho — PARTIAL bhi. Missing token bana do.
+  // Every payment should have a public receipt link — PARTIAL too. Generate the missing token.
   await Promise.all(
     payments.filter(p => !p.receiptToken).map(async p => {
       const token = randomToken(32)

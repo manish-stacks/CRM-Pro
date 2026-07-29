@@ -74,17 +74,17 @@ export default function AttendancePage() {
     try {
       const r = await api.get('/attendance/today')
       setToday(r.data.data)
-    } catch {}
+    } catch { }
   }, [])
 
   useEffect(() => { fetchRecords() }, [fetchRecords])
   useEffect(() => { fetchToday() }, [fetchToday])
   useEffect(() => {
     if (isAdminUser) {
-      api.get('/departments').then(r => setDepartments(r.data.data || [])).catch(() => {})
+      api.get('/departments').then(r => setDepartments(r.data.data || [])).catch(() => { })
     }
     if (canSeeAll) {
-      api.get('/employees?limit=500').then(r => setEmployeesList(r.data.data || [])).catch(() => {})
+      api.get('/employees?limit=500').then(r => setEmployeesList(r.data.data || [])).catch(() => { })
     }
   }, [canSeeAll, isAdminUser])
 
@@ -123,7 +123,7 @@ export default function AttendancePage() {
     finally { setAttSaving(false) }
   }
   const deleteAtt = async (r: any) => {
-    if (!confirm('Ye attendance record delete karein?')) return
+    if (!confirm('Delete this attendance record?')) return
     try {
       await api.delete(`/attendance/${r.id}`)
       toast.success('Deleted')
@@ -135,7 +135,7 @@ export default function AttendancePage() {
   // never recomputed against the half-day-hours threshold — see
   // /api/attendance/recompute-status for why this is needed.
   const fixOldStatuses = async () => {
-    if (!confirm('Purane PRESENT/HALF_DAY records ko current Half-Day Threshold ke hisaab se recompute karein?')) return
+    if (!confirm('Recompute old PRESENT/HALF_DAY records against the current Half-Day Threshold?')) return
     setFixingStatuses(true)
     try {
       const r = await api.post('/attendance/recompute-status')
@@ -245,11 +245,10 @@ export default function AttendancePage() {
 
           <div>
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Status</p>
-            <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-semibold ${
-              isPunchedIn ? 'bg-green-100 text-green-700' :
-              isPunchedOut ? 'bg-gray-100 text-gray-700' :
-              'bg-slate-100 text-slate-600'
-            }`}>
+            <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-semibold ${isPunchedIn ? 'bg-green-100 text-green-700' :
+                isPunchedOut ? 'bg-gray-100 text-gray-700' :
+                  'bg-slate-100 text-slate-600'
+              }`}>
               <span className="w-2 h-2 rounded-full bg-current" />
               {isPunchedIn ? 'Working' : isPunchedOut ? 'Day Ended' : 'Not Punched In'}
             </div>
@@ -313,13 +312,12 @@ export default function AttendancePage() {
                     <button
                       onClick={() => handlePunch()}
                       disabled={punching}
-                      className={`flex items-center justify-center gap-2 px-5 py-3 rounded-lg font-semibold text-sm transition-all shadow-sm ${
-                        isPunchedIn ? 'bg-gray-700 hover:bg-gray-800 text-white' : 'bg-gradient-to-r from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 text-white'
-                      } disabled:opacity-50`}
+                      className={`flex items-center justify-center gap-2 px-5 py-3 rounded-lg font-semibold text-sm transition-all shadow-sm ${isPunchedIn ? 'bg-gray-700 hover:bg-gray-800 text-white' : 'bg-gradient-to-r from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 text-white'
+                        } disabled:opacity-50`}
                     >
                       {punching ? <Loader2 size={16} className="animate-spin" /> :
                         isPunchedIn ? <><LogOut size={15} /> Punch Out</> :
-                        <><LogIn size={15} /> Punch In</>}
+                          <><LogIn size={15} /> Punch In</>}
                     </button>
                     <p className="text-xs text-gray-500 text-center">
                       <MapPin size={10} className="inline mr-0.5" />

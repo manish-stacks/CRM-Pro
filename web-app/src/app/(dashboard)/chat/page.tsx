@@ -115,7 +115,7 @@ export default function ChatPage() {
         await api.post(`/chat/groups/${gid}/messages`, { content: text })
         await loadGroups()
         setActiveId(gid)
-        toast.success('Wish bhej diya 🎉')
+        toast.success('Wish sent 🎉')
       } catch { toast.error('Failed to send wish') }
       finally { window.history.replaceState({}, '', '/chat') }
     })()
@@ -192,7 +192,7 @@ export default function ChatPage() {
 
   const deleteGroup = async () => {
     if (!activeId) return
-    if (!confirm('Ye chat delete karein? Saare messages hat jayenge.')) return
+    if (!confirm('Delete this chat? All messages will be removed.')) return
     setDeleting(true)
     try {
       await api.delete(`/chat/groups/${activeId}`)

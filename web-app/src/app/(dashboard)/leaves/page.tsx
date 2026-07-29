@@ -156,7 +156,7 @@ export default function LeavesPage() {
             </div>
           </div>
           {balance.lapsed > 0 && (
-            <p className="text-[11px] text-amber-100 mt-2">⚠️ {balance.lapsed} leave cap ({balance.maxCap}) se upar hone ki wajah se lapse ho gaye.</p>
+            <p className="text-[11px] text-amber-100 mt-2">⚠️ {balance.lapsed} leave(s) lapsed for exceeding the cap ({balance.maxCap}).</p>
           )}
         </div>
       )}
@@ -295,9 +295,8 @@ export default function LeavesPage() {
                       <div>
                         <p className="font-medium text-gray-800">{l.approver?.name || '—'}</p>
                         <p className="text-gray-500">
-                          <span className={`inline-block px-1.5 py-0.5 rounded font-semibold mr-1 ${
-                            l.approverType === 'ADMIN' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
-                          }`}>
+                          <span className={`inline-block px-1.5 py-0.5 rounded font-semibold mr-1 ${l.approverType === 'ADMIN' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
+                            }`}>
                             {l.approverType === 'ADMIN' ? 'Admin' : 'Team Lead'}
                           </span>
                           {l.approverNote || ''}

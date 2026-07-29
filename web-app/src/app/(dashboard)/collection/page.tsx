@@ -1,6 +1,6 @@
 'use client'
 // Daily Collection — admin ka shaam ka hisaab.
-// Har MARKETING_EXECUTIVE ne kitne visits kiye aur kitna cash / UPI / bank
+// Daily Collection — the admin's end-of-day tally.
 // collect kiya. Date-wise filter se fraud pakadna aasan.
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import api from '@/lib/axios'
@@ -165,7 +165,7 @@ export default function CollectionPage() {
         {loading ? (
           <div className="flex justify-center py-16"><Loader2 className="animate-spin text-gray-400" /></div>
         ) : !data?.rows?.length ? (
-          <EmptyState icon={<Wallet size={40} />} title="No collection in this period" description="Doosri date ya executive select karke dekho." />
+          <EmptyState icon={<Wallet size={40} />} title="No collection in this period" description="Try selecting a different date or executive." />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">

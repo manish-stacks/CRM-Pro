@@ -65,11 +65,16 @@ export default function Header({ onMenuClick }: { onMenuClick?: () => void }) {
                   <User size={15} /><span>Profile</span>
                 </div>
               </Link>
-              <Link href="/settings" onClick={() => setDropdownOpen(false)}>
-                <div className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-sm text-gray-700">
-                  <Settings size={15} /><span>Settings</span>
-                </div>
-              </Link>
+              {
+                user?.role === 'ADMIN' && (
+                  <Link href="/settings" onClick={() => setDropdownOpen(false)}>
+                    <div className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-sm text-gray-700">
+                      <Settings size={15} /><span>Settings</span>
+                    </div>
+                  </Link>
+                )
+              }
+
               <div className="border-t border-gray-100">
                 <button onClick={logout} className="flex items-center gap-3 px-4 py-2.5 hover:bg-red-50 text-sm text-red-600 w-full">
                   <LogOut size={15} /><span>Logout</span>

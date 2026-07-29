@@ -81,7 +81,7 @@ export async function GET(req: NextRequest) {
     return w
   }
 
-  // Filter laga ho to ek hi filtered list bhejo; warna purana today/upcoming/past layout
+  // If a filter is applied, send just one filtered list; otherwise use the old today/upcoming/past layout
   const filteredMeetings = filterActive
     ? await prisma.lead.findMany({
         where: buildWhere(),

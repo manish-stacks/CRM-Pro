@@ -101,7 +101,7 @@ export default function EmployeeDetailPage() {
     try {
       const next = !emp.trackerExempt
       await api.post(`/employees/${id}/toggle-tracker`, { trackerExempt: next })
-      toast.success(next ? 'Desktop tracker se exempt kar diya' : 'Desktop tracker phir se enabled')
+      toast.success(next ? 'Exempted from desktop tracker' : 'Desktop tracker re-enabled')
       fetchEmp()
     } catch (e: any) {
       toast.error(e.response?.data?.error || 'Failed to update')

@@ -1,13 +1,3 @@
-// src/lib/accountManager.ts
-// The client's "Account Manager" is resolved from a single place so the web portal,
-// mobile app aur emails — sab me same naam dikhe.
-//
-// Priority:
-//   1. marketingPerson  -> jis MARKETING_EXECUTIVE ne meeting karke client add kiya
-//   2. reportingPerson  -> agar admin ne manually koi aur set kiya ho
-//   3. telecaller
-//   4. assignedTo
-//   5. Company default  -> "Hover" (Settings se naam/phone/email)
 import { prisma } from './prisma'
 import { Settings } from './settings'
 
@@ -22,7 +12,7 @@ export interface AccountManager {
 
 const PERSON_SELECT = { id: true, name: true, email: true, phone: true, role: true } as const
 
-/** Prisma include block — jahan bhi client fetch ho, ye spread kar do */
+/** Prisma include block — spread this wherever a client is fetched */
 export const accountManagerInclude = {
   marketingPerson: { select: PERSON_SELECT },
   reportingPerson: { select: PERSON_SELECT },

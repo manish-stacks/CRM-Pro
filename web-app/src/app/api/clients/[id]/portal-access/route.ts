@@ -28,7 +28,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // Admin sets/updates a specific password (not random)
   if (action === 'set') {
     if (!password || String(password).length < 6) {
-      return errorResponse('Password kam se kam 6 characters ka hona chahiye')
+      return errorResponse('Password must be at least 6 characters')
     }
     const passwordHash = await hash(String(password), 10)
     await prisma.client.update({

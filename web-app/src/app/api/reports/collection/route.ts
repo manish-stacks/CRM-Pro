@@ -1,7 +1,7 @@
 // src/app/api/reports/collection/route.ts
-// Admin ka "shaam ka hisaab" — kis MARKETING_EXECUTIVE ne aaj kitna collect kiya,
+// Admin's "end-of-day tally" — which MARKETING_EXECUTIVE collected how much today,
 // method-wise (CASH / UPI / BANK / CHEQUE / CARD / GATEWAY), + uske visits.
-// Fraud check ke liye date-wise / exec-wise / method-wise filter.
+// Date-wise / exec-wise / method-wise filter for fraud checks.
 //
 //   GET ?range=today|yesterday|week|month   ya  ?dateFrom=&dateTo=
 //       &userId=<exec>   &method=CASH   &view=summary|transactions
@@ -110,7 +110,7 @@ export async function GET(req: NextRequest) {
       },
       _count: { _all: true },
     }),
-    // Unassigned (collectedById null) ko alag dikhane ke liye
+    // To show unassigned (collectedById null) separately
     prisma.payment.aggregate({
       where: { ...payWhere, collectedById: null },
       _sum: { amount: true },
@@ -118,8 +118,8 @@ export async function GET(req: NextRequest) {
     }),
   ])
 
-  // byExecMethod mein collectedById=null wale groups bhi aate hain (unassigned payments),
-  // lekin woh kisi exec row se match nahi karte isliye rows array mein kabhi nahi jud paate.
+  // byExecMethod also includes groups where collectedById=null (unassigned payments),
+  // Adding them in explicitly here so the totals cards show the correct (actual) amount.
   // Totals cards ko sahi (actual) amount dikhane ke liye unhe yahan explicitly jod rahe hain.
   const unassignedMethods = byExecMethod.filter(g => g.collectedById === null)
 
@@ -163,9 +163,9 @@ export async function GET(req: NextRequest) {
       visitsPending,
     }
   })
-  // Sirf woh log jinke total ya visits hain — clutter kam
-  .filter(r => r.total > 0 || r.visitsTotal > 0 || userId)
-  .sort((a, b) => b.total - a.total)
+    // Sirf woh log jinke total ya visits hain — clutter kam
+    .filter(r => r.total > 0 || r.visitsTotal > 0 || userId)
+    .sort((a, b) => b.total - a.total)
 
   const totals = rows.reduce(
     (acc, r) => {
@@ -180,9 +180,9 @@ export async function GET(req: NextRequest) {
     { methods: blank(), total: 0, txns: 0, visitsTotal: 0, visitsCompleted: 0, visitsPending: 0 }
   )
 
-  // Unassigned payments (collectedById null) ko bhi totals mein jodo — warna cards
-  // "actual" collected amount se kam dikhate hain jab koi client-portal/gateway payment
-  // kisi executive se link nahi hota.
+  // Add unassigned payments (collectedById null) into the totals too — otherwise the cards
+  // show less than the "actual" collected amount when a client-portal/gateway payment
+  // isn't linked to any executive.
   unassignedMethods.forEach(g => {
     const amt = g._sum.amount || 0
     totals.methods[g.method] = (totals.methods[g.method] || 0) + amt
