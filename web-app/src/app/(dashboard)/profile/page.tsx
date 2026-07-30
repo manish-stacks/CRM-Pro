@@ -9,6 +9,7 @@ import {
   Loader2, Check, Lock, Calendar, Briefcase, Heart, Info, FileText
 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import AvatarCropper from '@/components/AvatarCropper'
 
 const GENDER = ['Male', 'Female', 'Other']
 const MARITAL = ['Single', 'Married', 'Divorced', 'Widowed']
@@ -57,6 +58,7 @@ export default function ProfilePage() {
   const [sendingOtp, setSendingOtp] = useState(false)
   const [verifyingOtp, setVerifyingOtp] = useState(false)
   const avatarRef = useRef<HTMLInputElement>(null)
+  const [cropperFile, setCropperFile] = useState<File | null>(null)
   const aadharFrontRef = useRef<HTMLInputElement>(null)
   const aadharBackRef = useRef<HTMLInputElement>(null)
 
@@ -135,6 +137,17 @@ export default function ProfilePage() {
     } finally { setter(false) }
   }
 
+  const uploadAvatarDataUrl = async (dataUrl: string) => {
+    setAvatarUploading(true)
+    try {
+      const r = await api.post('/upload', { dataUrl, folder: 'avatars' })
+      upd('avatar', r.data.data.url)
+      toast.success('Photo cropped & uploaded! Click Save to keep it.')
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Upload failed')
+    } finally { setAvatarUploading(false) }
+  }
+
   const emp = profile?.employee
 
   const sendEmailOtp = async () => {
@@ -187,7 +200,14 @@ export default function ProfilePage() {
             {avatarUploading ? <Loader2 size={13} className="animate-spin" /> : <Camera size={13} className="text-gray-700" />}
           </button>
           <input ref={avatarRef} type="file" accept="image/*" className="hidden"
-            onChange={e => e.target.files?.[0] && uploadImage(e.target.files[0], 'avatars', setAvatarUploading, 'avatar')} />
+            onChange={e => {
+              const f = e.target.files?.[0]
+              if (f) {
+                if (f.size > 5 * 1024 * 1024) { toast.error('Max 5MB'); e.target.value = ''; return }
+                setCropperFile(f)
+              }
+              e.target.value = ''
+            }} />
         </div>
         <div className="flex-1">
           <h2 className="text-lg font-bold text-gray-900">{profile?.name}</h2>
@@ -370,6 +390,12 @@ export default function ProfilePage() {
       <div className="sticky bottom-4 flex justify-end">
         <Button onClick={save} loading={saving} className="shadow-lg"><Check size={14} /> Save Changes</Button>
       </div>
+
+      <AvatarCropper
+        file={cropperFile}
+        onCancel={() => setCropperFile(null)}
+        onCropped={dataUrl => { setCropperFile(null); uploadAvatarDataUrl(dataUrl) }}
+      />
     </div>
   )
 }

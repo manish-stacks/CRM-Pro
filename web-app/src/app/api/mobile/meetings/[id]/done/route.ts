@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma'
 import { requireMobileEmployee, ok, fail } from '@/lib/mobileAuth'
 import { logFromRequest } from '@/lib/audit'
 import { Notifications } from '@/lib/notify'
+import { completeVisitForLead } from '@/lib/visitSync'
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -42,6 +43,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       toStatus: 'MEETING_DONE',
       createdById: session.userId,
     },
+  })
+
+  // Meeting done also auto-completes the linked Visit Sheet entry — the
+  // marketing person shouldn't have to go complete it separately there too.
+  await completeVisitForLead({
+    leadId: id,
+    userId: session.userId,
+    clientName: lead.companyName || lead.clientName,
+    outcome: 'MEETING_DONE',
+    note: notes || null,
   })
 
   const notifyUserId = lead.assignedToId || lead.createdById

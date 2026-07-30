@@ -12,13 +12,14 @@ import toast from 'react-hot-toast'
 
 const WORK_MODES = ['WFO', 'WFH', 'HYBRID']
 const GENDERS = ['MALE', 'FEMALE', 'OTHER']
+const ROLES = ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'EMPLOYEE', 'TELECALLER', 'MARKETING_EXECUTIVE']
 const MARITAL_STATUSES = ['SINGLE', 'MARRIED', 'DIVORCED', 'WIDOWED']
 const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']
 const ID_PROOF_TYPES = ['AADHAR', 'PAN', 'PASSPORT', 'DRIVING_LICENSE', 'VOTER_ID']
 
 const emptyForm = {
-  name: '', phone: '', altPhone: '',
-  departmentId: '', reportingToId: '', position: '', salary: '', workMode: 'WFO', joiningDate: '',
+  name: '', email: '', phone: '', altPhone: '', role: '',
+  departmentId: '', reportingToId: '', position: '', salary: '', workMode: 'WFO', joiningDate: '', area: '',
   dateOfBirth: '', gender: '', bloodGroup: '', maritalStatus: '',
   fatherName: '', motherName: '',
   address: '', city: '', state: '', pincode: '',
@@ -68,8 +69,9 @@ export default function EmployeeDetailPage() {
   const openEdit = () => {
     if (!emp) return
     setForm({
-      name: emp.user.name || '', phone: emp.user.phone || '', altPhone: emp.user.altPhone || '',
+      name: emp.user.name || '', email: emp.user.email || '', phone: emp.user.phone || '', altPhone: emp.user.altPhone || '', role: emp.user.role || '',
       departmentId: emp.department?.id || '', reportingToId: emp.reportingToId || '', position: emp.position || '', salary: emp.salary || '',
+      area: emp.area || '',
       workMode: emp.workMode || 'WFO', joiningDate: toInputDate(emp.joiningDate),
       dateOfBirth: toInputDate(emp.dateOfBirth), gender: emp.gender || '', bloodGroup: emp.bloodGroup || '',
       maritalStatus: emp.maritalStatus || '', fatherName: emp.fatherName || '', motherName: emp.motherName || '',
@@ -101,7 +103,7 @@ export default function EmployeeDetailPage() {
     try {
       const next = !emp.trackerExempt
       await api.post(`/employees/${id}/toggle-tracker`, { trackerExempt: next })
-      toast.success(next ? 'Exempted from desktop tracker' : 'Desktop tracker re-enabled')
+      toast.success(next ? 'Desktop tracker se exempt kar diya' : 'Desktop tracker phir se enabled')
       fetchEmp()
     } catch (e: any) {
       toast.error(e.response?.data?.error || 'Failed to update')
@@ -296,6 +298,7 @@ export default function EmployeeDetailPage() {
               <InfoRow label="Role" value={emp.user.role.replace(/_/g, ' ')} />
               <InfoRow label="Position" value={emp.position} />
               <InfoRow label="Department" value={emp.department?.name} />
+              {emp.area && <InfoRow label="Marketing Area" value={emp.area} />}
               <InfoRow label="Reports To (Team Lead)" value={emp.reportingTo?.user?.name} />
               <InfoRow label="Work Mode" value={emp.workMode} />
               <InfoRow label="Joining Date" value={emp.joiningDate ? formatDate(emp.joiningDate) : undefined} />
@@ -415,8 +418,15 @@ export default function EmployeeDetailPage() {
             <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Work Details</h4>
             <div className="grid md:grid-cols-3 gap-3">
               <Input label="Full Name" value={form.name} onChange={e => setForm((p: any) => ({ ...p, name: e.target.value }))} />
+              <Input label="Email" type="email" value={form.email} onChange={e => setForm((p: any) => ({ ...p, email: e.target.value }))} />
               <Input label="Phone" value={form.phone} onChange={e => setForm((p: any) => ({ ...p, phone: e.target.value }))} />
               <Input label="Alt Phone" value={form.altPhone} onChange={e => setForm((p: any) => ({ ...p, altPhone: e.target.value }))} />
+              <Select label="Role" value={form.role} onChange={e => setForm((p: any) => ({ ...p, role: e.target.value }))}
+                options={ROLES.filter(r => r !== 'SUPER_ADMIN' || user?.role === 'SUPER_ADMIN').map(r => ({ value: r, label: r.replace(/_/g, ' ') }))} />
+              {form.role === 'MARKETING_EXECUTIVE' && (
+                <Input label="Marketing Area" value={form.area} onChange={e => setForm((p: any) => ({ ...p, area: e.target.value }))}
+                  placeholder="e.g. North Delhi, Noida, Gurugram" />
+              )}
               <Select label="Department" value={form.departmentId} onChange={e => setForm((p: any) => ({ ...p, departmentId: e.target.value }))} options={departments.map((d: any) => ({ value: d.id, label: d.name }))} />
               <Select label="Reports To (Team Lead)" value={form.reportingToId} onChange={e => setForm((p: any) => ({ ...p, reportingToId: e.target.value }))} options={[{ value: '', label: '— None —' }, ...allEmployees.filter((e: any) => e.id !== emp.id && e.user?.role === 'MANAGER').map((e: any) => ({ value: e.id, label: `${e.user?.name} · ${e.employeeId}${e.department?.name ? ` (${e.department.name})` : ''}` }))]} />
               <Input label="Position" value={form.position} onChange={e => setForm((p: any) => ({ ...p, position: e.target.value }))} />

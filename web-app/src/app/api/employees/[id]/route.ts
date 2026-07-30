@@ -10,7 +10,7 @@ import { getTeamScope } from '@/lib/teamScope'
 
 // Fields admin can update on User row
 const USER_ADMIN_FIELDS = new Set([
-  'name', 'phone', 'altPhone', 'avatar', 'role', 'dateOfBirth',
+  'name', 'email', 'phone', 'altPhone', 'avatar', 'role', 'dateOfBirth',
 ])
 
 // Fields admin can update on Employee row
@@ -23,6 +23,7 @@ const EMP_ADMIN_FIELDS = new Set([
   'panNumber', 'aadharNumber', 'aadharFrontUrl', 'aadharBackUrl',
   'idProofType', 'idProofNumber', 'idProofUrl',
   'bankName', 'accountNumber', 'ifscCode', 'accountHolderName',
+  'area',
 ])
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -86,6 +87,17 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const emp = await prisma.employee.findUnique({ where: { id }, include: { user: true } })
   if (!emp) return notFoundResponse('Employee')
 
+  if (userData.email) {
+    const normalizedEmail = String(userData.email).toLowerCase().trim()
+    if (!normalizedEmail) return errorResponse('Email is required')
+    if (normalizedEmail !== emp.user.email) {
+      const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } })
+      if (existing) return errorResponse('Email already registered to another account')
+      userData.emailVerified = false // changed email hasn't been verified yet
+    }
+    userData.email = normalizedEmail
+  }
+
   try {
     if (Object.keys(userData).length) {
       await prisma.user.update({ where: { id: emp.userId }, data: userData })
@@ -105,6 +117,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     return successResponse({ updated: true })
   } catch (e: any) {
     console.error('Employee update error:', e)
+    if (e.code === 'P2002') return errorResponse('Email already registered to another account')
     return errorResponse(e.message || 'Update failed')
   }
 }

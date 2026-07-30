@@ -8,6 +8,7 @@ import { getRequestSession } from '@/lib/auth'
 import { successResponse, errorResponse, unauthorizedResponse } from '@/lib/api'
 import { logFromRequest } from '@/lib/audit'
 import { getProfileCompletion } from '@/lib/profileCompletion'
+import { deleteFile, publicIdFromUrl } from '@/lib/cloudinary'
 
 // Fields the user can edit themselves
 const USER_SELF_EDITABLE = new Set([
@@ -84,6 +85,14 @@ export async function PUT(req: NextRequest) {
   if (employeeData.dateOfBirth) employeeData.dateOfBirth = new Date(employeeData.dateOfBirth)
 
   try {
+    // If avatar is changing, remember the old one so we can delete it from
+    // Cloudinary after the new avatar is saved successfully.
+    let oldAvatarUrl: string | null = null
+    if (userData.avatar) {
+      const current = await prisma.user.findUnique({ where: { id: session.userId }, select: { avatar: true } })
+      if (current?.avatar && current.avatar !== userData.avatar) oldAvatarUrl = current.avatar
+    }
+
     // Update User row
     if (Object.keys(userData).length) {
       await prisma.user.update({ where: { id: session.userId }, data: userData })
@@ -95,6 +104,12 @@ export async function PUT(req: NextRequest) {
       if (emp) {
         await prisma.employee.update({ where: { id: emp.id }, data: employeeData })
       }
+    }
+
+    // Best-effort cleanup — don't fail the request if Cloudinary delete has an issue
+    if (oldAvatarUrl) {
+      const publicId = publicIdFromUrl(oldAvatarUrl)
+      if (publicId) deleteFile(publicId).catch(() => {})
     }
 
     await logFromRequest(req, {

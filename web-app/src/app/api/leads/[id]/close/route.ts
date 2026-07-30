@@ -32,7 +32,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   else return errorResponse('Invalid action. Use: convert | lost | not_interested')
 
   if (newStatus === 'CONVERTED' && lead.status !== 'MEETING_DONE') {
-    return errorResponse(`Mark the meeting as done first before closing the deal (currently ${lead.status})`)
+    // Admin/TL and the telecaller who owns this lead can close the deal
+    // directly without a meeting — the marketing-led flow still requires
+    // MEETING_DONE first.
+    const canDirectClose = canCloseAny || lead.assignedToId === session.userId
+    if (!canDirectClose) {
+      return errorResponse(`Mark the meeting as done first before closing the deal (currently ${lead.status})`)
+    }
   }
 
   const updated = await prisma.lead.update({

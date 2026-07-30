@@ -19,7 +19,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
   if (!invoice) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const settings = await prisma.setting.findMany({
-    where: { key: { in: ['company_name', 'company_email', 'company_phone', 'company_address', 'company_gst', 'company_logo_url'] } },
+    where: { key: { in: ['company_name', 'company_email', 'company_phone', 'company_address', 'company_gst', 'company_logo_url', 'company_signature_url'] } },
   })
   const settingsMap: Record<string, string> = {}
   settings.forEach((s: { key: string; value: string }) => { settingsMap[s.key] = s.value })
@@ -31,6 +31,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     companyEmail: settingsMap.company_email || undefined,
     companyGst: settingsMap.company_gst || undefined,
     companyLogoUrl: settingsMap.company_logo_url || undefined,
+    companySignatureUrl: settingsMap.company_signature_url || undefined,
   }
 
   const bodyHtml = buildInvoiceBody({

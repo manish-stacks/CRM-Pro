@@ -28,6 +28,7 @@ export type UploadFolder =
   | 'chat-attachments'
   | 'proposals'
   | 'invoices'
+  | 'signatures'
   | 'screenshots'
   | 'general'
 

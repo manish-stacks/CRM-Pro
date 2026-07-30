@@ -31,7 +31,7 @@ interface ReceiptData {
       gstNo?: string
     }
   }
-  company?: { name: string; email: string; phone: string; address: string }
+  company?: { name: string; email: string; phone: string; address: string; gst?: string; signatureUrl?: string }
 }
 
 export default function ReceiptViewPage() {
@@ -100,6 +100,7 @@ export default function ReceiptViewPage() {
             <div className="text-xs text-slate-600 mt-1 space-y-0.5">
               {receipt.company?.phone && <p><span className="font-semibold">Contact:</span> {receipt.company.phone}</p>}
               {receipt.company?.email && <p><span className="font-semibold">Email:</span> {receipt.company.email}</p>}
+              {receipt.company?.gst && <p><span className="font-semibold">GSTIN:</span> {receipt.company.gst}</p>}
             </div>
           </div>
           <div className="text-right text-xs text-slate-700 space-y-1 shrink-0">
@@ -116,6 +117,9 @@ export default function ReceiptViewPage() {
             <p><span className="font-semibold text-slate-700">Contact No:</span> {receipt.invoice.client.phone || '-'}</p>
             <p><span className="font-semibold text-slate-700">Client Name:</span> {receipt.invoice.client.clientName}</p>
             <p><span className="font-semibold text-slate-700">Email:</span> {receipt.invoice.client.email || '-'}</p>
+            {receipt.invoice.client.gstNo && (
+              <p><span className="font-semibold text-slate-700">GSTIN:</span> {receipt.invoice.client.gstNo}</p>
+            )}
           </div>
         </div>
 
@@ -167,8 +171,11 @@ export default function ReceiptViewPage() {
 
         <div className="flex justify-end mt-10 mb-4">
           <div className="text-center">
-            <p className="text-sm font-semibold text-red-600 mb-6">For {receipt.company?.name || 'Your Company'}</p>
-            <p className="text-xs text-slate-500 border-t border-slate-400 pt-1 px-6">Authorised Signatory</p>
+            <p className="text-sm font-semibold text-red-600 mb-2">For {receipt.company?.name || 'Your Company'}</p>
+            {receipt.company?.signatureUrl && (
+              <img src={receipt.company.signatureUrl} alt="signature" className="h-10 mx-auto object-contain mb-1" />
+            )}
+            <p className="text-xs text-slate-500 border-t border-slate-400 pt-1 px-6 mt-1">Authorised Signatory</p>
           </div>
         </div>
 

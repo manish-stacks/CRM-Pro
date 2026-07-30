@@ -5,6 +5,7 @@ import { requireAuth, getRequestSession } from '@/lib/auth'
 import { errorResponse, successResponse } from '@/lib/api'
 import { dateOnly } from '@/lib/attendanceDate'
 import { getTeamScope } from '@/lib/teamScope'
+import { generateClientCode } from '@/lib/idgen'
 
 const isAdminRole = (role: string) => ['SUPER_ADMIN', 'ADMIN'].includes(role)
 
@@ -42,7 +43,79 @@ export async function GET(req: NextRequest) {
 
     switch (type) {
       case 'clients': {
+        // Admin + TL (MANAGER) only
+        if (!['SUPER_ADMIN', 'ADMIN', 'MANAGER'].includes(session.role)) {
+          return errorResponse('Forbidden', 403)
+        }
+        const search = searchParams.get('search')
+        const status = searchParams.get('status')
+        const state = searchParams.get('state')
+        const marketingPersonId = searchParams.get('marketingPersonId')
+        const telecallerId = searchParams.get('telecallerId')
+        const serviceCatalogId = searchParams.get('serviceCatalogId')
+        const serviceName = searchParams.get('serviceName')
+        const expiry = searchParams.get('expiry')
+        const dateField = searchParams.get('dateField') || 'createdAt'
+        const dateFrom = searchParams.get('dateFrom')
+        const dateTo = searchParams.get('dateTo')
+
+        const where: any = {}
+        if (status) where.status = status
+        if (state) where.state = state
+        if (marketingPersonId) where.marketingPersonId = marketingPersonId
+        if (telecallerId) where.telecallerId = telecallerId
+        if (search) {
+          where.OR = [
+            { clientCode: { contains: search } },
+            { clientName: { contains: search } },
+            { companyName: { contains: search } },
+            { phone: { contains: search } },
+            { email: { contains: search } },
+          ]
+        }
+        if (dateFrom || dateTo) {
+          const field = dateField === 'onboardingDate' ? 'onboardingDate' : 'createdAt'
+          where[field] = {}
+          if (dateFrom) where[field].gte = new Date(dateFrom)
+          if (dateTo) where[field].lte = new Date(dateTo + 'T23:59:59')
+        }
+        const svc: any = {}
+        if (serviceName) svc.serviceName = { contains: serviceName }
+        if (serviceCatalogId) svc.serviceCatalogId = serviceCatalogId
+        if (expiry) {
+          const todayStart = new Date(new Date().toISOString().split('T')[0])
+          if (expiry === 'expired') svc.expiryDate = { lt: todayStart }
+          else if (expiry === 'none') svc.expiryDate = null
+          else if (expiry === 'active') { svc.expiryDate = { gte: todayStart }; svc.status = 'ACTIVE' }
+          else {
+            const days = parseInt(expiry)
+            if (!isNaN(days)) {
+              const until = new Date(todayStart); until.setUTCDate(until.getUTCDate() + days); until.setUTCHours(23, 59, 59, 999)
+              svc.expiryDate = { gte: todayStart, lte: until }
+            }
+          }
+        }
+        if (Object.keys(svc).length) where.services = { some: svc }
+
+        // Same TL (MANAGER) visibility as the clients list — only their own
+        // added/assigned clients export, Admin/Super Admin export everything.
+        if (session.role === 'MANAGER') {
+          where.AND = [
+            ...(where.AND || []),
+            {
+              OR: [
+                { createdById: session.userId },
+                { telecallerId: session.userId },
+                { marketingPersonId: session.userId },
+                { reportingPersonId: session.userId },
+                { assignedToId: session.userId },
+              ],
+            },
+          ]
+        }
+
         const clients = await prisma.client.findMany({
+          where,
           include: { services: true, assignedTo: { select: { name: true } } },
           orderBy: { createdAt: 'desc' },
         })
@@ -366,19 +439,61 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST: Import leads from CSV/JSON
+// POST: Import leads or clients from CSV/JSON
 export async function POST(req: NextRequest) {
-  const auth = await requireAuth(req, 'MANAGER')
+  const auth = await requireAuth(req, 'MANAGER') // MANAGER (TL), ADMIN, SUPER_ADMIN
   if (auth instanceof Response) return auth
+  const session = await getRequestSession(req)
 
   const body = await req.json()
+
+  // ---- Import clients ----
+  if (Array.isArray(body.clients)) {
+    const rows = body.clients
+    if (rows.length === 0) return errorResponse('No clients provided')
+
+    const created: any[] = []
+    const errors: any[] = []
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i]
+      const companyName = row.companyName || row.CompanyName || row.company
+      const clientName = row.clientName || row.ContactName || row.contactName || row.name
+      const phone = row.phone || row.Phone
+      if (!companyName || !clientName || !phone) {
+        errors.push({ row: i + 1, error: 'Company name, client name and phone required' })
+        continue
+      }
+      try {
+        const client = await prisma.client.create({
+          data: {
+            clientCode: await generateClientCode(),
+            companyName, clientName, phone: String(phone),
+            email: (row.email || row.Email) ? String(row.email || row.Email).toLowerCase() : null,
+            address: row.address || row.Address || null,
+            city: row.city || row.City || null,
+            state: row.state || row.State || null,
+            gstNo: row.gstNo || row.GSTIN || null,
+            status: (row.status || row.Status || 'ACTIVE').toUpperCase(),
+            onboardingDate: new Date(),
+            createdById: (session as any).userId,
+          },
+        })
+        created.push(client)
+      } catch {
+        errors.push({ row: i + 1, error: 'Failed to create client (duplicate or invalid data)' })
+      }
+    }
+
+    return successResponse({ imported: created.length, errors }, created.length)
+  }
+
+  // ---- Import leads (existing behaviour) ----
   const { leads } = body
 
   if (!Array.isArray(leads) || leads.length === 0) {
     return errorResponse('No leads provided')
   }
-
-  const session = await getRequestSession(req)
 
   try {
     const created: any[] = []

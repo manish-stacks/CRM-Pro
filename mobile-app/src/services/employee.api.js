@@ -68,6 +68,8 @@ export const EmployeeAPI = {
   getMeetingById: (id) => AxiosInstance.get(`/mobile/meetings/${id}`),
   logMeetingActivity: (id, data) => AxiosInstance.post(`/mobile/meetings/${id}/activity`, data),
   markMeetingDone: (id, data) => AxiosInstance.post(`/mobile/meetings/${id}/done`, data),
+  noAnswerMeeting: (id, data) => AxiosInstance.post(`/mobile/meetings/${id}/no-answer`, data),
+  rescheduleMeeting: (id, data) => AxiosInstance.post(`/mobile/meetings/${id}/reschedule`, data),
   closeMeeting: (id, data) => AxiosInstance.post(`/mobile/meetings/${id}/close`, data),
 
   // Visits

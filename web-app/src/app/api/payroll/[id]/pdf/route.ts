@@ -29,14 +29,21 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     if (!payslip) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
+    // Non-admins can only download their own payslip — matches the payroll list scoping.
+    if (!['SUPER_ADMIN', 'ADMIN'].includes(session.role) && payslip.employee.userId !== session.userId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December']
 
-    const [companyName, companyAddress, companyPhone, companyEmail, companyLogoUrl] = await Promise.all([
+    const [companyName, companyAddress, companyPhone, companyEmail, companyGst, companyLogoUrl, companySignatureUrl] = await Promise.all([
       Settings.companyName(),
       Settings.companyAddress(),
       Settings.companyPhone(),
       Settings.companyEmail(),
+      Settings.companyGst(),
       Settings.companyLogo(),
+      Settings.companySignature(),
     ])
 
     const company: CompanyInfo = {
@@ -44,7 +51,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       companyAddress: companyAddress || undefined,
       companyPhone: companyPhone || undefined,
       companyEmail: companyEmail || undefined,
+      companyGst: companyGst || undefined,
       companyLogoUrl: companyLogoUrl || undefined,
+      companySignatureUrl: companySignatureUrl || undefined,
     }
 
     const bodyHtml = buildPayslipBody({

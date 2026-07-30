@@ -1,9 +1,9 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import api from '@/lib/axios'
 import { useAuth } from '@/hooks/useAuth'
 import { Button, Input, Select, Textarea } from '@/components/ui'
-import { Settings as SettingsIcon, Building2, DollarSign, Calendar, Clock, Save, Loader2, Camera, Bell } from 'lucide-react'
+import { Settings as SettingsIcon, Building2, DollarSign, Calendar, Clock, Save, Loader2, Camera, Bell, Upload, X, Video } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 // Default settings shown in the form (populated from API + falls back to these)
@@ -15,6 +15,7 @@ const DEFAULTS: Record<string, any> = {
   company_email: '',
   company_gst: '',
   company_logo_url: '',
+  company_signature_url: '',
   // Finance
   currency: 'INR',
   currency_symbol: '₹',
@@ -57,6 +58,10 @@ const DEFAULTS: Record<string, any> = {
   payroll_tds_annual_threshold: 500000,
   payroll_tds_monthly_exempt: 41667,
   hr_email: 'info@hovermedia.in',
+  // Meeting slot booking (telecaller -> marketing exec, by area)
+  meeting_office_start: '10:00',
+  meeting_office_end: '18:30',
+  meeting_slot_minutes: 90,
 }
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -82,7 +87,27 @@ export default function SettingsPage() {
   const [values, setValues] = useState<Record<string, any>>(DEFAULTS)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [tab, setTab] = useState<'company' | 'finance' | 'hrm' | 'attendance' | 'tracker' | 'notifications'>('company')
+  const [tab, setTab] = useState<'company' | 'finance' | 'hrm' | 'attendance' | 'meetings' | 'tracker' | 'notifications'>('company')
+  const [sigUploading, setSigUploading] = useState(false)
+  const sigRef = useRef<HTMLInputElement>(null)
+
+  const uploadSignature = async (file: File) => {
+    if (file.size > 2 * 1024 * 1024) { toast.error('Max 2MB'); return }
+    setSigUploading(true)
+    try {
+      const reader = new FileReader()
+      const dataUrl = await new Promise<string>((res, rej) => {
+        reader.onload = () => res(reader.result as string)
+        reader.onerror = rej
+        reader.readAsDataURL(file)
+      })
+      const r = await api.post('/upload', { dataUrl, folder: 'signatures' })
+      set('company_signature_url', r.data.data.url)
+      toast.success('Signature uploaded! Click Save All to keep it.')
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Upload failed')
+    } finally { setSigUploading(false) }
+  }
 
   useEffect(() => {
     api.get('/settings').then(r => {
@@ -116,7 +141,7 @@ export default function SettingsPage() {
     try {
       // Bucket the values by category (must include EVERY editable key)
       const CATS: Record<string, string[]> = {
-        company: ['company_name', 'company_address', 'company_phone', 'company_email', 'company_gst', 'company_logo_url', 'timezone', 'hr_email'],
+        company: ['company_name', 'company_address', 'company_phone', 'company_email', 'company_gst', 'company_logo_url', 'company_signature_url', 'timezone', 'hr_email'],
         finance: ['currency', 'currency_symbol', 'gst_default_rate', 'gst_enabled_by_default', 'invoice_due_days', 'invoice_prefix', 'payment_methods'],
         hrm: ['weekly_off_days', 'working_hours_per_day', 'half_day_threshold_hours',
           'payroll_basic_percent', 'payroll_hra_percent', 'payroll_conveyance_amount', 'payroll_medical_amount',
@@ -124,6 +149,7 @@ export default function SettingsPage() {
           'payroll_profession_tax', 'payroll_profession_tax_threshold',
           'payroll_tds_percent', 'payroll_tds_annual_threshold', 'payroll_tds_monthly_exempt'],
         attendance: ['office_start_time', 'office_end_time', 'late_grace_minutes', 'leave_monthly_accrual', 'leave_max_carryforward', 'leave_balance_start_month'],
+        meetings: ['meeting_office_start', 'meeting_office_end', 'meeting_slot_minutes'],
         tracker: ['tracker_enabled', 'tracker_idle_threshold_seconds'],
         notifications: ['email_enabled', 'whatsapp_enabled'],
       }
@@ -162,6 +188,7 @@ export default function SettingsPage() {
             { key: 'finance', label: 'Finance & Invoicing', icon: DollarSign },
             { key: 'hrm', label: 'HRM & Payroll', icon: Calendar },
             { key: 'attendance', label: 'Attendance & Late Mark', icon: Clock },
+            { key: 'meetings', label: 'Meeting Slots', icon: Video },
             { key: 'tracker', label: 'Desktop Tracker', icon: Camera },
             { key: 'notifications', label: 'Notifications', icon: Bell },
           ].map((t: any) => (
@@ -194,6 +221,32 @@ export default function SettingsPage() {
               </div>
               <Textarea label="Address" value={values.company_address || ''} onChange={e => set('company_address', e.target.value)} rows={3}
                 placeholder="Full address for invoices and emails" />
+
+              <div>
+                <label className="label">Authorised Signature</label>
+                <div className="flex items-center gap-3">
+                  {values.company_signature_url ? (
+                    <div className="relative">
+                      <img src={values.company_signature_url} alt="Signature" className="h-14 border border-gray-200 rounded-lg bg-white px-3 object-contain" />
+                      <button type="button" onClick={() => set('company_signature_url', '')}
+                        className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center">
+                        <X size={11} />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="h-14 w-40 border border-dashed border-gray-300 rounded-lg flex items-center justify-center text-xs text-gray-400">No signature</div>
+                  )}
+                  <button type="button" onClick={() => sigRef.current?.click()} disabled={sigUploading} className="btn-secondary btn-sm">
+                    {sigUploading ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />} Upload
+                  </button>
+                  <input ref={sigRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden"
+                    onChange={e => e.target.files?.[0] && uploadSignature(e.target.files[0])} />
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Transparent PNG works best. This prints above &quot;Authorised Signatory&quot; on every invoice, proposal and payment receipt.
+                </p>
+              </div>
+
               <p className="text-xs text-gray-500">This information is used on invoices, proposals, and email templates.</p>
             </>
           )}
@@ -400,6 +453,49 @@ export default function SettingsPage() {
                     : <>No reset set — each employee's balance is counted from their joining date.</>}
                 </div>
               </div>
+            </>
+          )}
+
+          {tab === 'meetings' && (
+            <>
+              <p className="text-sm text-gray-600">
+                Controls the meeting slots telecallers see when booking a marketing-exec meeting for a lead (by area).
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="label">Office Start</label>
+                  <input type="time" className="input" value={values.meeting_office_start || '10:00'}
+                    onChange={e => set('meeting_office_start', e.target.value)} />
+                </div>
+                <div>
+                  <label className="label">Office End</label>
+                  <input type="time" className="input" value={values.meeting_office_end || '18:30'}
+                    onChange={e => set('meeting_office_end', e.target.value)} />
+                </div>
+                <Input label="Slot Duration (minutes)" type="number" min="15" step="15"
+                  value={values.meeting_slot_minutes ?? 90}
+                  onChange={e => set('meeting_slot_minutes', Number(e.target.value))} />
+              </div>
+              {(() => {
+                const [sh, sm] = (values.meeting_office_start || '10:00').split(':').map(Number)
+                const [eh, em] = (values.meeting_office_end || '18:30').split(':').map(Number)
+                const dur = Number(values.meeting_slot_minutes) || 90
+                const startMin = sh * 60 + sm, endMin = eh * 60 + em
+                const slots: string[] = []
+                for (let t = startMin; t + dur <= endMin; t += dur) {
+                  const f = (m: number) => { const h = Math.floor(m / 60) % 24, mm = m % 60; const ap = h >= 12 ? 'PM' : 'AM'; const h12 = h % 12 === 0 ? 12 : h % 12; return `${h12}:${String(mm).padStart(2, '0')} ${ap}` }
+                  slots.push(`${f(t)} - ${f(t + dur)}`)
+                }
+                return (
+                  <div className="rounded-lg bg-brand-50 border border-brand-100 p-3 text-xs text-blue-800">
+                    <p className="font-semibold mb-1">{slots.length} slot(s) per day:</p>
+                    <p>{slots.length ? slots.join(' · ') : 'Invalid window — check start/end/duration.'}</p>
+                  </div>
+                )
+              })()}
+              <p className="text-xs text-gray-500">
+                Assign each Marketing Executive's territory (e.g. "North Delhi") from their <b>Employee profile</b> — telecallers then pick an area + date and see which execs in that area are free per slot.
+              </p>
             </>
           )}
 

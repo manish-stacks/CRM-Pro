@@ -9,6 +9,7 @@ import { sendWhatsapp } from '@/lib/whatsapp'
 import { Notifications } from '@/lib/notify'
 import { syncVisitForMeeting } from '@/lib/visitSync'
 import { geocodeAddress } from '@/lib/distance'
+import { dateOnly } from '@/lib/attendanceDate'
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -38,7 +39,24 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return errorResponse('Assignee must be a MARKETING_EXECUTIVE (or higher)')
   }
 
-  const md = new Date(meetingDate)
+  const md = dateOnly(meetingDate)
+  if (meetingSlot) {
+    // Re-check availability right before booking — someone else may have
+    // grabbed this exact person+slot between the picker loading and submit.
+    const conflict = await prisma.lead.findFirst({
+      where: {
+        id: { not: id },
+        meetingAssignedToId: marketingExecId,
+        meetingDate: md,
+        meetingSlot,
+        status: 'MEETING_SCHEDULED',
+      },
+      select: { id: true, clientName: true },
+    })
+    if (conflict) {
+      return errorResponse(`${marketingExec.name} just got booked for this slot (${meetingSlot}) — pick another slot or person.`)
+    }
+  }
 
   // Geocode the meeting location once and store it — ETA/distance in the app ("you're 8 km, ~24 min from here") is calculated from this lat/lng.
   const geoSource = meetingLocation || [lead.address, lead.city, lead.state].filter(Boolean).join(', ')

@@ -1,6 +1,7 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, Suspense } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
 import api from '@/lib/axios'
 import {
@@ -16,16 +17,16 @@ import * as XLSX from 'xlsx'
 import toast from 'react-hot-toast'
 
 const STATUSES = [
-  { key: 'NEW',               label: 'New',              color: 'blue'   },
-  { key: 'RINGING',           label: 'Ringing',          color: 'amber'  },
-  { key: 'FOLLOW_UP',         label: 'Follow Up',        color: 'yellow' },
-  { key: 'CALLBACK',          label: 'Callback',         color: 'cyan'   },
+  { key: 'NEW', label: 'New', color: 'blue' },
+  { key: 'RINGING', label: 'Ringing', color: 'amber' },
+  { key: 'FOLLOW_UP', label: 'Follow Up', color: 'yellow' },
+  { key: 'CALLBACK', label: 'Callback', color: 'cyan' },
   { key: 'MEETING_SCHEDULED', label: 'Meeting Scheduled', color: 'purple' },
-  { key: 'CONVERTED',         label: 'Converted',        color: 'emerald' },
-  { key: 'CLOSED',            label: 'Closed',           color: 'slate'  },
-  { key: 'NOT_INTERESTED',    label: 'Not Interested',   color: 'red'    },
+  { key: 'CONVERTED', label: 'Converted', color: 'emerald' },
+  { key: 'CLOSED', label: 'Closed', color: 'slate' },
+  { key: 'NOT_INTERESTED', label: 'Not Interested', color: 'red' },
 ]
-const SOURCES = ['WEBSITE', 'REFERRAL', 'SOCIAL_MEDIA', 'COLD_CALL', 'EMAIL', 'WALKIN', 'OTHER']
+const SOURCES = ['WEBSITE', 'SOCIAL_MEDIA', 'COLD_CALL', 'EMAIL', 'WALKIN', 'GOOGLE_AD', 'GMB', 'JustDial', 'OTHER']
 
 // Default follow-up: tomorrow, 11:00 AM — sensible default so a new lead
 // never sits without a next-action date; the user can still change it.
@@ -36,9 +37,10 @@ function defaultFollowUp() {
   return { followUpDate, followUpTime: '11:00' }
 }
 
-export default function LeadsPage() {
+function LeadsPageInner() {
   const { user, isAtLeast } = useAuth()
   const canSeeAll = isAtLeast('MANAGER')
+  const searchParams = useSearchParams()
 
   const [leads, setLeads] = useState<any[]>([])
   const [total, setTotal] = useState(0)
@@ -79,14 +81,22 @@ export default function LeadsPage() {
   }, [page, filters])
 
   useEffect(() => { fetchLeads() }, [fetchLeads])
+
+  // "My Leads" — sidebar links here with ?mine=1, pre-filling the existing
+  // assignedToId filter to the logged-in TL so it's just their own leads.
+  useEffect(() => {
+    if (searchParams.get('mine') === '1' && user?.id) {
+      setFilters(p => ({ ...p, assignedToId: user.id }))
+    }
+  }, [searchParams, user?.id])
   useEffect(() => {
     if (canSeeAll) {
       api.get('/users/by-role?roles=TELECALLER')
         .then(r => setTelecallers(r.data.data || []))
-        .catch(() => {})
+        .catch(() => { })
       api.get('/users/by-role?roles=MARKETING_EXECUTIVE')
         .then(r => setMarketingPersons(r.data.data || []))
-        .catch(() => {})
+        .catch(() => { })
     }
   }, [canSeeAll])
 
@@ -223,7 +233,7 @@ export default function LeadsPage() {
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input type="text" className="input pl-9 text-sm" placeholder="Search name, phone, email, lead#"
                 value={filters.search}
-                onChange={e => { setFilters(p => ({...p, search: e.target.value})); setPage(1) }} />
+                onChange={e => { setFilters(p => ({ ...p, search: e.target.value })); setPage(1) }} />
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -240,38 +250,38 @@ export default function LeadsPage() {
 
         {showFilter && (
           <div className="px-5 py-4 bg-gray-50 border-b border-gray-100 grid grid-cols-2 md:grid-cols-6 gap-3">
-            <select value={filters.status} onChange={e => { setFilters(p => ({...p, status: e.target.value})); setPage(1) }} className="input">
+            <select value={filters.status} onChange={e => { setFilters(p => ({ ...p, status: e.target.value })); setPage(1) }} className="input">
               <option value="">Status: All</option>
               {STATUSES.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
             </select>
-            <select value={filters.source} onChange={e => { setFilters(p => ({...p, source: e.target.value})); setPage(1) }} className="input">
+            <select value={filters.source} onChange={e => { setFilters(p => ({ ...p, source: e.target.value })); setPage(1) }} className="input">
               <option value="">Source: All</option>
               {SOURCES.map(s => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
             </select>
             {canSeeAll && (
-              <select value={filters.assignedToId} onChange={e => { setFilters(p => ({...p, assignedToId: e.target.value})); setPage(1) }} className="input">
+              <select value={filters.assignedToId} onChange={e => { setFilters(p => ({ ...p, assignedToId: e.target.value })); setPage(1) }} className="input">
                 <option value="">Telecaller: All</option>
                 {telecallers.map((u: any) => <option key={u.id} value={u.id}>{u.name}</option>)}
               </select>
             )}
             {canSeeAll && (
-              <select value={filters.meetingAssignedToId} onChange={e => { setFilters(p => ({...p, meetingAssignedToId: e.target.value})); setPage(1) }} className="input">
+              <select value={filters.meetingAssignedToId} onChange={e => { setFilters(p => ({ ...p, meetingAssignedToId: e.target.value })); setPage(1) }} className="input">
                 <option value="">Marketing Person: All</option>
                 {marketingPersons.map((u: any) => <option key={u.id} value={u.id}>{u.name}</option>)}
               </select>
             )}
             {canSeeAll && (
-              <select value={filters.createdById} onChange={e => { setFilters(p => ({...p, createdById: e.target.value})); setPage(1) }} className="input">
+              <select value={filters.createdById} onChange={e => { setFilters(p => ({ ...p, createdById: e.target.value })); setPage(1) }} className="input">
                 <option value="">Added By: All</option>
                 {[...telecallers, ...marketingPersons].map((u: any) => <option key={u.id} value={u.id}>{u.name}</option>)}
               </select>
             )}
             <input type="date" className="input text-xs" placeholder="From"
-              value={filters.dateFrom} onChange={e => { setFilters(p => ({...p, dateFrom: e.target.value})); setPage(1) }} />
+              value={filters.dateFrom} onChange={e => { setFilters(p => ({ ...p, dateFrom: e.target.value })); setPage(1) }} />
             <input type="date" className="input text-xs" placeholder="To"
-              value={filters.dateTo} onChange={e => { setFilters(p => ({...p, dateTo: e.target.value})); setPage(1) }} />
+              value={filters.dateTo} onChange={e => { setFilters(p => ({ ...p, dateTo: e.target.value })); setPage(1) }} />
             {activeFilterCount > 0 && (
-              <button onClick={() => { setFilters({status:'',source:'',assignedToId:'',meetingAssignedToId:'',createdById:'',search:'',dateFrom:'',dateTo:''}); setPage(1) }}
+              <button onClick={() => { setFilters({ status: '', source: '', assignedToId: '', meetingAssignedToId: '', createdById: '', search: '', dateFrom: '', dateTo: '' }); setPage(1) }}
                 className="text-xs text-red-600 hover:underline flex items-center gap-1 col-span-full">
                 <X size={12} /> Clear all
               </button>
@@ -360,29 +370,29 @@ export default function LeadsPage() {
       <Modal open={modal === 'add'} onClose={() => setModal('none')} title="Add New Lead">
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
-            <Input label="Company Name" value={form.companyName} onChange={e => setForm(p => ({...p, companyName: e.target.value}))} />
-            <Input label="Client Name *" value={form.clientName} onChange={e => setForm(p => ({...p, clientName: e.target.value}))} />
-            <Input label="Client Phone *" value={form.clientPhone} onChange={e => setForm(p => ({...p, clientPhone: e.target.value}))} placeholder="+91 9999999999" />
-            <Input label="Client Email" type="email" value={form.clientEmail} onChange={e => setForm(p => ({...p, clientEmail: e.target.value}))} />
-            <Input label="Alternate Phone" value={form.alternatePhone} onChange={e => setForm(p => ({...p, alternatePhone: e.target.value}))} />
-            <Input label="Link / Website" value={form.link} onChange={e => setForm(p => ({...p, link: e.target.value}))} placeholder="https://..." />
+            <Input label="Company Name" value={form.companyName} onChange={e => setForm(p => ({ ...p, companyName: e.target.value }))} />
+            <Input label="Client Name *" value={form.clientName} onChange={e => setForm(p => ({ ...p, clientName: e.target.value }))} />
+            <Input label="Client Phone *" value={form.clientPhone} onChange={e => setForm(p => ({ ...p, clientPhone: e.target.value }))} placeholder="+91 9999999999" />
+            <Input label="Client Email" type="email" value={form.clientEmail} onChange={e => setForm(p => ({ ...p, clientEmail: e.target.value }))} />
+            <Input label="Alternate Phone" value={form.alternatePhone} onChange={e => setForm(p => ({ ...p, alternatePhone: e.target.value }))} />
+            <Input label="Link / Website" value={form.link} onChange={e => setForm(p => ({ ...p, link: e.target.value }))} placeholder="https://..." />
           </div>
-          <Textarea label="Address" value={form.address} onChange={e => setForm(p => ({...p, address: e.target.value}))} rows={2} />
+          <Textarea label="Address" value={form.address} onChange={e => setForm(p => ({ ...p, address: e.target.value }))} rows={2} />
           <div className="grid grid-cols-2 gap-3">
-            <Input label="City" value={form.city} onChange={e => setForm(p => ({...p, city: e.target.value}))} />
-            <Input label="State" value={form.state} onChange={e => setForm(p => ({...p, state: e.target.value}))} />
+            <Input label="City" value={form.city} onChange={e => setForm(p => ({ ...p, city: e.target.value }))} />
+            <Input label="State" value={form.state} onChange={e => setForm(p => ({ ...p, state: e.target.value }))} />
           </div>
           <div className="grid grid-cols-3 gap-3">
-            <Select label="Source" value={form.source} onChange={e => setForm(p => ({...p, source: e.target.value}))} options={SOURCES.map(s => ({ value: s, label: s.replace(/_/g, ' ') }))} />
-            <Input label="Service Pitched" value={form.service} onChange={e => setForm(p => ({...p, service: e.target.value}))} placeholder="e.g. Website + SEO" />
-            <Input label="Est. Price (₹)" type="number" value={form.price} onChange={e => setForm(p => ({...p, price: e.target.value}))} placeholder="25000" />
+            <Select label="Source" value={form.source} onChange={e => setForm(p => ({ ...p, source: e.target.value }))} options={SOURCES.map(s => ({ value: s, label: s.replace(/_/g, ' ') }))} />
+            <Input label="Service Pitched" value={form.service} onChange={e => setForm(p => ({ ...p, service: e.target.value }))} placeholder="e.g. Website + SEO" />
+            <Input label="Est. Price (₹)" type="number" value={form.price} onChange={e => setForm(p => ({ ...p, price: e.target.value }))} placeholder="25000" />
           </div>
           <div className="grid grid-cols-3 gap-3">
-            <Select label="Lead Status" value={form.status} onChange={e => setForm(p => ({...p, status: e.target.value}))} options={STATUSES.filter(s => !['CONVERTED', 'CLOSED', 'MEETING_SCHEDULED'].includes(s.key)).map(s => ({ value: s.key, label: s.label }))} />
-            <Input label="Follow-up Date" type="date" value={form.followUpDate} onChange={e => setForm(p => ({...p, followUpDate: e.target.value}))} />
-            <Input label="Follow-up Time" type="time" value={form.followUpTime} onChange={e => setForm(p => ({...p, followUpTime: e.target.value}))} />
+            <Select label="Lead Status" value={form.status} onChange={e => setForm(p => ({ ...p, status: e.target.value }))} options={STATUSES.filter(s => !['CONVERTED', 'CLOSED', 'MEETING_SCHEDULED'].includes(s.key)).map(s => ({ value: s.key, label: s.label }))} />
+            <Input label="Follow-up Date" type="date" value={form.followUpDate} onChange={e => setForm(p => ({ ...p, followUpDate: e.target.value }))} />
+            <Input label="Follow-up Time" type="time" value={form.followUpTime} onChange={e => setForm(p => ({ ...p, followUpTime: e.target.value }))} />
           </div>
-          <Textarea label="Remark" value={form.remark} onChange={e => setForm(p => ({...p, remark: e.target.value}))}
+          <Textarea label="Remark" value={form.remark} onChange={e => setForm(p => ({ ...p, remark: e.target.value }))}
             placeholder="First call notes, client's response, etc." rows={3} />
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="secondary" onClick={() => setModal('none')}>Cancel</Button>
@@ -449,5 +459,13 @@ export default function LeadsPage() {
         </div>
       </Modal>
     </div>
+  )
+}
+
+export default function LeadsPage() {
+  return (
+    <Suspense fallback={<Loader2 className="animate-spin mx-auto mt-12 text-gray-400" />}>
+      <LeadsPageInner />
+    </Suspense>
   )
 }

@@ -271,6 +271,11 @@ model Employee {
   // check-in/check-out tracking (e.g. leadership, or roles that don't use the desktop app).
   trackerExempt     Boolean   @default(false)
 
+  // Marketing territory (e.g. "North Delhi", "Noida") — used to route
+  // telecaller meeting bookings to whichever marketing exec covering that
+  // area is free at the requested slot.
+  area              String?
+
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
@@ -289,6 +294,7 @@ model Employee {
 
   @@index([employeeId])
   @@index([departmentId])
+  @@index([area])
   @@map("employees")
 }
 

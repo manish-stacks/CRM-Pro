@@ -4,12 +4,13 @@
 //
 //  - Meeting assigned to a MARKETING_EXECUTIVE  -> PENDING visit auto-created
 //  - Meeting re-scheduled / re-assigned         -> that visit is updated/moved
-//  - Deal Done / Lost / Not Interested          -> visit auto-COMPLETED
+//  - Meeting marked Done                        -> visit auto-COMPLETED (outcome MEETING_DONE)
+//  - Deal Done / Lost / Not Interested           -> visit auto-COMPLETED
 //
 // Everything is best-effort: a failure here must never break the main flow.
 import { prisma } from './prisma'
 
-export type CloseOutcome = 'DEAL_DONE' | 'LOST' | 'NOT_INTERESTED'
+export type CloseOutcome = 'DEAL_DONE' | 'LOST' | 'NOT_INTERESTED' | 'MEETING_DONE'
 
 interface LeadLike {
   id: string

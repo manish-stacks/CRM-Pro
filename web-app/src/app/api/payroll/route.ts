@@ -24,27 +24,14 @@ export async function GET(req: NextRequest) {
   if (year) where.year = parseInt(year)
   if (status) where.status = status
 
-  const nonAdmin = ['EMPLOYEE', 'TELECALLER', 'MARKETING_EXECUTIVE']
+  const nonAdmin = ['EMPLOYEE', 'TELECALLER', 'MARKETING_EXECUTIVE', 'MANAGER']
   if (nonAdmin.includes(session.role)) {
     const emp = await prisma.employee.findFirst({ where: { userId: session.userId } })
     if (emp) where.employeeId = emp.id
     else return successResponse([], 0)
-  } else if (session.role === 'MANAGER') {
-    const managerEmp = await prisma.employee.findFirst({ where: { userId: session.userId } })
-    if (managerEmp) {
-      const managedDepts = await prisma.department.findMany({
-        where: { managerId: managerEmp.id },
-        select: { id: true },
-      })
-      const deptEmps = managedDepts.length
-        ? await prisma.employee.findMany({ where: { departmentId: { in: managedDepts.map(d => d.id) } }, select: { id: true } })
-        : []
-      const allowed = new Set([managerEmp.id, ...deptEmps.map(e => e.id)])
-      where.employeeId = { in: Array.from(allowed) }
-    }
   }
 
-  if (employeeId && ['SUPER_ADMIN', 'ADMIN', 'MANAGER'].includes(session.role)) {
+  if (employeeId && ['SUPER_ADMIN', 'ADMIN'].includes(session.role)) {
     where.employeeId = employeeId
   }
   if (departmentId && ['SUPER_ADMIN', 'ADMIN'].includes(session.role)) {

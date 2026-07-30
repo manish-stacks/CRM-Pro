@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
 import { useTheme } from '../../context/ThemeContext';
 import ScreenWrapper from '../../components/ScreenWrapper';
+import { DatePickerField } from '../../components/DatePickerField';
 import { EmployeeAPI } from '../../services/employee.api';
 
 function openInMaps(address) {
@@ -54,6 +55,12 @@ export default function MeetingDetailScreen({ route, navigation }) {
   const [convertNote, setConvertNote] = useState('');
   const [showLost, setShowLost] = useState(false);
   const [lostReason, setLostReason] = useState('');
+  const [showReschedule, setShowReschedule] = useState(false);
+  const [rescheduleDate, setRescheduleDate] = useState('');
+  const [rescheduleTime, setRescheduleTime] = useState('');
+  const [rescheduleNotes, setRescheduleNotes] = useState('');
+  const [showNoAnswer, setShowNoAnswer] = useState(false);
+  const [noAnswerReason, setNoAnswerReason] = useState('');
 
   // Proposals (telecaller creates, marketing person can view for context)
   const [proposals, setProposals] = useState([]);
@@ -239,15 +246,32 @@ export default function MeetingDetailScreen({ route, navigation }) {
   const submitNoAnswer = async () => {
     setSaving(true);
     try {
-      await EmployeeAPI.logMeetingActivity(meetingId, {
-        type: 'CALL',
-        title: 'Call Not Picked / No Answer',
-        description: 'Client did not answer the call.',
-      });
-      Alert.alert('Updated', 'Logged as "Call Not Picked".');
+      await EmployeeAPI.noAnswerMeeting(meetingId, { reason: noAnswerReason || 'Client did not answer the call.' });
+      setShowNoAnswer(false);
+      setNoAnswerReason('');
       fetchDetail();
     } catch (e) {
       Alert.alert('Error', e.message || 'Failed to update');
+    } finally { setSaving(false); }
+  };
+
+  const submitReschedule = async () => {
+    if (!rescheduleDate || !rescheduleTime) {
+      Alert.alert('Missing info', 'Pick a new date and time (after office hours).');
+      return;
+    }
+    setSaving(true);
+    try {
+      await EmployeeAPI.rescheduleMeeting(meetingId, {
+        meetingDate: rescheduleDate,
+        meetingTime: rescheduleTime,
+        notes: rescheduleNotes,
+      });
+      setShowReschedule(false);
+      Alert.alert('Rescheduled', 'Meeting moved to the new time.');
+      fetchDetail();
+    } catch (e) {
+      Alert.alert('Error', e.message || 'Failed to reschedule — must be after office hours.');
     } finally { setSaving(false); }
   };
 
@@ -398,11 +422,18 @@ export default function MeetingDetailScreen({ route, navigation }) {
                 <Text style={[s.actionRowTxt, { color: colors.text }]}>Log Call / Remark</Text>
                 <Ionicons name="chevron-forward" size={16} color={colors.text3} />
               </TouchableOpacity>
-              <TouchableOpacity style={[s.actionRow, { borderColor: colors.border }]} onPress={submitNoAnswer} disabled={saving}>
+              <TouchableOpacity style={[s.actionRow, { borderColor: colors.border }]} onPress={() => { setNoAnswerReason(''); setShowNoAnswer(true); }} disabled={saving}>
                 <Ionicons name="call-outline" size={18} color="#F59E0B" />
                 <Text style={[s.actionRowTxt, { color: '#F59E0B' }]}>Client Didn't Pick Up (No Answer)</Text>
-                {saving ? <ActivityIndicator color="#F59E0B" size="small" /> : <Ionicons name="chevron-forward" size={16} color="#F59E0B" />}
+                <Ionicons name="chevron-forward" size={16} color="#F59E0B" />
               </TouchableOpacity>
+              {data.status === 'MEETING_SCHEDULED' && (
+                <TouchableOpacity style={[s.actionRow, { borderColor: colors.border }]} onPress={() => { setRescheduleDate(''); setRescheduleTime(''); setRescheduleNotes(''); setShowReschedule(true); }} disabled={saving}>
+                  <Ionicons name="time-outline" size={18} color="#6366F1" />
+                  <Text style={[s.actionRowTxt, { color: '#6366F1' }]}>Reschedule (after office hours)</Text>
+                  <Ionicons name="chevron-forward" size={16} color="#6366F1" />
+                </TouchableOpacity>
+              )}
               {data.status === 'MEETING_SCHEDULED' && (
                 <TouchableOpacity style={[s.dealBtn, { backgroundColor: '#14B8A6' }]} onPress={submitMeetingDone} disabled={saving}>
                   {saving ? <ActivityIndicator color="#fff" /> : <><Ionicons name="checkmark-done-outline" size={18} color="#fff" /><Text style={s.dealBtnTxt}>Mark Meeting Done</Text></>}
@@ -552,6 +583,80 @@ export default function MeetingDetailScreen({ route, navigation }) {
                 {saving ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>Close as Lost</Text>}
               </TouchableOpacity>
             </View>
+          </ScrollView>
+        </View>
+      </Modal>
+      {/* Reschedule Modal */}
+      <Modal visible={showReschedule} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowReschedule(false)}>
+        <View style={[s.modal, { backgroundColor: colors.bg, paddingTop: 40 }]}>
+          <View style={s.modalHeader}>
+            <Text style={[s.modalTitle, { color: colors.text }]}>Reschedule Meeting</Text>
+            <TouchableOpacity onPress={() => setShowReschedule(false)}>
+              <Ionicons name="close" size={24} color={colors.text2} />
+            </TouchableOpacity>
+          </View>
+          <ScrollView style={{ padding: 20 }} keyboardShouldPersistTaps="handled">
+            <View style={{ backgroundColor: 'rgba(99,102,241,0.1)', borderRadius: 12, padding: 12, marginBottom: 16 }}>
+              <Text style={{ color: '#6366F1', fontSize: 12, lineHeight: 18 }}>
+                Self-reschedule is only allowed AFTER office hours. For a daytime slot, ask your telecaller/TL to rebook through the office slot picker.
+              </Text>
+            </View>
+            <DatePickerField label="NEW DATE *" value={rescheduleDate} onChange={setRescheduleDate} minToday />
+            <Text style={s.fieldLabel}>NEW TIME (24h, e.g. 19:00) *</Text>
+            <View style={[s.fieldWrap, { backgroundColor: colors.bg2, borderColor: colors.border }]}>
+              <TextInput
+                style={{ flex: 1, fontSize: 14, paddingVertical: 12, color: colors.text }}
+                placeholder="19:00"
+                placeholderTextColor={colors.text3}
+                value={rescheduleTime}
+                onChangeText={setRescheduleTime}
+                keyboardType="numbers-and-punctuation"
+              />
+            </View>
+            <Text style={s.fieldLabel}>NOTES (OPTIONAL)</Text>
+            <View style={[s.fieldWrap, { backgroundColor: colors.bg2, borderColor: colors.border }]}>
+              <TextInput
+                style={{ flex: 1, fontSize: 14, paddingVertical: 12, color: colors.text }}
+                placeholder="e.g. Client asked to meet in the evening"
+                placeholderTextColor={colors.text3}
+                value={rescheduleNotes}
+                onChangeText={setRescheduleNotes}
+              />
+            </View>
+            <TouchableOpacity onPress={submitReschedule} disabled={saving} style={{ backgroundColor: '#6366F1', borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 20 }}>
+              {saving ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>Confirm Reschedule</Text>}
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+      </Modal>
+      {/* No Answer Modal */}
+      <Modal visible={showNoAnswer} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowNoAnswer(false)}>
+        <View style={[s.modal, { backgroundColor: colors.bg, paddingTop: 40 }]}>
+          <View style={s.modalHeader}>
+            <Text style={[s.modalTitle, { color: colors.text }]}>Client Didn't Pick Up</Text>
+            <TouchableOpacity onPress={() => setShowNoAnswer(false)}>
+              <Ionicons name="close" size={24} color={colors.text2} />
+            </TouchableOpacity>
+          </View>
+          <ScrollView style={{ padding: 20 }} keyboardShouldPersistTaps="handled">
+            <View style={{ backgroundColor: 'rgba(245,158,11,0.1)', borderRadius: 12, padding: 12, marginBottom: 16 }}>
+              <Text style={{ color: '#F59E0B', fontSize: 12, lineHeight: 18 }}>
+                This frees the meeting slot immediately and moves the lead to Callback for a re-attempt.
+              </Text>
+            </View>
+            <Text style={s.fieldLabel}>REASON (OPTIONAL)</Text>
+            <View style={[s.fieldWrap, { backgroundColor: colors.bg2, borderColor: colors.border }]}>
+              <TextInput
+                style={{ flex: 1, fontSize: 14, paddingVertical: 12, color: colors.text }}
+                placeholder="e.g. Phone switched off, no response after 3 tries"
+                placeholderTextColor={colors.text3}
+                value={noAnswerReason}
+                onChangeText={setNoAnswerReason}
+              />
+            </View>
+            <TouchableOpacity onPress={submitNoAnswer} disabled={saving} style={{ backgroundColor: '#F59E0B', borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 20 }}>
+              {saving ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>Confirm No Answer</Text>}
+            </TouchableOpacity>
           </ScrollView>
         </View>
       </Modal>

@@ -25,7 +25,7 @@ export default function EmployeesPage() {
   const [loading, setLoading] = useState(true)
 
   const [showFilter, setShowFilter] = useState(false)
-  const [filters, setFilters] = useState({ search: '', departmentId: '', role: '', status: '' })
+  const [filters, setFilters] = useState({ search: '', departmentId: '', role: '', status: 'true', gender: '' })
   const [company, setCompany] = useState<any>({ name: 'Hover Business Services' })
 
   const [modal, setModal] = useState<'none' | 'add' | 'toggle'>('none')
@@ -193,9 +193,15 @@ export default function EmployeesPage() {
               <option value="true">Active</option>
               <option value="false">Disabled</option>
             </select>
+            <select value={filters.gender} onChange={e => { setFilters(p => ({...p, gender: e.target.value})); setPage(1) }} className="input">
+              <option value="">All Genders</option>
+              <option value="MALE">Male</option>
+              <option value="FEMALE">Female</option>
+              <option value="OTHER">Other</option>
+            </select>
             {activeFilterCount > 0 && (
               <button
-                onClick={() => { setFilters({search:'',departmentId:'',role:'',status:''}); setPage(1) }}
+                onClick={() => { setFilters({search:'',departmentId:'',role:'',status:'',gender:''}); setPage(1) }}
                 className="text-xs text-red-600 hover:underline flex items-center gap-1 col-span-full"
               >
                 <X size={12} /> Clear all

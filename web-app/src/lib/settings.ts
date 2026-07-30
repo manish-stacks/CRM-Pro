@@ -61,6 +61,7 @@ export const Settings = {
   companyEmail: () => getSetting<string>('company_email', 'info@hovermedia.in'),
   companyGst: () => getSetting<string>('company_gst', '07APGPG3277A1Z9'),
   companyLogo: () => getSetting<string>('company_logo_url', 'https://hoverbusinessservices.com/images/hbs-logo.png'),
+  companySignature: () => getSetting<string>('company_signature_url', ''),
   currency: () => getSetting<string>('currency', 'INR'),
   currencySymbol: () => getSetting<string>('currency_symbol', '₹'),
   gstDefaultRate: () => getSetting<number>('gst_default_rate', 18),
@@ -83,6 +84,11 @@ export const Settings = {
   paymentMethods: () => getSetting<string[]>('payment_methods', ['UPI', 'CASH', 'BANK_TRANSFER', 'CHEQUE', 'CARD']),
   timezone: () => getSetting<string>('timezone', 'Asia/Kolkata'),
   hrEmail: () => getSetting<string>('hr_email', 'info@hovermedia.in'),
+  // Meeting slot booking — office window + slot size used to compute
+  // available meeting slots per area for the telecaller's booking picker.
+  meetingOfficeStart: () => getSetting<string>('meeting_office_start', '10:00'),
+  meetingOfficeEnd: () => getSetting<string>('meeting_office_end', '18:30'),
+  meetingSlotMinutes: () => getSetting<number>('meeting_slot_minutes', 90),
   // Notification kill-switches (desktop app section) — admin can stop
   // outgoing messages instantly without touching SMTP/WhatsApp credentials.
   emailEnabled: () => getSetting<boolean>('email_enabled', true),

@@ -47,6 +47,12 @@ export default function AttendancePage() {
   const [attSaving, setAttSaving] = useState(false)
   const [fixingStatuses, setFixingStatuses] = useState(false)
 
+  // Admin-only "today's overview" — punched in / not punched in / on leave / short leave
+  const [adminSummary, setAdminSummary] = useState<any>(null)
+  const [summaryFilter, setSummaryFilter] = useState<string | null>(null)
+  const [summaryList, setSummaryList] = useState<any[]>([])
+  const [summaryLoading, setSummaryLoading] = useState(false)
+
   // Live clock
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000)
@@ -76,6 +82,25 @@ export default function AttendancePage() {
       setToday(r.data.data)
     } catch { }
   }, [])
+
+  const fetchAdminSummary = useCallback(async (category?: string | null) => {
+    if (!isAdminUser) return
+    setSummaryLoading(true)
+    try {
+      const p: Record<string, string> = {}
+      if (category) p.filter = category
+      const r = await api.get(`/attendance/admin-summary?${new URLSearchParams(p)}`)
+      setAdminSummary(r.data.data?.counts || null)
+      setSummaryList(r.data.data?.list || [])
+    } catch { /* silent — this is a secondary widget */ }
+    finally { setSummaryLoading(false) }
+  }, [isAdminUser])
+
+  useEffect(() => { fetchAdminSummary(summaryFilter) }, [fetchAdminSummary, summaryFilter])
+
+  const toggleSummaryFilter = (category: string) => {
+    setSummaryFilter(prev => prev === category ? null : category)
+  }
 
   useEffect(() => { fetchRecords() }, [fetchRecords])
   useEffect(() => { fetchToday() }, [fetchToday])
@@ -338,6 +363,89 @@ export default function AttendancePage() {
           </div>
         </div>
       </div>
+
+      {/* Admin-only: Today's Overview — punched in / not punched in / on leave / short leave */}
+      {isAdminUser && (
+        <div className="card p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="font-semibold text-gray-900">Today's Overview</h3>
+              <p className="text-xs text-gray-500 mt-0.5">Click a card to filter the list below</p>
+            </div>
+            {summaryLoading && <Loader2 size={15} className="animate-spin text-gray-400" />}
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { key: 'PUNCHED_IN', label: 'Punched In', count: adminSummary?.punchedIn ?? 0, color: 'emerald' },
+              { key: 'NOT_PUNCHED_IN', label: 'Not Punched In', count: adminSummary?.notPunchedIn ?? 0, color: 'red' },
+              { key: 'ON_LEAVE', label: 'On Leave', count: adminSummary?.onLeave ?? 0, color: 'amber' },
+              { key: 'SHORT_LEAVE', label: 'Short Leave', count: adminSummary?.shortLeave ?? 0, color: 'blue' },
+            ].map(card => {
+              const active = summaryFilter === card.key
+              const colorClasses: Record<string, string> = {
+                emerald: active ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-emerald-50 text-emerald-700 border-emerald-100 hover:border-emerald-300',
+                red: active ? 'bg-red-600 text-white border-red-600' : 'bg-red-50 text-red-700 border-red-100 hover:border-red-300',
+                amber: active ? 'bg-amber-600 text-white border-amber-600' : 'bg-amber-50 text-amber-700 border-amber-100 hover:border-amber-300',
+                blue: active ? 'bg-blue-600 text-white border-blue-600' : 'bg-blue-50 text-blue-700 border-blue-100 hover:border-blue-300',
+              }
+              return (
+                <button
+                  key={card.key}
+                  onClick={() => toggleSummaryFilter(card.key)}
+                  className={`text-left rounded-xl border-2 p-4 transition-colors ${colorClasses[card.color]}`}
+                >
+                  <p className="text-2xl font-bold tabular-nums">{card.count}</p>
+                  <p className="text-xs font-semibold mt-1">{card.label}</p>
+                </button>
+              )
+            })}
+          </div>
+
+          {summaryFilter && (
+            <div className="mt-4 border-t border-gray-100 pt-4">
+              {summaryList.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-4">Nobody in this category today</p>
+              ) : (
+                <div className="table-wrapper">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Employee</th>
+                        <th>Department</th>
+                        <th>Detail</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {summaryList.map((e: any) => (
+                        <tr key={e.employeeId}>
+                          <td>
+                            <div className="flex items-center gap-2">
+                              <div className="w-7 h-7 rounded-full bg-brand-100 flex items-center justify-center text-[10px] font-bold text-brand-700 flex-shrink-0">
+                                {e.avatar ? <img src={e.avatar} className="w-full h-full rounded-full object-cover" /> : getInitials(e.name)}
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium text-gray-900">{e.name}</p>
+                                <p className="text-xs text-gray-400">{e.empCode}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="text-sm text-gray-600">{e.department || '—'}</td>
+                          <td className="text-xs text-gray-500">
+                            {e.category === 'PUNCHED_IN' && (e.punchIn ? `In: ${formatDateTime(e.punchIn).split(',')[1] || formatDateTime(e.punchIn)}` : '—')}
+                            {e.category === 'NOT_PUNCHED_IN' && 'No punch-in recorded'}
+                            {e.category === 'ON_LEAVE' && (e.leaveType ? `${e.leaveType.replace(/_/g, ' ')} leave` : 'On leave')}
+                            {e.category === 'SHORT_LEAVE' && (e.leaveHours ? `Short leave ${e.leaveHours.start}–${e.leaveHours.end}` : 'Short/half leave')}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Filters */}
       <div className="card">

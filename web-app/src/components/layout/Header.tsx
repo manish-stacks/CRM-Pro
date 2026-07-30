@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { useAuth } from '@/hooks/useAuth'
-import { Menu, LogOut, User, Settings, ChevronDown } from 'lucide-react'
+import { Menu, LogOut, User, Settings, ChevronDown, KeyRound } from 'lucide-react'
 import Link from 'next/link'
 import { NotificationBell } from '@/components/NotificationBell'
 import { ReminderWidget } from '@/components/ReminderWidget'
@@ -63,6 +63,11 @@ export default function Header({ onMenuClick }: { onMenuClick?: () => void }) {
               <Link href="/profile" onClick={() => setDropdownOpen(false)}>
                 <div className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-sm text-gray-700">
                   <User size={15} /><span>Profile</span>
+                </div>
+              </Link>
+              <Link href="/change-password" onClick={() => setDropdownOpen(false)}>
+                <div className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-sm text-gray-700">
+                  <KeyRound size={15} /><span>Change Password</span>
                 </div>
               </Link>
               {

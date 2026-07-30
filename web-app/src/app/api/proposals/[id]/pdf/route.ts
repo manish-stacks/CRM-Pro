@@ -22,17 +22,19 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!p) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const recipient = p.client
-    ? { name: p.client.companyName, contact: p.client.clientName, phone: p.client.phone || undefined, email: p.client.email || undefined }
+    ? { name: p.client.companyName, contact: p.client.clientName, phone: p.client.phone || undefined, email: p.client.email || undefined, gstNo: p.client.gstNo || undefined }
     : p.lead
     ? { name: p.lead.companyName || p.lead.clientName, contact: p.lead.clientName, phone: p.lead.clientPhone || undefined, email: p.lead.clientEmail || undefined }
     : { name: '—', contact: '—' }
 
-  const [companyName, companyAddress, companyPhone, companyEmail, companyLogoUrl] = await Promise.all([
+  const [companyName, companyAddress, companyPhone, companyEmail, companyGst, companyLogoUrl, companySignatureUrl] = await Promise.all([
     Settings.companyName(),
     Settings.companyAddress(),
     Settings.companyPhone(),
     Settings.companyEmail(),
+    Settings.companyGst(),
     Settings.companyLogo(),
+    Settings.companySignature(),
   ])
 
   const company: CompanyInfo = {
@@ -40,7 +42,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     companyAddress: companyAddress || undefined,
     companyPhone: companyPhone || undefined,
     companyEmail: companyEmail || undefined,
+    companyGst: companyGst || undefined,
     companyLogoUrl: companyLogoUrl || undefined,
+    companySignatureUrl: companySignatureUrl || undefined,
   }
 
   const bodyHtml = buildProposalBody({

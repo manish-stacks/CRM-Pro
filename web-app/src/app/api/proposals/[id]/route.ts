@@ -41,7 +41,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const auth = await requireAuth(req)
+  const auth = await requireAuth(req, 'MANAGER')
   if (auth instanceof Response) return auth
   const session = (auth as any).session
 
@@ -99,12 +99,17 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       data,
       include: { items: { orderBy: { order: 'asc' } } },
     })
+    const diff: Record<string, { from: any; to: any }> = {}
+    for (const k of Object.keys(data)) {
+      const before = (existing as any)[k]
+      if (JSON.stringify(before) !== JSON.stringify(data[k])) diff[k] = { from: before, to: data[k] }
+    }
     await logFromRequest(req, {
       userId: session.userId,
       action: 'UPDATE',
       entityType: 'Proposal',
       entityId: id,
-      changes: data,
+      changes: diff,
     })
     return successResponse(updated)
   } catch (e: any) {

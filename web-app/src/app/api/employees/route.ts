@@ -22,6 +22,7 @@ export async function GET(req: NextRequest) {
   const departmentId = searchParams.get('department') || searchParams.get('departmentId')
   const role = searchParams.get('role')
   const status = searchParams.get('status')       // 'true' | 'false'
+  const gender = searchParams.get('gender')        // MALE | FEMALE | OTHER
 
   const where: any = {}
 
@@ -38,6 +39,7 @@ export async function GET(req: NextRequest) {
   ]
   if (departmentId) where.departmentId = departmentId
   if (role) where.user = { ...(where.user || {}), role }
+  if (gender) where.gender = gender
   if (status !== null && status !== '' && status !== undefined) {
     where.user = { ...(where.user || {}), isActive: status === 'true' }
   }

@@ -94,6 +94,22 @@ export async function GET(req: NextRequest) {
     where.telecallerId = session.userId
   } else if (session.role === 'MARKETING_EXECUTIVE') {
     where.marketingPersonId = session.userId
+  } else if (session.role === 'MANAGER') {
+    // TL sees only the clients they added themselves, plus any client where
+    // admin has since assigned them as telecaller/marketing/reporting person.
+    // Admin/Super Admin still see every client.
+    where.AND = [
+      ...(where.AND || []),
+      {
+        OR: [
+          { createdById: session.userId },
+          { telecallerId: session.userId },
+          { marketingPersonId: session.userId },
+          { reportingPersonId: session.userId },
+          { assignedToId: session.userId },
+        ],
+      },
+    ]
   } else if (session.role === 'EMPLOYEE') {
     // Employees see clients where they're on a project team (Phase 5)
     // For now, empty

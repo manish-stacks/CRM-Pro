@@ -3,18 +3,24 @@ import { useState, useEffect, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import api from '@/lib/axios'
+import { useAuth } from '@/hooks/useAuth'
 import { Button, Modal, Badge } from '@/components/ui'
 import { formatDate, formatCurrency } from '@/lib/utils'
 import {
   ArrowLeft, Send, Copy, Loader2, ExternalLink,
-  ArrowRight, Building2
+  ArrowRight, Building2, Pencil
 } from 'lucide-react'
 import toast from 'react-hot-toast'
+
+// Admin and the telecalling head (MANAGER = "TL") can edit an existing proposal
+const CAN_EDIT_ROLES = ['SUPER_ADMIN', 'ADMIN', 'MANAGER']
 
 export default function ProposalDetailPage() {
   const params = useParams()
   const router = useRouter()
   const id = params.id as string
+  const { user } = useAuth()
+  const canEdit = CAN_EDIT_ROLES.includes(user?.role || '')
 
   const [proposal, setProposal] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -96,6 +102,11 @@ export default function ProposalDetailPage() {
             <button onClick={() => setModal('send')} className="btn-primary btn-sm">
               <Send size={13} /> Send to Client
             </button>
+          )}
+          {canEdit && (
+            <Link href={`/proposals/${id}/edit`} className="btn-secondary btn-sm">
+              <Pencil size={13} /> Edit
+            </Link>
           )}
           {/* {canConvert && (
             <button onClick={() => setModal('convert')} className="btn-primary btn-sm !bg-emerald-600 hover:!bg-emerald-700">

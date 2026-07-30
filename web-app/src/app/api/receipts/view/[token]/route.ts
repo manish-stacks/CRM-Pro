@@ -29,7 +29,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     if (!payment) return errorResponse('Receipt not found', 404)
 
     const settings = await prisma.setting.findMany({
-      where: { key: { in: ['company_name', 'company_email', 'company_phone', 'company_address', 'company_gst'] } },
+      where: { key: { in: ['company_name', 'company_email', 'company_phone', 'company_address', 'company_gst', 'company_signature_url'] } },
     })
     const settingsMap: Record<string, string> = {}
     settings.forEach(s => { settingsMap[s.key] = s.value })
@@ -42,6 +42,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
         phone:   settingsMap.company_phone   || '',
         address: settingsMap.company_address || '',
         gst:     settingsMap.company_gst     || '',
+        signatureUrl: settingsMap.company_signature_url || '',
       },
     })
   } catch (error) {

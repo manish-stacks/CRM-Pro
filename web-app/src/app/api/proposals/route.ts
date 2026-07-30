@@ -70,6 +70,10 @@ export async function GET(req: NextRequest) {
         { client: { is: { marketingPersonId: session.userId } } },
       ],
     })
+  } else if (session.role === 'MANAGER') {
+    // TL (telecalling head) sees only the proposals they personally raised —
+    // Admin/Super Admin still see everything.
+    andClauses.push({ createdById: session.userId })
   } else if (session.role === 'EMPLOYEE') {
     return successResponse([], 0)
   }

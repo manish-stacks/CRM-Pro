@@ -9,6 +9,9 @@ const outfit = Outfit({ subsets: ['latin'], variable: '--font-outfit' })
 export const metadata: Metadata = {
   title: 'HBS CRM — Business Management',
   description: 'Complete CRM & HRM by Hover Business Services',
+  icons: {
+    icon: '/images/favicon.ico',
+  },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

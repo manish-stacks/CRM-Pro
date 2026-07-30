@@ -34,10 +34,11 @@ const NAV: NavItem[] = [
   {
     label: 'CRM', icon: Briefcase, children: [
       { label: 'Leads', href: '/leads', icon: Target, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'TELECALLER'] },
+      { label: 'My Leads', href: '/leads?mine=1', icon: Target, roles: ['MANAGER'] },
       { label: 'My Meetings', href: '/marketing', icon: Video, roles: ['SUPER_ADMIN', 'ADMIN', 'MARKETING_EXECUTIVE'] },
-      { label: 'Proposals', href: '/proposals', icon: FileText, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'MARKETING_EXECUTIVE', 'TELECALLER'] },
+      { label: 'Proposals', href: '/proposals', icon: FileText, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'MARKETING_EXECUTIVE', ] },
       { label: 'Invoices', href: '/invoices', icon: CreditCard, roles: ['SUPER_ADMIN', 'ADMIN', 'MARKETING_EXECUTIVE'] },
-      { label: 'Clients', href: '/clients', icon: Users2, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'TELECALLER', 'MARKETING_EXECUTIVE'] },
+      { label: 'Clients', href: '/clients', icon: Users2, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'MARKETING_EXECUTIVE'] },
       { label: 'Projects', href: '/projects', icon: Briefcase },
       { label: 'Services', href: '/services', icon: Package, roles: ['SUPER_ADMIN', 'ADMIN'] },
     ]
@@ -77,6 +78,8 @@ function NavLink({ item, depth = 0 }: { item: NavItem; depth?: number }) {
 
   if (item.roles && user && !item.roles.includes(user.role)) return null
 
+  const displayLabel = item.href === '/leads' && user?.role === 'MANAGER' ? 'Team Leads' : item.label
+
   if (item.children) {
     const visibleChildren = item.children.filter(c => !c.roles || (user && c.roles.includes(user.role)))
     if (visibleChildren.length === 0) return null
@@ -104,13 +107,14 @@ function NavLink({ item, depth = 0 }: { item: NavItem; depth?: number }) {
     )
   }
 
-  const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
+  const hrefPath = (item.href || '').split('?')[0]
+  const isActive = pathname === hrefPath || pathname.startsWith(hrefPath + '/')
 
   return (
     <Link href={item.href!}>
       <div className={`sidebar-link ${isActive ? 'active' : ''}`}>
         <item.icon size={17} />
-        <span>{item.label}</span>
+        <span>{displayLabel}</span>
       </div>
     </Link>
   )

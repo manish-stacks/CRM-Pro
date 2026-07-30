@@ -67,6 +67,13 @@ export interface CompanyInfo {
   companyEmail?: string
   companyGst?: string
   companyLogoUrl?: string
+  companySignatureUrl?: string
+}
+
+function sigImg(company: CompanyInfo): string {
+  return company.companySignatureUrl
+    ? `<img src="${esc(company.companySignatureUrl)}" alt="signature" style="height:38px;max-width:170px;object-fit:contain;display:block;margin:0 auto;" />`
+    : ''
 }
 
 function logoImg(company: CompanyInfo): string {
@@ -191,7 +198,8 @@ export function buildInvoiceBody(d: InvoiceDocData): string {
   <div class="sig-area">
     <div class="sig">
       <div style="font-weight:bold;color:#dc2626;font-size:12px;">For ${esc(d.company.companyName)}</div>
-      <div class="sig-line">Authorised Signatory</div>
+      ${sigImg(d.company)}
+      <div class="sig-line" style="${d.company.companySignatureUrl ? 'margin-top:6px;' : ''}">Authorised Signatory</div>
     </div>
   </div>
   `
@@ -228,6 +236,11 @@ export function buildPayslipBody(d: PayslipDocData): string {
       ${logoImg(d.company)}
       <h2 class="company-name">${esc(d.company.companyName)}</h2>
       ${d.company.companyAddress ? `<div style="font-size:11px;color:#64748b;max-width:320px;margin-top:5px;">${esc(d.company.companyAddress)}</div>` : ''}
+      <div style="font-size:11px;color:#64748b;margin-top:4px;">
+        ${d.company.companyPhone ? `<div>Contact: ${esc(d.company.companyPhone)}</div>` : ''}
+        ${d.company.companyEmail ? `<div>Email: ${esc(d.company.companyEmail)}</div>` : ''}
+        ${d.company.companyGst ? `<div>GSTIN: ${esc(d.company.companyGst)}</div>` : ''}
+      </div>
     </div>
     <div class="doc-meta">
       <div class="doc-number">PAYSLIP</div>
@@ -284,7 +297,8 @@ export function buildPayslipBody(d: PayslipDocData): string {
   <div class="sig-area">
     <div class="sig">
       <div style="font-weight:bold;font-size:12px;">${esc(d.company.companyName)}</div>
-      <div class="sig-line">Authorised Signatory</div>
+      ${sigImg(d.company)}
+      <div class="sig-line" style="${d.company.companySignatureUrl ? 'margin-top:6px;' : ''}">Authorised Signatory</div>
     </div>
   </div>
   `
@@ -316,7 +330,7 @@ export interface ProposalDocData {
   notes?: string | null
   terms?: string | null
   items: ProposalDocItem[]
-  recipient: { name: string; contact?: string; phone?: string; email?: string }
+  recipient: { name: string; contact?: string; phone?: string; email?: string; gstNo?: string }
   preparedBy?: string
   company: CompanyInfo
 }
@@ -335,6 +349,7 @@ export function buildProposalBody(d: ProposalDocData): string {
       <div style="font-size:11px;color:#64748b;margin-top:4px;">
         ${d.company.companyPhone ? `<div>Contact: ${esc(d.company.companyPhone)}</div>` : ''}
         ${d.company.companyEmail ? `<div>Email: ${esc(d.company.companyEmail)}</div>` : ''}
+        ${d.company.companyGst ? `<div>GSTIN: ${esc(d.company.companyGst)}</div>` : ''}
       </div>
     </div>
     <div class="doc-meta">
@@ -352,6 +367,7 @@ export function buildProposalBody(d: ProposalDocData): string {
       ${d.recipient.contact ? `<div>${esc(d.recipient.contact)}</div>` : ''}
       ${d.recipient.phone ? `<div>${esc(d.recipient.phone)}</div>` : ''}
       ${d.recipient.email ? `<div>${esc(d.recipient.email)}</div>` : ''}
+      ${d.recipient.gstNo ? `<div>GSTIN: ${esc(d.recipient.gstNo)}</div>` : ''}
     </div>
     <div class="info-box">
       <div class="section-title">Prepared By</div>
@@ -392,7 +408,8 @@ export function buildProposalBody(d: ProposalDocData): string {
   <div class="sig-area">
     <div class="sig">
       <div style="font-weight:bold;color:#dc2626;font-size:12px;">For ${esc(d.company.companyName)}</div>
-      <div class="sig-line">Authorised Signatory</div>
+      ${sigImg(d.company)}
+      <div class="sig-line" style="${d.company.companySignatureUrl ? 'margin-top:6px;' : ''}">Authorised Signatory</div>
     </div>
   </div>
   `

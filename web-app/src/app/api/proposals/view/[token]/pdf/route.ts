@@ -19,13 +19,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
   if (!p) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const recipient = p.client
-    ? { name: p.client.companyName, contact: p.client.clientName, phone: p.client.phone || undefined, email: p.client.email || undefined }
+    ? { name: p.client.companyName, contact: p.client.clientName, phone: p.client.phone || undefined, email: p.client.email || undefined, gstNo: p.client.gstNo || undefined }
     : p.lead
     ? { name: p.lead.companyName || p.lead.clientName, contact: p.lead.clientName, phone: p.lead.clientPhone || undefined, email: p.lead.clientEmail || undefined }
     : { name: '—', contact: '—' }
 
   const settings = await prisma.setting.findMany({
-    where: { key: { in: ['company_name', 'company_email', 'company_phone', 'company_address', 'company_logo_url'] } },
+    where: { key: { in: ['company_name', 'company_email', 'company_phone', 'company_address', 'company_gst', 'company_logo_url', 'company_signature_url'] } },
   })
   const settingsMap: Record<string, string> = {}
   settings.forEach((s: { key: string; value: string }) => { settingsMap[s.key] = s.value })
@@ -35,7 +35,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     companyAddress: settingsMap.company_address || undefined,
     companyPhone: settingsMap.company_phone || undefined,
     companyEmail: settingsMap.company_email || undefined,
+    companyGst: settingsMap.company_gst || undefined,
     companyLogoUrl: settingsMap.company_logo_url || undefined,
+    companySignatureUrl: settingsMap.company_signature_url || undefined,
   }
 
   const bodyHtml = buildProposalBody({
