@@ -232,6 +232,22 @@ export default function MeetingDetailScreen({ route, navigation }) {
     } finally { setSaving(false); }
   };
 
+  // Any of these actions can 403 if the lead was reassigned/updated elsewhere
+  // (e.g. someone else already marked it No Answer) since this screen loaded.
+  // Show a friendly message instead of raw "Forbidden" and bounce back to the
+  // Meetings list so the user doesn't keep acting on stale data.
+  const showActionError = (e) => {
+    if (e?.status === 403) {
+      Alert.alert(
+        "Can't do that anymore",
+        "This lead isn't assigned to you anymore — it may have been updated elsewhere. Pull to refresh your Meetings list.",
+        [{ text: 'OK', onPress: () => navigation.navigate('Meetings') }]
+      );
+    } else {
+      Alert.alert('Error', e?.message || 'Failed to update');
+    }
+  };
+
   const submitMeetingDone = async () => {
     setSaving(true);
     try {
@@ -239,7 +255,7 @@ export default function MeetingDetailScreen({ route, navigation }) {
       Alert.alert('Meeting Done', 'Now you can close the deal — Deal Done or Lost.');
       fetchDetail();
     } catch (e) {
-      Alert.alert('Error', e.message || 'Failed to update');
+      showActionError(e);
     } finally { setSaving(false); }
   };
 
@@ -251,7 +267,7 @@ export default function MeetingDetailScreen({ route, navigation }) {
       setNoAnswerReason('');
       fetchDetail();
     } catch (e) {
-      Alert.alert('Error', e.message || 'Failed to update');
+      showActionError(e);
     } finally { setSaving(false); }
   };
 
@@ -271,7 +287,7 @@ export default function MeetingDetailScreen({ route, navigation }) {
       Alert.alert('Rescheduled', 'Meeting moved to the new time.');
       fetchDetail();
     } catch (e) {
-      Alert.alert('Error', e.message || 'Failed to reschedule — must be after office hours.');
+      showActionError(e);
     } finally { setSaving(false); }
   };
 
@@ -292,7 +308,7 @@ export default function MeetingDetailScreen({ route, navigation }) {
         ]
       );
     } catch (e) {
-      Alert.alert('Error', e.message || 'Failed to convert');
+      showActionError(e);
     } finally { setSaving(false); }
   };
 
@@ -305,7 +321,7 @@ export default function MeetingDetailScreen({ route, navigation }) {
       Alert.alert('Updated', action === 'lost' ? 'Marked as Lost' : 'Marked as Not Interested');
       fetchDetail();
     } catch (e) {
-      Alert.alert('Error', e.message || 'Failed to update');
+      showActionError(e);
     } finally { setSaving(false); }
   };
 

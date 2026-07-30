@@ -4,6 +4,7 @@ import { AxiosInstance } from '../lib/Axios.instance';
 import { Alert } from 'react-native';
 import { stopTracking } from '../services/LocationTracker';
 import { registerForPush, unregisterPush } from '../services/push';
+import { setSessionExpiredHandler } from '../lib/authEvents';
 
 const AuthContext = createContext();
 
@@ -73,6 +74,17 @@ export function AuthProvider({ children }) {
     setRole(null);
     setUser(null);
   };
+
+  // Axios (outside the React tree) calls this when a request comes back 401 —
+  // the session is invalid, so flip isLoggedIn to false right away instead of
+  // leaving the user stuck on a screen full of failing requests. Re-registered
+  // on every render so it always closes over the latest logout closure.
+  useEffect(() => {
+    setSessionExpiredHandler(() => {
+      Alert.alert('Session Expired', 'Please log in again.');
+      logout();
+    });
+  });
 
   const getUserData = async () => {
     const data = await AsyncStorage.getItem('userData');

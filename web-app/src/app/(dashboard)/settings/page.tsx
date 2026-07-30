@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'react'
 import api from '@/lib/axios'
 import { useAuth } from '@/hooks/useAuth'
 import { Button, Input, Select, Textarea } from '@/components/ui'
-import { Settings as SettingsIcon, Building2, DollarSign, Calendar, Clock, Save, Loader2, Camera, Bell, Upload, X, Video } from 'lucide-react'
+import { Settings as SettingsIcon, Building2, DollarSign, Calendar, Clock, Save, Loader2, Camera, Bell, Upload, X, Video, FileText } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 // Default settings shown in the form (populated from API + falls back to these)
@@ -90,6 +90,49 @@ export default function SettingsPage() {
   const [tab, setTab] = useState<'company' | 'finance' | 'hrm' | 'attendance' | 'meetings' | 'tracker' | 'notifications'>('company')
   const [sigUploading, setSigUploading] = useState(false)
   const sigRef = useRef<HTMLInputElement>(null)
+  const [holidayCalUrl, setHolidayCalUrl] = useState('')
+  const [holidayCalUploading, setHolidayCalUploading] = useState(false)
+  const holidayCalRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    api.get('/settings/holiday-calendar').then(r => setHolidayCalUrl(r.data.data?.url || '')).catch(() => {})
+  }, [])
+
+  const uploadHolidayCalendar = async (file: File) => {
+    if (file.type !== 'application/pdf') { toast.error('PDF only'); return }
+    if (file.size > 10 * 1024 * 1024) { toast.error('Max 10MB'); return }
+    setHolidayCalUploading(true)
+    try {
+      const reader = new FileReader()
+      const dataUrl = await new Promise<string>((res, rej) => {
+        reader.onload = () => res(reader.result as string)
+        reader.onerror = rej
+        reader.readAsDataURL(file)
+      })
+      const up = await api.post('/upload', { dataUrl, folder: 'holiday-calendar', resourceType: 'raw' })
+      // This saves immediately (unlike the rest of this page) — it also
+      // deletes the previous PDF from Cloudinary so a replace never leaves
+      // an orphaned old file behind.
+      const r = await api.post('/settings/holiday-calendar', {
+        url: up.data.data.url, publicId: up.data.data.publicId, resourceType: up.data.data.resourceType,
+      })
+      setHolidayCalUrl(r.data.data.url)
+      toast.success(r.data.data.replaced ? 'Holiday calendar replaced — old one deleted' : 'Holiday calendar uploaded')
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Upload failed')
+    } finally { setHolidayCalUploading(false) }
+  }
+
+  const removeHolidayCalendar = async () => {
+    setHolidayCalUploading(true)
+    try {
+      await api.delete('/settings/holiday-calendar')
+      setHolidayCalUrl('')
+      toast.success('Holiday calendar removed')
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Failed')
+    } finally { setHolidayCalUploading(false) }
+  }
 
   const uploadSignature = async (file: File) => {
     if (file.size > 2 * 1024 * 1024) { toast.error('Max 2MB'); return }
@@ -245,6 +288,31 @@ export default function SettingsPage() {
                 <p className="text-xs text-gray-500 mt-1">
                   Transparent PNG works best. This prints above &quot;Authorised Signatory&quot; on every invoice, proposal and payment receipt.
                 </p>
+              </div>
+
+              <div className="border-t border-gray-100 pt-4">
+                <label className="label">Holiday Calendar (PDF)</label>
+                <p className="text-xs text-gray-500 mb-2">Shown to everyone from the calendar icon in the header. Saves immediately — replacing it deletes the old PDF.</p>
+                <div className="flex items-center gap-3">
+                  {holidayCalUrl ? (
+                    <a href={holidayCalUrl} target="_blank" rel="noreferrer" className="btn-secondary btn-sm">
+                      <FileText size={12} /> View Current PDF
+                    </a>
+                  ) : (
+                    <span className="text-xs text-gray-400">Not uploaded yet</span>
+                  )}
+                  <button type="button" onClick={() => holidayCalRef.current?.click()} disabled={holidayCalUploading} className="btn-secondary btn-sm">
+                    {holidayCalUploading ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
+                    {holidayCalUrl ? 'Replace' : 'Upload'}
+                  </button>
+                  {holidayCalUrl && (
+                    <button type="button" onClick={removeHolidayCalendar} disabled={holidayCalUploading} className="btn-ghost btn-sm text-red-600">
+                      <X size={12} /> Remove
+                    </button>
+                  )}
+                  <input ref={holidayCalRef} type="file" accept="application/pdf" className="hidden"
+                    onChange={e => e.target.files?.[0] && uploadHolidayCalendar(e.target.files[0])} />
+                </div>
               </div>
 
               <p className="text-xs text-gray-500">This information is used on invoices, proposals, and email templates.</p>

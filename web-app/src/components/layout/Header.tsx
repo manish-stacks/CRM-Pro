@@ -8,6 +8,7 @@ import { ReminderWidget } from '@/components/ReminderWidget'
 import { NoteWidget } from '@/components/NoteWidget'
 import { GlobalSearch } from '@/components/GlobalSearch'
 import { MyIdCardButton } from '@/components/MyIdCardButton'
+import { HolidayCalendarButton } from '@/components/HolidayCalendarButton'
 
 export default function Header({ onMenuClick }: { onMenuClick?: () => void }) {
   const { user, logout } = useAuth()
@@ -34,6 +35,9 @@ export default function Header({ onMenuClick }: { onMenuClick?: () => void }) {
 
         {/* My ID Card */}
         <MyIdCardButton />
+
+        {/* Holiday Calendar */}
+        <HolidayCalendarButton />
 
         {/* User menu */}
         <div className="relative">

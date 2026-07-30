@@ -62,6 +62,7 @@ export const Settings = {
   companyGst: () => getSetting<string>('company_gst', '07APGPG3277A1Z9'),
   companyLogo: () => getSetting<string>('company_logo_url', 'https://hoverbusinessservices.com/images/hbs-logo.png'),
   companySignature: () => getSetting<string>('company_signature_url', ''),
+  holidayCalendarUrl: () => getSetting<string>('holiday_calendar_url', ''),
   currency: () => getSetting<string>('currency', 'INR'),
   currencySymbol: () => getSetting<string>('currency_symbol', '₹'),
   gstDefaultRate: () => getSetting<number>('gst_default_rate', 18),

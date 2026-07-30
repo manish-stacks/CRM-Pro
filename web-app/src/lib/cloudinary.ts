@@ -29,6 +29,7 @@ export type UploadFolder =
   | 'proposals'
   | 'invoices'
   | 'signatures'
+  | 'holiday-calendar'
   | 'screenshots'
   | 'general'
 

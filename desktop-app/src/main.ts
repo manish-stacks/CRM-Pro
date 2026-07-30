@@ -1,17 +1,3 @@
-// desktop-app/src/main.ts
-//
-// The window loads the real web dashboard (same one you open in a browser) —
-// so login, logout, and every other page work exactly the same way, using
-// the same session cookie.
-//
-// The desktop tracker no longer has its own login/check-in widget. It runs
-// quietly in the background: every SYNC_INTERVAL_MS it asks the server "is
-// this employee checked in right now?" (GET /api/mobile/attendance/status)
-// and starts/stops the session + idle tracking to match. Whether tracking
-// actually happens is still fully controlled server-side by the admin
-// Settings master switch and per-employee "tracker exempt" flag (see
-// /api/tracker/checkin in the web app) — this file never decides that on
-// its own.
 import { app, BrowserWindow, session, powerMonitor, dialog, desktopCapturer, screen } from 'electron'
 import path from 'path'
 import Store from 'electron-store'
@@ -83,6 +69,18 @@ function createWindow() {
   // the page actually rendered anything. An empty body after the app has
   // had time to load means it's stuck blank — reload instead of leaving the
   // user to hit refresh themselves.
+  mainWindow.on('close', (e) => {
+    if (isTracking) {
+      e.preventDefault()
+      dialog.showMessageBox(mainWindow!, {
+        type: 'warning',
+        message: 'Aap currently checked-in hain. Pehle punch-out karein, phir app band karein.',
+        buttons: ['OK'],
+      })
+      mainWindow?.minimize()
+    }
+  })
+
   mainWindow.on('focus', () => {
     mainWindow?.webContents.executeJavaScript('document.body.innerText.trim().length', true)
       .then(len => {
@@ -171,12 +169,19 @@ function stopSyncLoop() {
   syncTimer = null
 }
 
+let wasLoggedIn = false
+
 async function syncTrackingState() {
   const token = await getAuthToken()
   if (!token) {
     if (isTracking) await stopTracking()
+    if (wasLoggedIn) {
+      wasLoggedIn = false
+      mainWindow?.loadURL(API_BASE)
+    }
     return
   }
+  wasLoggedIn = true
   try {
     const res = await fetch(`${API_BASE}/api/mobile/attendance/status`, {
       headers: { Authorization: `Bearer ${token}` },
