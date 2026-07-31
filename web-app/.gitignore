@@ -41,6 +41,4 @@ yarn-error.log*
 Thumbs.db
 
 # Uploads (local dev)
-/public/uploads
-/uploads
 /credential/firebase-service-account.json
