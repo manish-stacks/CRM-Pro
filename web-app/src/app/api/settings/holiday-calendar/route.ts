@@ -1,20 +1,21 @@
 // src/app/api/settings/holiday-calendar/route.ts
-// The Holiday Calendar PDF shown from the header icon. GET is available to
-// any logged-in staff member (just the URL — no other settings exposed).
-// POST (upload/replace) is Admin-only and deletes the previous Cloudinary
-// file first, so replacing the calendar never leaves an orphaned old PDF.
+// Holiday Calendar PDF — stored locally on disk (public/uploads/holiday-calendar/),
+// not Cloudinary. GET is for any logged-in user, POST (upload/replace, deletes
+// old file) and DELETE are Admin-only.
 import { NextRequest } from 'next/server'
+import { writeFile, unlink, mkdir } from 'fs/promises'
+import path from 'path'
 import { prisma } from '@/lib/prisma'
 import { requireAuth, getRequestSession } from '@/lib/auth'
 import { successResponse, errorResponse, unauthorizedResponse } from '@/lib/api'
 import { logFromRequest } from '@/lib/audit'
-import { deleteFile } from '@/lib/cloudinary'
 import { invalidateSetting } from '@/lib/settings'
+
+const DIR = path.join(process.cwd(), 'public', 'uploads', 'holiday-calendar')
 
 export async function GET(req: NextRequest) {
   const session = await getRequestSession(req)
   if (!session) return unauthorizedResponse()
-
   const row = await prisma.setting.findUnique({ where: { key: 'holiday_calendar_url' } })
   return successResponse({ url: row?.value || '' })
 }
@@ -24,48 +25,39 @@ export async function POST(req: NextRequest) {
   if (auth instanceof Response) return auth
   const session = (auth as any).session
 
-  const { url, publicId, resourceType } = await req.json()
-  if (!url || !publicId) return errorResponse('url and publicId required — upload the PDF via /api/upload first')
-
-  const [oldUrlRow, oldIdRow, oldTypeRow] = await Promise.all([
-    prisma.setting.findUnique({ where: { key: 'holiday_calendar_url' } }),
-    prisma.setting.findUnique({ where: { key: 'holiday_calendar_public_id' } }),
-    prisma.setting.findUnique({ where: { key: 'holiday_calendar_resource_type' } }),
-  ])
-
-  // Delete the previous file so a replace never leaves an orphaned PDF sitting in Cloudinary.
-  if (oldIdRow?.value && oldIdRow.value !== publicId) {
-    await deleteFile(oldIdRow.value, (oldTypeRow?.value as any) || 'image')
+  const { dataUrl } = await req.json()
+  if (!dataUrl || !dataUrl.startsWith('data:application/pdf')) {
+    return errorResponse('dataUrl must be a base64 PDF (data:application/pdf;base64,...)')
   }
 
-  await prisma.$transaction([
-    prisma.setting.upsert({
-      where: { key: 'holiday_calendar_url' },
-      update: { value: url, category: 'company' },
-      create: { key: 'holiday_calendar_url', value: url, category: 'company' },
-    }),
-    prisma.setting.upsert({
-      where: { key: 'holiday_calendar_public_id' },
-      update: { value: publicId, category: 'company' },
-      create: { key: 'holiday_calendar_public_id', value: publicId, category: 'company' },
-    }),
-    prisma.setting.upsert({
-      where: { key: 'holiday_calendar_resource_type' },
-      update: { value: resourceType || 'image', category: 'company' },
-      create: { key: 'holiday_calendar_resource_type', value: resourceType || 'image', category: 'company' },
-    }),
-  ])
+  const base64 = dataUrl.split(',')[1]
+  const buffer = Buffer.from(base64, 'base64')
+  if (buffer.byteLength > 10 * 1024 * 1024) return errorResponse('Max 10MB')
 
+  const filename = `holiday-calendar_${Date.now()}.pdf`
+  await mkdir(DIR, { recursive: true })
+  await writeFile(path.join(DIR, filename), buffer)
+  const url = `/uploads/holiday-calendar/${filename}`
+
+  // Delete the previous file so replacing never leaves an orphaned old PDF.
+  const oldRow = await prisma.setting.findUnique({ where: { key: 'holiday_calendar_url' } })
+  if (oldRow?.value && oldRow.value.startsWith('/uploads/holiday-calendar/')) {
+    await unlink(path.join(process.cwd(), 'public', oldRow.value)).catch(() => {})
+  }
+
+  await prisma.setting.upsert({
+    where: { key: 'holiday_calendar_url' },
+    update: { value: url, category: 'company' },
+    create: { key: 'holiday_calendar_url', value: url, category: 'company' },
+  })
   invalidateSetting('holiday_calendar_url')
 
   await logFromRequest(req, {
-    userId: session.userId,
-    action: 'UPDATE',
-    entityType: 'Settings',
-    metadata: { updated: 'holiday_calendar', replaced: !!oldUrlRow?.value },
+    userId: session.userId, action: 'UPDATE', entityType: 'Settings',
+    metadata: { updated: 'holiday_calendar', replaced: !!oldRow?.value },
   })
 
-  return successResponse({ url, replaced: !!oldUrlRow?.value })
+  return successResponse({ url, replaced: !!oldRow?.value })
 }
 
 export async function DELETE(req: NextRequest) {
@@ -73,25 +65,13 @@ export async function DELETE(req: NextRequest) {
   if (auth instanceof Response) return auth
   const session = (auth as any).session
 
-  const [idRow, typeRow] = await Promise.all([
-    prisma.setting.findUnique({ where: { key: 'holiday_calendar_public_id' } }),
-    prisma.setting.findUnique({ where: { key: 'holiday_calendar_resource_type' } }),
-  ])
-  if (idRow?.value) {
-    await deleteFile(idRow.value, (typeRow?.value as any) || 'image')
+  const row = await prisma.setting.findUnique({ where: { key: 'holiday_calendar_url' } })
+  if (row?.value && row.value.startsWith('/uploads/holiday-calendar/')) {
+    await unlink(path.join(process.cwd(), 'public', row.value)).catch(() => {})
   }
-
-  await prisma.setting.deleteMany({
-    where: { key: { in: ['holiday_calendar_url', 'holiday_calendar_public_id', 'holiday_calendar_resource_type'] } },
-  })
+  await prisma.setting.deleteMany({ where: { key: 'holiday_calendar_url' } })
   invalidateSetting('holiday_calendar_url')
 
-  await logFromRequest(req, {
-    userId: session.userId,
-    action: 'DELETE',
-    entityType: 'Settings',
-    metadata: { removed: 'holiday_calendar' },
-  })
-
+  await logFromRequest(req, { userId: session.userId, action: 'DELETE', entityType: 'Settings', metadata: { removed: 'holiday_calendar' } })
   return successResponse({ deleted: true })
 }

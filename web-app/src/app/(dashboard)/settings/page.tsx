@@ -109,13 +109,7 @@ export default function SettingsPage() {
         reader.onerror = rej
         reader.readAsDataURL(file)
       })
-      const up = await api.post('/upload', { dataUrl, folder: 'holiday-calendar', resourceType: 'raw' })
-      // This saves immediately (unlike the rest of this page) — it also
-      // deletes the previous PDF from Cloudinary so a replace never leaves
-      // an orphaned old file behind.
-      const r = await api.post('/settings/holiday-calendar', {
-        url: up.data.data.url, publicId: up.data.data.publicId, resourceType: up.data.data.resourceType,
-      })
+      const r = await api.post('/settings/holiday-calendar', { dataUrl })
       setHolidayCalUrl(r.data.data.url)
       toast.success(r.data.data.replaced ? 'Holiday calendar replaced — old one deleted' : 'Holiday calendar uploaded')
     } catch (e: any) {
