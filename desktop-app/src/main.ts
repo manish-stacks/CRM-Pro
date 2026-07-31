@@ -2,6 +2,7 @@ import { app, BrowserWindow, session, powerMonitor, dialog, desktopCapturer, scr
 import path from 'path'
 import Store from 'electron-store'
 import { autoUpdater } from "electron-updater";
+import log from 'electron-log'
 
 // Production backend URL is baked in directly so the packaged app works on
 // any machine without needing a .env file shipped alongside it. Setting the
@@ -111,6 +112,9 @@ app.whenReady().then(() => {
   startSyncLoop();
   startScreenshotPolling();
   if (app.isPackaged) {
+    log.transports.file.level = 'info'
+    autoUpdater.logger = log
+    log.info('App starting, checking for updates. Current version:', app.getVersion())
     autoUpdater.checkForUpdatesAndNotify();
   }
 });
@@ -121,21 +125,35 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
 })
 
-autoUpdater.on("update-available", () => {
-  console.log("Update Available");
+autoUpdater.on("checking-for-update", () => {
+  log.info("Checking for update...");
+});
+
+autoUpdater.on("update-available", (info) => {
+  log.info("Update Available:", info.version);
+});
+
+autoUpdater.on("update-not-available", (info) => {
+  log.info("No update available. Current is latest:", info.version);
 });
 
 autoUpdater.on("error", (err) => {
-  console.error("Auto-update error:", err);
+  log.error("Auto-update error:", err);
+});
+
+autoUpdater.on("download-progress", (progress) => {
+  log.info(`Download progress: ${Math.round(progress.percent)}%`);
 });
 
 autoUpdater.on("update-downloaded", () => {
-  dialog.showMessageBox({
+  log.info("Update downloaded, forcing restart");
+  dialog.showMessageBox(mainWindow!, {
     type: 'info',
-    buttons: ['Restart Now', 'Later'],
-    message: 'A new version has been downloaded. Restart to apply the update?',
-  }).then((result) => {
-    if (result.response === 0) autoUpdater.quitAndInstall();
+    buttons: ['Restart Now'],
+    message: 'A new version has been downloaded. The app must restart to continue.',
+    noLink: true,
+  }).then(() => {
+    autoUpdater.quitAndInstall();
   });
 });
 
