@@ -351,7 +351,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {showBiz && (
+      {showBiz && showRevenue && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Lead pipeline */}
           <div className="card card-glow hover-lift animate-rise stagger-1 p-5">

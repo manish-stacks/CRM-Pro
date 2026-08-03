@@ -60,6 +60,7 @@ export async function GET(req: NextRequest) {
   const dateTo = searchParams.get('dateTo')
   const followUpDate = searchParams.get('followUpDate') // YYYY-MM-DD
   const meetingDate = searchParams.get('meetingDate')
+  const sortBy = searchParams.get('sortBy') || '' // 'followup' | 'created' | '' (default — plain newest-first, same as before)
 
   const where: any = {}
   if (status) where.status = status
@@ -158,7 +159,20 @@ export async function GET(req: NextRequest) {
         meetingAssignedTo: { select: { id: true, name: true, role: true, phone: true } },
         _count: { select: { activities: true, proposals: true } },
       },
-      orderBy: { createdAt: 'desc' },
+      // 'followup' mirrors the on-screen "Follow-up / Meeting" column, which
+      // shows meetingDate when set, else followUpDate — so sort primarily by
+      // meetingDate (latest date first) then followUpDate as a tiebreaker for
+      // rows with no meeting. `nulls: 'last'` is required here — MySQL sorts
+      // NULL as the smallest value in ASC order, so without it every lead
+      // with no date at all (the "—" rows) would float above leads that
+      // actually have a follow-up/meeting date, regardless of sort direction.
+      // 'created' is the previous newest-first default.
+      orderBy: sortBy === 'followup'
+        ? [
+            { meetingDate: { sort: 'desc', nulls: 'last' } },
+            { followUpDate: { sort: 'desc', nulls: 'last' } },
+          ]
+        : { createdAt: 'desc' },
     }),
     prisma.lead.count({ where }),
   ])
@@ -189,13 +203,20 @@ export async function POST(req: NextRequest) {
   try {
     // Who gets this lead if nobody explicitly picked an assignee?
     // - Telecaller creating their own lead → assign to themselves.
-    // - Anyone else (Admin/Manager/Marketing adding a lead manually without
-    //   picking a telecaller) → default to an Admin, not to themselves —
-    //   a Manager/Marketing Executive self-assigning would incorrectly make
-    //   them "the telecaller" on the lead.
+    // - MANAGER (the telecalling TL — see "My Leads" / proposal-edit
+    //   elsewhere in the app, which already treat MANAGER as a working
+    //   telecaller) adding a lead themselves → also assign to themselves.
+    //   Previously this fell into the "everyone else" branch below, which
+    //   defaults to the *oldest active Admin in the whole system* — so
+    //   every Manager-added lead silently landed on that one fixed admin
+    //   account instead of the person who actually created it.
+    // - Admin/Marketing Executive adding a lead manually without picking a
+    //   telecaller → default to an Admin, not to themselves — self-assigning
+    //   would incorrectly make them "the telecaller" on the lead (Marketing
+    //   Executives track their own work via meetingAssignedToId instead).
     let finalAssigneeId: string = assignedToId || ''
     if (!finalAssigneeId) {
-      if (session.role === 'TELECALLER') {
+      if (session.role === 'TELECALLER' || session.role === 'MANAGER') {
         finalAssigneeId = session.userId
       } else {
         const defaultAdmin = await prisma.user.findFirst({

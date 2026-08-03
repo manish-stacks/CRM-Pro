@@ -124,6 +124,19 @@ export default function ProposalEditPage() {
     } finally { setSaving(false) }
   }
 
+  const [unlocking, setUnlocking] = useState(false)
+  const moveToDraft = async () => {
+    if (!confirm('Move this proposal back to Draft so line items, description, discount and GST can be edited? The client will no longer see it as sent until you send it again.')) return
+    setUnlocking(true)
+    try {
+      await api.put(`/proposals/${id}`, { status: 'DRAFT' })
+      toast.success('Moved back to Draft — pricing & items are now editable')
+      await fetch_()
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Failed to move to Draft')
+    } finally { setUnlocking(false) }
+  }
+
   if (loading) return <div className="p-12 text-center"><Loader2 className="animate-spin mx-auto text-gray-400" /></div>
 
   if (user && !canEdit) {
@@ -159,9 +172,17 @@ export default function ProposalEditPage() {
       </div>
 
       {!isDraft && (
-        <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800 flex items-start gap-2">
+        <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800 flex items-start gap-2 flex-wrap">
           <Lock size={15} className="mt-0.5 flex-shrink-0" />
-          Status is <b>{proposal.status}</b> — line items, discount and GST are locked. Only title, notes, terms and valid-until can be edited now. Move it back to Draft to change pricing.
+          <span className="flex-1 min-w-[200px]">
+            Status is <b>{proposal.status}</b> — line items, discount and GST are locked. Only title, notes, terms and valid-until can be edited now. Move it back to Draft to change pricing.
+          </span>
+          {CAN_EDIT_ROLES.includes(user?.role || '') && (
+            <button onClick={moveToDraft} disabled={unlocking}
+              className="btn-secondary btn-sm !bg-white !border-amber-300 !text-amber-800 hover:!bg-amber-100 flex-shrink-0">
+              {unlocking ? <Loader2 size={13} className="animate-spin" /> : <Lock size={13} />} Move to Draft
+            </button>
+          )}
         </div>
       )}
 

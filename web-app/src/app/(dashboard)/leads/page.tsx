@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback, Suspense } from 'react'
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
@@ -43,6 +43,7 @@ function LeadsPageInner({ forceMine = false }: { forceMine?: boolean }) {
   const isAdminUser = isAtLeast('ADMIN')
   const searchParams = useSearchParams()
   const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [viewRemark, setViewRemark] = useState<string | null>(null)
   const [bulkDeleting, setBulkDeleting] = useState(false)
 
   const [leads, setLeads] = useState<any[]>([])
@@ -51,10 +52,11 @@ function LeadsPageInner({ forceMine = false }: { forceMine?: boolean }) {
   const [loading, setLoading] = useState(true)
   const [showFilter, setShowFilter] = useState(false)
   const [filters, setFilters] = useState({
-    status: '', source: '', assignedToId: '', meetingAssignedToId: '', createdById: '', search: '', dateFrom: '', dateTo: '',
+    status: '', source: '', assignedToId: '', meetingAssignedToId: '', createdById: '', search: '', dateFrom: '', dateTo: '', sortBy: '',
   })
   const [telecallers, setTelecallers] = useState<any[]>([])
   const [marketingPersons, setMarketingPersons] = useState<any[]>([])
+  const [admins, setAdmins] = useState<any[]>([])
 
   const [modal, setModal] = useState<'none' | 'add' | 'import'>('none')
   const [saving, setSaving] = useState(false)
@@ -71,26 +73,42 @@ function LeadsPageInner({ forceMine = false }: { forceMine?: boolean }) {
     status: 'NEW', remark: '', ...defaultFollowUp(),
   })
 
+  // "My Leads" (forceMine=true from the dedicated /leads/my route, or the
+  // legacy ?mine=1 query param) pins the assignedToId filter to the logged
+  // in manager.
+  const mine = forceMine || searchParams.get('mine') === '1'
+
+  // Guards against a race condition: on /leads/my, the component used to
+  // fire an unfiltered fetch on mount (fast for admins, but a full
+  // team-wide scan for a MANAGER — slow), and only *after* that set
+  // filters.assignedToId to the logged-in user's id, firing a second,
+  // filtered request. Because the filtered request is much smaller it
+  // often resolved first, but the earlier unfiltered request would then
+  // land *after* it and overwrite the correctly-filtered list with the
+  // full team's leads — which is exactly what "My Leads" was showing.
+  // Fix: (1) don't fetch at all until we know the right filter to send
+  // (wait for user.id when mine=true), and (2) tag every request with a
+  // sequence number and drop any response that isn't from the latest one,
+  // so this class of race can't resurface even if filters change quickly.
+  const requestSeq = useRef(0)
+
   const fetchLeads = useCallback(async () => {
+    if (mine && !user?.id) return
+    const seq = ++requestSeq.current
     setLoading(true)
     try {
       const p: Record<string, string> = { page: String(page), limit: '20' }
       Object.entries(filters).forEach(([k, v]) => { if (v) p[k] = v })
       const r = await api.get(`/leads?${new URLSearchParams(p)}`)
+      if (seq !== requestSeq.current) return // a newer request superseded this one — ignore
       setLeads(r.data.data || [])
       setTotal(r.data.total || 0)
-    } catch { toast.error('Failed to load') }
-    finally { setLoading(false) }
-  }, [page, filters])
+    } catch { if (seq === requestSeq.current) toast.error('Failed to load') }
+    finally { if (seq === requestSeq.current) setLoading(false) }
+  }, [page, filters, mine, user?.id])
 
   useEffect(() => { fetchLeads(); setSelectedIds([]) }, [fetchLeads])
 
-  // "My Leads" (forceMine=true from the dedicated /leads/my route, or the
-  // legacy ?mine=1 query param) pins the assignedToId filter to the logged
-  // in manager. Previously this only ever *set* the filter and never
-  // cleared it, so navigating from My Leads back to Team Leads kept
-  // showing the same filtered-to-self list on both pages.
-  const mine = forceMine || searchParams.get('mine') === '1'
   useEffect(() => {
     if (!user?.id) return
     if (mine) {
@@ -106,6 +124,9 @@ function LeadsPageInner({ forceMine = false }: { forceMine?: boolean }) {
         .catch(() => { })
       api.get('/users/by-role?roles=MARKETING_EXECUTIVE')
         .then(r => setMarketingPersons(r.data.data || []))
+        .catch(() => { })
+      api.get('/users/by-role?roles=SUPER_ADMIN,ADMIN')
+        .then(r => setAdmins(r.data.data || []))
         .catch(() => { })
     }
   }, [canSeeAll])
@@ -248,7 +269,7 @@ function LeadsPageInner({ forceMine = false }: { forceMine?: boolean }) {
   }
 
   
-  const activeFilterCount = Object.values(filters).filter(v => v).length
+  const activeFilterCount = Object.entries(filters).filter(([k, v]) => k !== 'sortBy' && v).length
 
   const statusPill = (status: string) => {
     const s = STATUSES.find(x => x.key === status)
@@ -324,6 +345,11 @@ function LeadsPageInner({ forceMine = false }: { forceMine?: boolean }) {
               <select value={filters.assignedToId} onChange={e => { setFilters(p => ({ ...p, assignedToId: e.target.value })); setPage(1) }} className="input">
                 <option value="">Telecaller: All</option>
                 {telecallers.map((u: any) => <option key={u.id} value={u.id}>{u.name}</option>)}
+                {admins.length > 0 && (
+                  <optgroup label="Admin">
+                    {admins.map((u: any) => <option key={u.id} value={u.id}>{u.name}</option>)}
+                  </optgroup>
+                )}
               </select>
             )}
             {canSeeAll && (
@@ -335,15 +361,20 @@ function LeadsPageInner({ forceMine = false }: { forceMine?: boolean }) {
             {canSeeAll && (
               <select value={filters.createdById} onChange={e => { setFilters(p => ({ ...p, createdById: e.target.value })); setPage(1) }} className="input">
                 <option value="">Added By: All</option>
-                {[...telecallers, ...marketingPersons].map((u: any) => <option key={u.id} value={u.id}>{u.name}</option>)}
+                {[...telecallers, ...marketingPersons, ...admins].map((u: any) => <option key={u.id} value={u.id}>{u.name}</option>)}
               </select>
             )}
             <input type="date" className="input text-xs" placeholder="From"
               value={filters.dateFrom} onChange={e => { setFilters(p => ({ ...p, dateFrom: e.target.value })); setPage(1) }} />
             <input type="date" className="input text-xs" placeholder="To"
               value={filters.dateTo} onChange={e => { setFilters(p => ({ ...p, dateTo: e.target.value })); setPage(1) }} />
+            <select value={filters.sortBy} onChange={e => { setFilters(p => ({ ...p, sortBy: e.target.value })); setPage(1) }} className="input">
+              <option value="">Sort: Default</option>
+              <option value="followup">Sort: Follow-up / Meeting</option>
+              <option value="created">Sort: Created (newest)</option>
+            </select>
             {activeFilterCount > 0 && (
-              <button onClick={() => { setFilters({ status: '', source: '', assignedToId: '', meetingAssignedToId: '', createdById: '', search: '', dateFrom: '', dateTo: '' }); setPage(1) }}
+              <button onClick={() => { setFilters({ status: '', source: '', assignedToId: '', meetingAssignedToId: '', createdById: '', search: '', dateFrom: '', dateTo: '', sortBy: '' }); setPage(1) }}
                 className="text-xs text-red-600 hover:underline flex items-center gap-1 col-span-full">
                 <X size={12} /> Clear all
               </button>
@@ -367,15 +398,16 @@ function LeadsPageInner({ forceMine = false }: { forceMine?: boolean }) {
                 <th>Status</th>
                 <th>Assigned To</th>
                 <th>Follow-up / Meeting</th>
+                <th>Remark</th>
                 <th>Created</th>
                 <th className="text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={isAdminUser ? 9 : 8} className="text-center py-8 text-gray-400"><Loader2 className="animate-spin inline" /></td></tr>
+                <tr><td colSpan={isAdminUser ? 10 : 9} className="text-center py-8 text-gray-400"><Loader2 className="animate-spin inline" /></td></tr>
               ) : leads.length === 0 ? (
-                <tr><td colSpan={isAdminUser ? 9 : 8}><EmptyState icon={<Users size={40} />} title="No leads" description="No leads match your filters" /></td></tr>
+                <tr><td colSpan={isAdminUser ? 10 : 9}><EmptyState icon={<Users size={40} />} title="No leads" description="No leads match your filters" /></td></tr>
               ) : leads.map(l => (
                 <tr key={l.id} className="hover:bg-slate-50">
                   {isAdminUser && (
@@ -423,6 +455,13 @@ function LeadsPageInner({ forceMine = false }: { forceMine?: boolean }) {
                         {l.followUpTime && <p className="text-[10px]">{l.followUpTime}</p>}
                       </div>
                     ) : <span className="text-gray-400">—</span>}
+                  </td>
+                  <td className="text-xs text-gray-600 max-w-[180px]">
+                    {l.remark ? (
+                      <button onClick={() => setViewRemark(l.remark)} className="truncate block text-left hover:text-brand-600 hover:underline w-full">
+                        {l.remark}
+                      </button>
+                    ) : <span className="text-gray-300">—</span>}
                   </td>
                   <td className="text-xs text-gray-500">{formatDate(l.createdAt)}</td>
                   <td className="text-right">
@@ -552,6 +591,11 @@ function LeadsPageInner({ forceMine = false }: { forceMine?: boolean }) {
             )}
           </div>
         </div>
+      </Modal>
+
+      {/* Full remark viewer */}
+      <Modal open={!!viewRemark} onClose={() => setViewRemark(null)} title="Remark">
+        <p className="text-sm text-gray-700 whitespace-pre-wrap">{viewRemark}</p>
       </Modal>
     </div>
   )

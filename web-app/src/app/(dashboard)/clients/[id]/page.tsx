@@ -682,6 +682,7 @@ function ReportsSection({ clientId, services }: { clientId: string, services: an
   const [reports, setReports] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [modal, setModal] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({
     title: '', description: '', reportType: 'TEXT',
@@ -732,17 +733,42 @@ function ReportsSection({ clientId, services }: { clientId: string, services: an
     }
   }
 
+  const emptyForm = {
+    title: '', description: '', reportType: 'TEXT',
+    fileUrl: '', fileType: '', fileSize: 0, reportPeriod: '', content: '',
+    reportDate: new Date().toISOString().split('T')[0],
+    clientServiceId: '',
+    notifyClient: false,
+  }
+
+  const openAdd = () => { setEditingId(null); setForm(emptyForm); setModal(true) }
+  const openEdit = (r: any) => {
+    setEditingId(r.id)
+    setForm({
+      title: r.title || '', description: r.description || '', reportType: r.reportType || 'TEXT',
+      fileUrl: r.fileUrl || '', fileType: r.fileType || '', fileSize: r.fileSize || 0,
+      reportPeriod: r.reportPeriod || '', content: r.content || '',
+      reportDate: r.reportDate ? r.reportDate.split('T')[0] : new Date().toISOString().split('T')[0],
+      clientServiceId: r.clientServiceId || '',
+      notifyClient: false,
+    })
+    setModal(true)
+  }
+
   const save = async () => {
     if (!form.title) { toast.error('Title required'); return }
     setSaving(true)
     try {
-      await api.post(`/clients/${clientId}/reports`, form)
-      toast.success('Report added' + (form.notifyClient ? ' + WhatsApp sent' : ''))
+      if (editingId) {
+        await api.put(`/clients/${clientId}/reports/${editingId}`, form)
+        toast.success('Report updated')
+      } else {
+        await api.post(`/clients/${clientId}/reports`, form)
+        toast.success('Report added' + (form.notifyClient ? ' + WhatsApp sent' : ''))
+      }
       setModal(false)
-      setForm({
-        title: '', description: '', reportType: 'TEXT', fileUrl: '', fileType: '', fileSize: 0, reportPeriod: '', content: '',
-        reportDate: new Date().toISOString().split('T')[0], clientServiceId: '', notifyClient: false
-      })
+      setEditingId(null)
+      setForm(emptyForm)
       load()
     } catch (e: any) {
       toast.error(e.response?.data?.error || 'Failed')
@@ -762,7 +788,7 @@ function ReportsSection({ clientId, services }: { clientId: string, services: an
     <div>
       <div className="flex items-center justify-between mb-4">
         <h3 className="font-semibold text-gray-900">Client Reports</h3>
-        <Button size="sm" onClick={() => setModal(true)}><Plus size={13} /> Add Report</Button>
+        <Button size="sm" onClick={openAdd}><Plus size={13} /> Add Report</Button>
       </div>
       {reports.length === 0 ? (
         <EmptyState icon={<FileText size={20} />} title="No reports" description="Upload SEO reports, monthly summaries, screenshots, PDFs" />
@@ -792,14 +818,17 @@ function ReportsSection({ clientId, services }: { clientId: string, services: an
                     {r.uploadedBy?.name} · {formatDate(r.reportDate)}
                   </p>
                 </div>
-                <button onClick={() => del(r.id)} className="text-red-500 hover:bg-red-50 rounded p-1"><Trash2 size={12} /></button>
+                <div className="flex flex-col gap-1">
+                  <button onClick={() => openEdit(r)} className="text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded p-1" title="Edit"><Edit3 size={12} /></button>
+                  <button onClick={() => del(r.id)} className="text-red-500 hover:bg-red-50 rounded p-1" title="Delete"><Trash2 size={12} /></button>
+                </div>
               </div>
             </div>
           ))}
         </div>
       )}
 
-      <Modal open={modal} onClose={() => setModal(false)} title="Add Client Report">
+      <Modal open={modal} onClose={() => { setModal(false); setEditingId(null) }} title={editingId ? 'Edit Client Report' : 'Add Client Report'}>
         <div className="space-y-3">
           <Input label="Title *" value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))}
             placeholder="e.g. January 2026 SEO Report" />
@@ -826,8 +855,8 @@ function ReportsSection({ clientId, services }: { clientId: string, services: an
             <span>📲 Send WhatsApp notification to client</span>
           </label>
           <div className="flex justify-end gap-2 pt-1">
-            <Button variant="secondary" onClick={() => setModal(false)}>Cancel</Button>
-            <Button onClick={save} loading={saving}>Save Report</Button>
+            <Button variant="secondary" onClick={() => { setModal(false); setEditingId(null) }}>Cancel</Button>
+            <Button onClick={save} loading={saving}>{editingId ? 'Update Report' : 'Save Report'}</Button>
           </div>
         </div>
       </Modal>
