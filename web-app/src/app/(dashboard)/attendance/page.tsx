@@ -1,0 +1,777 @@
+'use client'
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useAuth } from '@/hooks/useAuth'
+import api from '@/lib/axios'
+import { getCurrentGeo } from '@/lib/geolocation'
+import { formatDate, formatDateTime, getInitials, getStatusColor } from '@/lib/utils'
+import { Badge, EmptyState, Pagination } from '@/components/ui'
+import {
+  Clock, LogIn, LogOut, MapPin, Monitor, Smartphone, Tablet as TabletIcon,
+  Loader2, Filter, X, Search, Wifi, Home, Briefcase, Download, AlertTriangle,
+  Plus, Edit3, Trash2, RefreshCw
+} from 'lucide-react'
+import toast from 'react-hot-toast'
+
+const STATUSES = ['PRESENT', 'HALF_DAY', 'LEAVE', 'ABSENT', 'HOLIDAY']
+const WORK_MODES = ['WFO', 'WFH', 'FIELD']
+
+function DeviceIcon({ device }: { device?: string | null }) {
+  if (device === 'Mobile') return <Smartphone size={12} className="text-slate-400" />
+  if (device === 'Tablet') return <TabletIcon size={12} className="text-slate-400" />
+  return <Monitor size={12} className="text-slate-400" />
+}
+
+export default function AttendancePage() {
+  const { user, isAtLeast } = useAuth()
+  const isFieldExec = user?.role === 'MARKETING_EXECUTIVE'
+  const canSeeAll = isAtLeast('MANAGER')
+  const isAdminUser = isAtLeast('ADMIN')
+
+  const [records, setRecords] = useState<any[]>([])
+  const [total, setTotal] = useState(0)
+  const [lateTotal, setLateTotal] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [today, setToday] = useState<any>(null)
+  const [punching, setPunching] = useState(false)
+  const [now, setNow] = useState(new Date())
+
+  const [page, setPage] = useState(1)
+  const [showFilter, setShowFilter] = useState(false)
+  const [filters, setFilters] = useState({
+    status: '', month: '', date: new Date().toISOString().split('T')[0], departmentId: '', search: '',
+  })
+  const [departments, setDepartments] = useState<any[]>([])
+  const [employeesList, setEmployeesList] = useState<any[]>([])
+  const [attModal, setAttModal] = useState<null | 'add' | string>(null) // 'add' or record id (edit)
+  const [attForm, setAttForm] = useState<any>({ employeeId: '', date: '', status: 'PRESENT', workMode: 'WFO', inTime: '', outTime: '', notes: '' })
+  const [attSaving, setAttSaving] = useState(false)
+  const [fixingStatuses, setFixingStatuses] = useState(false)
+
+  // Admin-only "today's overview" — punched in / not punched in / on leave / short leave
+  const [adminSummary, setAdminSummary] = useState<any>(null)
+  const [summaryFilter, setSummaryFilter] = useState<string | null>(null)
+  const [summaryList, setSummaryList] = useState<any[]>([])
+  const [summaryLoading, setSummaryLoading] = useState(false)
+
+  // Live clock
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 1000)
+    return () => clearInterval(t)
+  }, [])
+
+  const fetchRecords = useCallback(async () => {
+    setLoading(true)
+    try {
+      const activeFilters: Record<string, string> = { page: String(page), limit: '20' }
+      Object.entries(filters).forEach(([k, v]) => {
+        if (!v) return
+        if (k === 'departmentId' && !isAdminUser) return
+        activeFilters[k] = v
+      })
+      const r = await api.get(`/attendance?${new URLSearchParams(activeFilters)}`)
+      setRecords(r.data.data || [])
+      setTotal(r.data.total || 0)
+      setLateTotal(r.data.lateTotal || 0)
+    } catch { toast.error('Failed to load attendance') }
+    finally { setLoading(false) }
+  }, [page, filters, isAdminUser])
+
+  const fetchToday = useCallback(async () => {
+    try {
+      const r = await api.get('/attendance/today')
+      setToday(r.data.data)
+    } catch { }
+  }, [])
+
+  const fetchAdminSummary = useCallback(async (category?: string | null) => {
+    if (!isAdminUser) return
+    setSummaryLoading(true)
+    try {
+      const p: Record<string, string> = {}
+      if (category) p.filter = category
+      const r = await api.get(`/attendance/admin-summary?${new URLSearchParams(p)}`)
+      setAdminSummary(r.data.data?.counts || null)
+      setSummaryList(r.data.data?.list || [])
+    } catch { /* silent — this is a secondary widget */ }
+    finally { setSummaryLoading(false) }
+  }, [isAdminUser])
+
+  useEffect(() => { fetchAdminSummary(summaryFilter) }, [fetchAdminSummary, summaryFilter])
+
+  const toggleSummaryFilter = (category: string) => {
+    setSummaryFilter(prev => prev === category ? null : category)
+  }
+
+  useEffect(() => { fetchRecords() }, [fetchRecords])
+  useEffect(() => { fetchToday() }, [fetchToday])
+  useEffect(() => {
+    if (isAdminUser) {
+      api.get('/departments').then(r => setDepartments(r.data.data || [])).catch(() => { })
+    }
+    if (canSeeAll) {
+      // /employees caps `limit` at 100 server-side, so a single request with
+      // limit=500 silently only returns the first 100. Page through all
+      // results so the "Add Attendance" dropdown lists every employee.
+      const fetchAllEmployees = async () => {
+        const pageSize = 100
+        let page = 1
+        let all: any[] = []
+        while (true) {
+          const r = await api.get(`/employees?limit=${pageSize}&page=${page}`)
+          const batch = r.data.data || []
+          all = all.concat(batch)
+          const total = r.data.total ?? all.length
+          if (all.length >= total || batch.length < pageSize) break
+          page += 1
+        }
+        setEmployeesList(all)
+      }
+      fetchAllEmployees().catch(() => { })
+    }
+  }, [canSeeAll, isAdminUser])
+
+  const isAdmin = isAdminUser
+  const [empSearch, setEmpSearch] = useState('')
+  const [empDropdownOpen, setEmpDropdownOpen] = useState(false)
+  const filteredEmployees = employeesList.filter((e: any) => {
+    const q = empSearch.trim().toLowerCase()
+    if (!q) return true
+    return (e.user?.name || '').toLowerCase().includes(q) || (e.employeeId || '').toLowerCase().includes(q)
+  })
+
+  const openAdd = () => {
+    setAttForm({ employeeId: '', date: new Date().toISOString().slice(0, 10), status: 'PRESENT', workMode: 'WFO', inTime: '', outTime: '', notes: '' })
+    setEmpSearch('')
+    setAttModal('add')
+  }
+  const openEdit = (r: any) => {
+    const t = (dt: string | null) => dt ? new Date(dt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : ''
+    setAttForm({
+      employeeId: r.employeeId, date: new Date(r.date).toISOString().slice(0, 10),
+      status: r.status, workMode: r.workMode, inTime: t(r.punchIn), outTime: t(r.punchOut), notes: r.notes || '',
+    })
+    setEmpSearch(r.employee?.user?.name || r.employeeId || '')
+    setAttModal(r.id)
+  }
+  const saveAtt = async () => {
+    if (!attForm.employeeId || !attForm.date) { toast.error('Employee + date zaroori'); return }
+    setAttSaving(true)
+    try {
+      const iso = (time: string) => time ? new Date(`${attForm.date}T${time}`).toISOString() : null
+      const payload = {
+        status: attForm.status, workMode: attForm.workMode, notes: attForm.notes,
+        punchIn: iso(attForm.inTime), punchOut: iso(attForm.outTime),
+      }
+      if (attModal === 'add') {
+        await api.post('/attendance', { action: 'admin_save', employeeId: attForm.employeeId, date: attForm.date, ...payload })
+      } else {
+        await api.patch(`/attendance/${attModal}`, payload)
+      }
+      toast.success('Attendance saved')
+      setAttModal(null)
+      fetchRecords()
+    } catch (e: any) { toast.error(e.response?.data?.error || 'Failed') }
+    finally { setAttSaving(false) }
+  }
+  const deleteAtt = async (r: any) => {
+    if (!confirm('Delete this attendance record?')) return
+    try {
+      await api.delete(`/attendance/${r.id}`)
+      toast.success('Deleted')
+      fetchRecords()
+    } catch (e: any) { toast.error(e.response?.data?.error || 'Failed') }
+  }
+
+  // One-time fix for old records (mostly from the app) whose status was
+  // never recomputed against the half-day-hours threshold — see
+  // /api/attendance/recompute-status for why this is needed.
+  const fixOldStatuses = async () => {
+    if (!confirm('Recompute old PRESENT/HALF_DAY records against the current Half-Day Threshold?')) return
+    setFixingStatuses(true)
+    try {
+      const r = await api.post('/attendance/recompute-status')
+      const { scanned, updated } = r.data.data
+      toast.success(`${updated} record(s) fixed (${scanned} checked)`)
+      fetchRecords()
+    } catch (e: any) { toast.error(e.response?.data?.error || 'Failed') }
+    finally { setFixingStatuses(false) }
+  }
+
+  const isPunchedIn = today?.punchIn && !today?.punchOut
+  const isPunchedOut = today?.punchIn && today?.punchOut
+
+  const handlePunch = async (workMode: string = 'WFO') => {
+    setPunching(true)
+    const action = isPunchedIn ? 'punch_out' : 'punch_in'
+    const loadingToast = toast.loading('Getting your location...')
+
+    try {
+      // Coordinates only — the address is resolved server-side, which is what
+      // keeps this fast. We take the best fix but stop as soon as it stops
+      // improving (a desktop Wi-Fi/IP fix never improves, so no long wait).
+      const geo = await getCurrentGeo({
+        reverseGeocode: false,
+        timeoutMs: 10000,
+        settleMs: 2500,
+        highAccuracy: true,
+        desiredAccuracyM: 100,
+        warnAccuracyM: 500,
+        maxAgeMs: 0,
+      })
+      const hasLocation = !geo.error
+
+      toast.dismiss(loadingToast)
+      if (!hasLocation) {
+        toast(`Punching ${action === 'punch_in' ? 'in' : 'out'} without location — ${geo.error}`, { icon: '📍' })
+      } else if (geo.ipLevel) {
+        toast('This PC has no GPS, so the location is a Wi-Fi/IP estimate and can be several km off. Punch from the mobile app for an exact address.', { icon: '⚠️', duration: 7000 })
+      } else if (geo.lowAccuracy) {
+        toast(`Location is approximate (±${Math.round(geo.accuracy || 0)}m).`, { icon: '⚠️', duration: 5000 })
+      }
+      toast.loading(action === 'punch_in' ? 'Punching in...' : 'Punching out...')
+      const r = await api.post('/attendance', {
+        action,
+        workMode,
+        latitude: hasLocation ? geo.latitude : null,
+        longitude: hasLocation ? geo.longitude : null,
+        accuracy: hasLocation ? geo.accuracy : null,
+      })
+      toast.dismiss()
+      setToday(r.data.data)
+      toast.success(action === 'punch_in' ? '✅ Punched In!' : '👋 Punched Out!')
+      fetchRecords()
+    } catch (e: any) {
+      toast.dismiss()
+      toast.error(e.response?.data?.error || 'Failed')
+    } finally { setPunching(false) }
+  }
+
+  const activeFilterCount = Object.values(filters).filter(v => v).length
+
+  const exportAttendance = () => {
+    const p = new URLSearchParams({ type: 'attendance', format: 'csv' })
+    Object.entries(filters).forEach(([k, v]) => {
+      if (!v) return
+      if (k === 'departmentId' && !isAdminUser) return
+      p.set(k, v as string)
+    })
+    window.open(`/api/import-export?${p.toString()}`, '_blank')
+  }
+
+  const [summaryMonth, setSummaryMonth] = useState(new Date().toISOString().slice(0, 7))
+  const exportSummary = () => {
+    window.open(`/api/import-export?type=attendance-summary&format=csv&month=${summaryMonth}`, '_blank')
+  }
+
+  const workedSecs = useMemo(() => {
+    if (!today?.punchIn) return 0
+    const end = today.punchOut ? new Date(today.punchOut) : now
+    return Math.max(0, Math.floor((end.getTime() - new Date(today.punchIn).getTime()) / 1000))
+  }, [today, now])
+
+  const fmtDuration = (secs: number) => {
+    const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60), s = secs % 60
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900">Attendance</h1>
+        <p className="text-sm text-gray-500 mt-1">
+          {canSeeAll ? 'Track team attendance with location & device details' : 'Your daily attendance log'}
+        </p>
+      </div>
+
+      {/* Punch Card */}
+      <div className="card p-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
+          <div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Today</p>
+            <p className="text-lg font-bold text-gray-900">{formatDate(now)}</p>
+            <p className="text-3xl font-bold text-gray-900 tabular-nums mt-2">
+              {now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+            </p>
+          </div>
+
+          <div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Status</p>
+            <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-semibold ${isPunchedIn ? 'bg-green-100 text-green-700' :
+                isPunchedOut ? 'bg-gray-100 text-gray-700' :
+                  'bg-slate-100 text-slate-600'
+              }`}>
+              <span className="w-2 h-2 rounded-full bg-current" />
+              {isPunchedIn ? 'Working' : isPunchedOut ? 'Day Ended' : 'Not Punched In'}
+            </div>
+            {today?.punchIn && (
+              <p className="text-sm text-gray-600 mt-3 tabular-nums">
+                {isPunchedOut ? `Worked: ${today.hoursWorked?.toFixed(2)}h` : `Working: ${fmtDuration(workedSecs)}`}
+              </p>
+            )}
+            {today?.punchInAddress && (
+              <p className="text-xs text-gray-500 mt-1 flex items-start gap-1 max-w-xs">
+                <MapPin size={11} className="text-gray-400 flex-shrink-0 mt-0.5" />
+                <span className="truncate">{today.punchInAddress}</span>
+              </p>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-2">
+            {isFieldExec ? (
+              <>
+                {!isPunchedOut && !today?.punchIn && (
+                  <div className="text-center bg-slate-50 border border-dashed border-gray-300 rounded-lg px-4 py-3">
+                    <Smartphone size={18} className="mx-auto text-gray-400 mb-1.5" />
+                    <p className="text-xs font-medium text-gray-600">Punch in from the mobile app</p>
+                    <p className="text-[11px] text-gray-400 mt-0.5">Field staff punch in/out from the HBS app — the phone's GPS gives an exact location fix.</p>
+                  </div>
+                )}
+                {today?.punchIn && !isPunchedOut && (
+                  <p className="text-xs text-gray-500 text-center bg-slate-50 rounded-lg px-3 py-2">
+                    <Smartphone size={11} className="inline mr-1" />
+                    Punch out from the mobile app when your day ends.
+                  </p>
+                )}
+                {isPunchedOut && (
+                  <div className="text-center">
+                    <p className="text-sm text-gray-500">✅ Day complete</p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {today.hoursWorked?.toFixed(2)}h · {today.status}
+                    </p>
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                {!isPunchedOut && (
+                  <>
+                    {!isPunchedIn && (
+                      <div className="flex gap-2">
+                        {WORK_MODES.map(mode => (
+                          <button
+                            key={mode}
+                            onClick={() => handlePunch(mode)}
+                            disabled={punching}
+                            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-white border border-gray-300 hover:border-green-500 hover:bg-green-50 text-xs font-semibold text-gray-700 hover:text-green-700 transition-all disabled:opacity-50"
+                          >
+                            {mode === 'WFO' ? <Briefcase size={13} /> : mode === 'WFH' ? <Home size={13} /> : <MapPin size={13} />}
+                            {mode}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <button
+                      onClick={() => handlePunch()}
+                      disabled={punching}
+                      className={`flex items-center justify-center gap-2 px-5 py-3 rounded-lg font-semibold text-sm transition-all shadow-sm ${isPunchedIn ? 'bg-gray-700 hover:bg-gray-800 text-white' : 'bg-gradient-to-r from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 text-white'
+                        } disabled:opacity-50`}
+                    >
+                      {punching ? <Loader2 size={16} className="animate-spin" /> :
+                        isPunchedIn ? <><LogOut size={15} /> Punch Out</> :
+                          <><LogIn size={15} /> Punch In</>}
+                    </button>
+                    <p className="text-xs text-gray-500 text-center">
+                      <MapPin size={10} className="inline mr-0.5" />
+                      Location will be recorded
+                    </p>
+                  </>
+                )}
+                {isPunchedOut && (
+                  <div className="text-center">
+                    <p className="text-sm text-gray-500">✅ Day complete</p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {today.hoursWorked?.toFixed(2)}h · {today.status}
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Admin-only: Today's Overview — punched in / not punched in / on leave / short leave */}
+      {isAdminUser && (
+        <div className="card p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="font-semibold text-gray-900">Today's Overview</h3>
+              <p className="text-xs text-gray-500 mt-0.5">Click a card to filter the list below</p>
+            </div>
+            {summaryLoading && <Loader2 size={15} className="animate-spin text-gray-400" />}
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { key: 'PUNCHED_IN', label: 'Punched In', count: adminSummary?.punchedIn ?? 0, color: 'emerald' },
+              { key: 'NOT_PUNCHED_IN', label: 'Not Punched In', count: adminSummary?.notPunchedIn ?? 0, color: 'red' },
+              { key: 'ON_LEAVE', label: 'On Leave', count: adminSummary?.onLeave ?? 0, color: 'amber' },
+              { key: 'SHORT_LEAVE', label: 'Short Leave', count: adminSummary?.shortLeave ?? 0, color: 'blue' },
+            ].map(card => {
+              const active = summaryFilter === card.key
+              const colorClasses: Record<string, string> = {
+                emerald: active ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-emerald-50 text-emerald-700 border-emerald-100 hover:border-emerald-300',
+                red: active ? 'bg-red-600 text-white border-red-600' : 'bg-red-50 text-red-700 border-red-100 hover:border-red-300',
+                amber: active ? 'bg-amber-600 text-white border-amber-600' : 'bg-amber-50 text-amber-700 border-amber-100 hover:border-amber-300',
+                blue: active ? 'bg-blue-600 text-white border-blue-600' : 'bg-blue-50 text-blue-700 border-blue-100 hover:border-blue-300',
+              }
+              return (
+                <button
+                  key={card.key}
+                  onClick={() => toggleSummaryFilter(card.key)}
+                  className={`text-left rounded-xl border-2 p-4 transition-colors ${colorClasses[card.color]}`}
+                >
+                  <p className="text-2xl font-bold tabular-nums">{card.count}</p>
+                  <p className="text-xs font-semibold mt-1">{card.label}</p>
+                </button>
+              )
+            })}
+          </div>
+
+          {summaryFilter && (
+            <div className="mt-4 border-t border-gray-100 pt-4">
+              {summaryList.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-4">Nobody in this category today</p>
+              ) : (
+                <div className="table-wrapper">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Employee</th>
+                        <th>Department</th>
+                        <th>Detail</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {summaryList.map((e: any) => (
+                        <tr key={e.employeeId}>
+                          <td>
+                            <div className="flex items-center gap-2">
+                              <div className="w-7 h-7 rounded-full bg-brand-100 flex items-center justify-center text-[10px] font-bold text-brand-700 flex-shrink-0">
+                                {e.avatar ? <img src={e.avatar} className="w-full h-full rounded-full object-cover" /> : getInitials(e.name)}
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium text-gray-900">{e.name}</p>
+                                <p className="text-xs text-gray-400">{e.empCode}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="text-sm text-gray-600">{e.department || '—'}</td>
+                          <td className="text-xs text-gray-500">
+                            {e.category === 'PUNCHED_IN' && (e.punchIn ? `In: ${formatDateTime(e.punchIn).split(',')[1] || formatDateTime(e.punchIn)}` : '—')}
+                            {e.category === 'NOT_PUNCHED_IN' && 'No punch-in recorded'}
+                            {e.category === 'ON_LEAVE' && (e.leaveType ? `${e.leaveType.replace(/_/g, ' ')} leave` : 'On leave')}
+                            {e.category === 'SHORT_LEAVE' && (e.leaveHours ? `Short leave ${e.leaveHours.start}–${e.leaveHours.end}` : 'Short/half leave')}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Filters */}
+      <div className="card">
+        <div className="px-5 py-3 flex items-center justify-between border-b border-gray-100">
+          <div className="flex items-center gap-2">
+            <h3 className="font-semibold text-gray-900">
+              {canSeeAll ? 'Team Attendance' : 'My Attendance'}
+            </h3>
+            <span className="text-xs text-gray-500">({total} records)</span>
+            {lateTotal > 0 && (
+              <span className="badge bg-red-100 text-red-700 flex items-center gap-1">
+                <AlertTriangle size={11} /> {lateTotal} Late
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {isAdmin && (
+              <button onClick={openAdd} className="btn-primary btn-sm">
+                <Plus size={13} /> Add
+              </button>
+            )}
+            {isAdmin && (
+              <button onClick={fixOldStatuses} disabled={fixingStatuses} className="btn-secondary btn-sm" title="Recompute PRESENT/HALF_DAY status for old records against the current Half-Day Threshold setting">
+                <RefreshCw size={13} className={fixingStatuses ? 'animate-spin' : ''} /> {fixingStatuses ? 'Fixing…' : 'Fix Statuses'}
+              </button>
+            )}
+            {canSeeAll && (
+              <button onClick={exportAttendance} className="btn-secondary btn-sm">
+                <Download size={13} /> Export
+              </button>
+            )}
+            {canSeeAll && (
+              <div className="flex items-center gap-1 border border-gray-200 rounded-lg pl-2 bg-white">
+                <input type="month" value={summaryMonth} onChange={e => setSummaryMonth(e.target.value)}
+                  className="text-xs outline-none bg-transparent py-1.5 w-[120px]" title="Month for summary" />
+                <button onClick={exportSummary} className="btn-primary btn-sm rounded-l-none" title="Monthly summary (Present/Leave/Late/WFH/Short leave/Half days)">
+                  <Download size={13} /> Summary
+                </button>
+              </div>
+            )}
+            <button
+              onClick={() => setShowFilter(!showFilter)}
+              className={`btn-secondary btn-sm ${activeFilterCount > 0 ? 'border-brand-500 text-brand-600' : ''}`}
+            >
+              <Filter size={13} /> Filters
+              {activeFilterCount > 0 && (
+                <span className="ml-1 bg-brand-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                  {activeFilterCount}
+                </span>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {showFilter && (
+          <div className="px-5 py-4 bg-gray-50 border-b border-gray-100 grid grid-cols-2 md:grid-cols-5 gap-3">
+            <div>
+              <label className="text-xs font-medium text-gray-600 mb-1 block">Date</label>
+              <input type="date" className="input text-xs"
+                value={filters.date}
+                onChange={e => { setFilters(p => ({ ...p, date: e.target.value, month: '' })); setPage(1) }} />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-gray-600 mb-1 block">Month</label>
+              <input type="month" className="input text-xs"
+                value={filters.month}
+                onChange={e => { setFilters(p => ({ ...p, month: e.target.value, date: '' })); setPage(1) }} />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-gray-600 mb-1 block">Status</label>
+              <select className="input text-xs"
+                value={filters.status}
+                onChange={e => { setFilters(p => ({ ...p, status: e.target.value })); setPage(1) }}>
+                <option value="">All</option>
+                {STATUSES.map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
+              </select>
+            </div>
+            {isAdmin && (
+              <div>
+                <label className="text-xs font-medium text-gray-600 mb-1 block">Department</label>
+                <select className="input text-xs"
+                  value={filters.departmentId}
+                  onChange={e => { setFilters(p => ({ ...p, departmentId: e.target.value })); setPage(1) }}>
+                  <option value="">All</option>
+                  {departments.map((d: any) => <option key={d.id} value={d.id}>{d.name}</option>)}
+                </select>
+              </div>
+            )}
+            {canSeeAll && (
+              <>
+                <div>
+                  <label className="text-xs font-medium text-gray-600 mb-1 block">Employee</label>
+                  <div className="relative">
+                    <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input type="text" className="input text-xs pl-7" placeholder="Search name"
+                      value={filters.search}
+                      onChange={e => { setFilters(p => ({ ...p, search: e.target.value })); setPage(1) }} />
+                  </div>
+                </div>
+              </>
+            )}
+            {activeFilterCount > 0 && (
+              <div className="col-span-full">
+                <button
+                  onClick={() => { setFilters({ status: '', month: '', date: '', departmentId: '', search: '' }); setPage(1) }}
+                  className="text-xs text-red-600 hover:underline flex items-center gap-1"
+                >
+                  <X size={12} /> Clear all filters
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                {canSeeAll && <th>Employee</th>}
+                <th>Date</th>
+                <th>Punch In</th>
+                <th>Punch Out</th>
+                <th>Hours</th>
+                <th>Mode</th>
+                <th>Status</th>
+                <th>Late</th>
+                <th>Location</th>
+                {isAdmin && <th>Actions</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr><td colSpan={(canSeeAll ? 9 : 8) + (isAdmin ? 1 : 0)} className="text-center py-8 text-gray-400">Loading...</td></tr>
+              ) : records.length === 0 ? (
+                <tr>
+                  <td colSpan={(canSeeAll ? 9 : 8) + (isAdmin ? 1 : 0)}>
+                    <EmptyState icon={<Clock size={48} />} title="No records" description="No attendance records match your filters" />
+                  </td>
+                </tr>
+              ) : records.map((r: any) => (
+                <tr key={r.id}>
+                  {canSeeAll && (
+                    <td>
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-full bg-brand-600 flex items-center justify-center text-white text-xs font-bold">
+                          {getInitials(r.employee?.user?.name || '?')}
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-900 text-sm">{r.employee?.user?.name}</p>
+                          <p className="text-xs text-gray-500">{r.employee?.department?.name || '—'}</p>
+                        </div>
+                      </div>
+                    </td>
+                  )}
+                  <td className="text-sm">{formatDate(r.date)}</td>
+                  <td className="text-sm tabular-nums">
+                    {r.punchIn ? new Date(r.punchIn).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '—'}
+                  </td>
+                  <td className="text-sm tabular-nums">
+                    {r.punchOut ? new Date(r.punchOut).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '—'}
+                  </td>
+                  <td className="text-sm tabular-nums font-medium">{r.hoursWorked?.toFixed(2) || '—'}</td>
+                  <td><Badge status={r.workMode} /></td>
+                  <td><Badge status={r.status} /></td>
+                  <td>
+                    {r.isLate ? (
+                      <span className="badge bg-red-100 text-red-700" title={`${r.lateBy} min late`}>
+                        Late {r.lateBy ? `+${r.lateBy}m` : ''}
+                      </span>
+                    ) : r.punchIn ? (
+                      <span className="badge bg-green-100 text-green-700">On time</span>
+                    ) : (
+                      <span className="text-gray-300">—</span>
+                    )}
+                  </td>
+                  <td className="text-xs text-gray-600 max-w-xs">
+                    {r.punchInAddress ? (
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-start gap-1">
+                          <MapPin size={10} className="text-blue-500 flex-shrink-0 mt-0.5" />
+                          <span className="truncate" title={r.punchInAddress}>{r.punchInAddress}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-gray-400">
+                          <DeviceIcon device={r.punchInDevice} />
+                          <span>{r.punchInBrowser || r.punchInDevice || '—'}</span>
+                          {r.punchInIp && <><Wifi size={10} /><span className="tabular-nums">{r.punchInIp}</span></>}
+                        </div>
+                      </div>
+                    ) : '—'}
+                  </td>
+                  {isAdmin && (
+                    <td>
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => openEdit(r)} className="p-1.5 rounded-lg hover:bg-brand-50 text-gray-400 hover:text-brand-600" title="Edit"><Edit3 size={13} /></button>
+                        <button onClick={() => deleteAtt(r)} className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-600" title="Delete"><Trash2 size={13} /></button>
+                      </div>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="px-5 py-3 border-t border-gray-100">
+          <Pagination page={page} totalPages={Math.ceil(total / 20)} onChange={setPage} />
+        </div>
+      </div>
+
+      {/* Admin add/edit attendance modal */}
+      {attModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => setAttModal(null)}>
+          <div className="bg-white rounded-2xl max-w-md w-full p-5 space-y-3" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-lg text-gray-900">{attModal === 'add' ? 'Add Attendance' : 'Edit Attendance'}</h3>
+              <button onClick={() => setAttModal(null)} className="text-gray-400 hover:text-gray-700"><X size={18} /></button>
+            </div>
+            <div>
+              <label className="label">Employee</label>
+              {attModal !== 'add' ? (
+                <input className="input" value={empSearch} disabled />
+              ) : (
+                <div className="relative">
+                  <div className="relative">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                      className="input pl-8"
+                      placeholder="Search employee by name..."
+                      value={empSearch}
+                      onFocus={() => setEmpDropdownOpen(true)}
+                      onChange={e => {
+                        setEmpSearch(e.target.value)
+                        setEmpDropdownOpen(true)
+                        // Typing again after a selection means they're picking someone else.
+                        if (attForm.employeeId) setAttForm((p: any) => ({ ...p, employeeId: '' }))
+                      }}
+                      onBlur={() => setTimeout(() => setEmpDropdownOpen(false), 150)}
+                    />
+                  </div>
+                  {empDropdownOpen && (
+                    <div className="absolute z-10 mt-1 w-full max-h-56 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg">
+                      {filteredEmployees.length === 0 ? (
+                        <div className="px-3 py-2 text-sm text-gray-400">No employee found</div>
+                      ) : filteredEmployees.map((e: any) => (
+                        <button
+                          type="button"
+                          key={e.id}
+                          onMouseDown={() => {
+                            setAttForm((p: any) => ({ ...p, employeeId: e.id }))
+                            setEmpSearch(e.user?.name || e.employeeId)
+                            setEmpDropdownOpen(false)
+                          }}
+                          className={`w-full text-left px-3 py-2 text-sm hover:bg-brand-50 ${attForm.employeeId === e.id ? 'bg-brand-50 text-brand-700' : 'text-gray-700'}`}
+                        >
+                          {e.user?.name || e.employeeId} <span className="text-xs text-gray-400">({e.employeeId})</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="label">Date</label>
+                <input type="date" className="input" value={attForm.date} disabled={attModal !== 'add'}
+                  onChange={e => setAttForm((p: any) => ({ ...p, date: e.target.value }))} />
+              </div>
+              <div>
+                <label className="label">Status</label>
+                <select className="input" value={attForm.status} onChange={e => setAttForm((p: any) => ({ ...p, status: e.target.value }))}>
+                  {['PRESENT', 'ABSENT', 'HALF_DAY', 'LEAVE', 'HOLIDAY'].map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="label">Punch In</label>
+                <input type="time" className="input" value={attForm.inTime} onChange={e => setAttForm((p: any) => ({ ...p, inTime: e.target.value }))} />
+              </div>
+              <div>
+                <label className="label">Punch Out</label>
+                <input type="time" className="input" value={attForm.outTime} onChange={e => setAttForm((p: any) => ({ ...p, outTime: e.target.value }))} />
+              </div>
+              <div>
+                <label className="label">Work Mode</label>
+                <select className="input" value={attForm.workMode} onChange={e => setAttForm((p: any) => ({ ...p, workMode: e.target.value }))}>
+                  {['WFO', 'WFH', 'FIELD'].map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="label">Notes</label>
+                <input className="input" value={attForm.notes} onChange={e => setAttForm((p: any) => ({ ...p, notes: e.target.value }))} placeholder="Optional" />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <button onClick={() => setAttModal(null)} className="btn-secondary">Cancel</button>
+              <button onClick={saveAtt} disabled={attSaving} className="btn-primary">{attSaving ? 'Saving...' : 'Save'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

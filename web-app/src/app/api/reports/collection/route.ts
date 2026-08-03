@@ -1,0 +1,210 @@
+// src/app/api/reports/collection/route.ts
+// Admin's "end-of-day tally" — which MARKETING_EXECUTIVE collected how much today,
+// method-wise (CASH / UPI / BANK / CHEQUE / CARD / GATEWAY), + uske visits.
+// Date-wise / exec-wise / method-wise filter for fraud checks.
+//
+//   GET ?range=today|yesterday|week|month   ya  ?dateFrom=&dateTo=
+//       &userId=<exec>   &method=CASH   &view=summary|transactions
+//
+// summary      -> per-executive rollup + grand totals (default)
+// transactions -> raw payment list (drill-down / audit)
+import { NextRequest } from 'next/server'
+import { prisma } from '@/lib/prisma'
+import { requireAuth } from '@/lib/auth'
+import { successResponse, getPaginationParams } from '@/lib/api'
+import { istDayRange, getISTDateParts } from '@/lib/attendanceDate'
+
+const METHODS = ['CASH', 'UPI', 'BANK_TRANSFER', 'CHEQUE', 'CARD', 'ONLINE_GATEWAY']
+
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000
+
+function resolveRange(searchParams: URLSearchParams) {
+  const range = searchParams.get('range') || 'today'
+  const dateFrom = searchParams.get('dateFrom')
+  const dateTo = searchParams.get('dateTo')
+
+  if (dateFrom || dateTo) {
+    const start = dateFrom ? istDayRange(dateFrom).start : new Date('2000-01-01')
+    const end = dateTo ? istDayRange(dateTo).end : new Date()
+    return { start, end, label: 'custom' }
+  }
+
+  const { start: todayStart, end: todayEnd } = istDayRange()
+  let start = todayStart
+  let end = todayEnd
+
+  if (range === 'yesterday') {
+    start = new Date(start.getTime() - 86400000)
+    end = new Date(end.getTime() - 86400000)
+  } else if (range === 'week') {
+    const { year, month, day } = getISTDateParts(new Date())
+    const dow = new Date(Date.UTC(year, month, day)).getUTCDay()
+    start = new Date(todayStart.getTime() - dow * 86400000)
+  } else if (range === 'month') {
+    const { year, month } = getISTDateParts(new Date())
+    start = new Date(Date.UTC(year, month, 1) - IST_OFFSET_MS)
+  } else if (range === 'all') {
+    start = new Date('2000-01-01')
+  }
+  return { start, end, label: range }
+}
+
+export async function GET(req: NextRequest) {
+  const auth = await requireAuth(req, 'MANAGER')
+  if (auth instanceof Response) return auth
+
+  const { searchParams } = new URL(req.url)
+  const { start, end, label } = resolveRange(searchParams)
+  const userId = searchParams.get('userId')
+  const method = searchParams.get('method')
+  const view = searchParams.get('view') || 'summary'
+
+  const payWhere: any = { paidAt: { gte: start, lte: end } }
+  if (userId) payWhere.collectedById = userId
+  if (method && METHODS.includes(method)) payWhere.method = method
+
+  // ---------------- TRANSACTIONS (drill-down) ----------------
+  if (view === 'transactions') {
+    const { skip, limit } = getPaginationParams(searchParams)
+    const [rows, total] = await Promise.all([
+      prisma.payment.findMany({
+        where: payWhere, skip, take: limit,
+        orderBy: { paidAt: 'desc' },
+        include: {
+          collectedBy: { select: { id: true, name: true, avatar: true } },
+          invoice: {
+            select: {
+              id: true, invoiceNumber: true,
+              client: { select: { id: true, clientCode: true, clientName: true, companyName: true } },
+            },
+          },
+        },
+      }),
+      prisma.payment.count({ where: payWhere }),
+    ])
+    return successResponse(rows, total)
+  }
+
+  // ---------------- SUMMARY ----------------
+  const execs = await prisma.user.findMany({
+    where: {
+      role: { in: ['MARKETING_EXECUTIVE', 'MANAGER'] },
+      ...(userId ? { id: userId } : {}),
+    },
+    select: { id: true, name: true, avatar: true, role: true, isActive: true },
+    orderBy: { name: 'asc' },
+  })
+
+  const [byExecMethod, visitGroups, payments] = await Promise.all([
+    prisma.payment.groupBy({
+      by: ['collectedById', 'method'],
+      where: payWhere,
+      _sum: { amount: true },
+      _count: { _all: true },
+    }),
+    prisma.clientVisit.groupBy({
+      by: ['userId', 'status'],
+      where: {
+        scheduledDate: { gte: start, lte: end },
+        ...(userId ? { userId } : {}),
+      },
+      _count: { _all: true },
+    }),
+    // To show unassigned (collectedById null) separately
+    prisma.payment.aggregate({
+      where: { ...payWhere, collectedById: null },
+      _sum: { amount: true },
+      _count: { _all: true },
+    }),
+  ])
+
+  // byExecMethod also includes groups where collectedById=null (unassigned payments),
+  // Adding them in explicitly here so the totals cards show the correct (actual) amount.
+  // Totals cards ko sahi (actual) amount dikhane ke liye unhe yahan explicitly jod rahe hain.
+  const unassignedMethods = byExecMethod.filter(g => g.collectedById === null)
+
+  const blank = () => METHODS.reduce((a, m) => ({ ...a, [m]: 0 }), {} as Record<string, number>)
+
+  const rows = execs.map(u => {
+    const methods = blank()
+    let total = 0
+    let txns = 0
+    byExecMethod
+      .filter(g => g.collectedById === u.id)
+      .forEach(g => {
+        const amt = g._sum.amount || 0
+        methods[g.method] = (methods[g.method] || 0) + amt
+        total += amt
+        txns += g._count._all
+      })
+
+    const v = visitGroups.filter(g => g.userId === u.id)
+    const visitsTotal = v.reduce((a, g) => a + g._count._all, 0)
+    const visitsCompleted = v.filter(g => g.status === 'COMPLETED').reduce((a, g) => a + g._count._all, 0)
+    const visitsPending = v.filter(g => ['PENDING', 'IN_PROGRESS'].includes(g.status)).reduce((a, g) => a + g._count._all, 0)
+
+    return {
+      userId: u.id,
+      name: u.name,
+      avatar: u.avatar,
+      role: u.role,
+      isActive: u.isActive,
+      methods,
+      cash: methods.CASH,
+      upi: methods.UPI,
+      bank: methods.BANK_TRANSFER,
+      cheque: methods.CHEQUE,
+      card: methods.CARD,
+      online: methods.ONLINE_GATEWAY,
+      total,
+      txns,
+      visitsTotal,
+      visitsCompleted,
+      visitsPending,
+    }
+  })
+    // Sirf woh log jinke total ya visits hain — clutter kam
+    .filter(r => r.total > 0 || r.visitsTotal > 0 || userId)
+    .sort((a, b) => b.total - a.total)
+
+  const totals = rows.reduce(
+    (acc, r) => {
+      METHODS.forEach(m => { acc.methods[m] += r.methods[m] })
+      acc.total += r.total
+      acc.txns += r.txns
+      acc.visitsTotal += r.visitsTotal
+      acc.visitsCompleted += r.visitsCompleted
+      acc.visitsPending += r.visitsPending
+      return acc
+    },
+    { methods: blank(), total: 0, txns: 0, visitsTotal: 0, visitsCompleted: 0, visitsPending: 0 }
+  )
+
+  // Add unassigned payments (collectedById null) into the totals too — otherwise the cards
+  // show less than the "actual" collected amount when a client-portal/gateway payment
+  // isn't linked to any executive.
+  unassignedMethods.forEach(g => {
+    const amt = g._sum.amount || 0
+    totals.methods[g.method] = (totals.methods[g.method] || 0) + amt
+    totals.total += amt
+    totals.txns += g._count._all
+  })
+
+  return successResponse({
+    range: { from: start.toISOString(), to: end.toISOString(), label },
+    rows,
+    totals: {
+      ...totals,
+      cash: totals.methods.CASH,
+      upi: totals.methods.UPI,
+      bank: totals.methods.BANK_TRANSFER,
+      cheque: totals.methods.CHEQUE,
+      card: totals.methods.CARD,
+      online: totals.methods.ONLINE_GATEWAY,
+    },
+    unassigned: {
+      total: payments._sum.amount || 0,
+      txns: payments._count._all,
+    },
+  })
+}

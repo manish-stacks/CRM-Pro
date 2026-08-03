@@ -1,0 +1,228 @@
+// src/lib/notify.ts
+// Create in-app notifications for one or more users
+import { prisma } from './prisma'
+import { sendPushToUsers } from './push'
+
+type NotifyInput = {
+  userIds: string | string[]
+  title: string
+  message: string
+  type?: 'info' | 'success' | 'warning' | 'error' | 'birthday' | 'anniversary' | 'lead' | 'meeting' | 'ticket' | 'payment' | 'report' | 'chat'
+  link?: string
+  metadata?: Record<string, any>
+}
+
+export async function notify(input: NotifyInput) {
+  const raw = Array.isArray(input.userIds) ? input.userIds : [input.userIds]
+  // Filter falsy + dedupe (a bad/undefined userId would make createMany throw and
+  // silently drop the whole batch — this is why some events never notified).
+  const users = Array.from(new Set(raw.filter((u): u is string => !!u)))
+  if (!users.length) return
+
+  try {
+    await prisma.notification.createMany({
+      data: users.map(userId => ({
+        userId,
+        title: input.title,
+        message: input.message,
+        type: input.type || 'info',
+        link: input.link || null,
+        metadata: input.metadata ? JSON.stringify(input.metadata) : null,
+      })),
+    })
+
+    // Mobile push (best-effort) to every registered device of these users.
+    // sendPushToUsers() looks up BOTH the staff device (User.fcmToken) and the
+    // client-portal device (Client.fcmToken where Client.userId = this user) —
+    // client devices used to store a token that nothing ever sent to.
+    //
+    // IMPORTANT: this MUST be awaited. Previously it was fire-and-forget, so on
+    // serverless/PM2-clustered production the response returned and the request
+    // context was torn down before the HTTP call actually went out — which is
+    // why meeting-assign pushes never reached the device.
+    await sendPushToUsers(users, {
+      title: input.title,
+      body: input.message,
+      data: { link: input.link || '', type: input.type || 'info', ...(input.metadata || {}) },
+    })
+  } catch (e) {
+    console.error('Notify failed:', e)
+  }
+}
+
+// Convenience wrappers matching common events
+export const Notifications = {
+  meetingScheduled: (marketingExecId: string, clientName: string, date: string, leadId: string) =>
+    notify({
+      userIds: marketingExecId,
+      title: 'New Meeting Assigned',
+      message: `Meeting with ${clientName} on ${date}`,
+      type: 'meeting',
+      link: `/marketing`,
+      // `screen` is read by the mobile app's notification tap handler
+      metadata: { screen: 'MeetingDetail', leadId, meetingId: leadId },
+    }),
+
+  // Marketing exec marked the meeting done — telecaller (or whoever owns the
+  // lead) needs to know so they can send the proposal / follow up on the deal.
+  meetingDone: (userId: string, clientName: string, leadId: string) =>
+    notify({
+      userIds: userId,
+      title: 'Meeting Done',
+      message: `Meeting with ${clientName} is done — send a proposal / follow up`,
+      type: 'meeting',
+      link: `/leads/${leadId}`,
+      metadata: { screen: 'LeadDetail', leadId },
+    }),
+
+  // ---- Field visits ----
+  visitAssigned: (userId: string, clientName: string, date: string, visitId: string) =>
+    notify({
+      userIds: userId,
+      title: 'New Visit Scheduled',
+      message: `${clientName} — ${date}`,
+      type: 'meeting',
+      link: `/visits`,
+      metadata: { screen: 'Visits', visitId },
+    }),
+
+  visitUpdated: (userId: string, clientName: string, date: string, visitId: string) =>
+    notify({
+      userIds: userId,
+      title: 'Visit Updated',
+      message: `${clientName} — ${date}`,
+      type: 'meeting',
+      link: `/visits`,
+      metadata: { screen: 'Visits', visitId },
+    }),
+
+  visitCompleted: (userIds: string | string[], clientName: string, outcome: string) =>
+    notify({
+      userIds,
+      title: outcome === 'DEAL_DONE' ? '🎉 Deal Done' : 'Visit Completed',
+      message: `${clientName} — ${outcome.replace(/_/g, ' ').toLowerCase()}`,
+      type: outcome === 'DEAL_DONE' ? 'success' : 'info',
+      link: `/visits`,
+      metadata: { screen: 'Visits' },
+    }),
+
+  leadReassigned: (userId: string, leadNumber: string, leadId: string, reason?: string) =>
+    notify({
+      userIds: userId,
+      title: 'Lead Assigned to You',
+      message: `${leadNumber}${reason ? ` — ${reason}` : ''}`,
+      type: 'lead',
+      link: `/leads/${leadId}`,
+    }),
+
+  ticketAssigned: (userId: string, ticketNumber: string, subject: string, ticketId: string) =>
+    notify({
+      userIds: userId,
+      title: `Ticket ${ticketNumber} assigned to you`,
+      message: subject,
+      type: 'ticket',
+      link: `/tickets/${ticketId}`,
+    }),
+
+  paymentReceived: (userIds: string[], invoiceNumber: string, amount: number, invoiceId: string) =>
+    notify({
+      userIds,
+      title: `Payment received on ${invoiceNumber}`,
+      message: `₹${amount.toLocaleString('en-IN')}`,
+      type: 'payment',
+      link: `/invoices/${invoiceId}`,
+    }),
+
+  reportUploaded: (userIds: string | string[], clientName: string, title: string, clientId: string) =>
+    notify({
+      userIds,
+      title: `Report shared: ${clientName}`,
+      message: title,
+      type: 'report',
+      link: `/clients/${clientId}`,
+    }),
+
+  // ---- Project assignments ----
+  projectAssignedManager: (userId: string, serviceName: string, clientName: string, clientId: string) =>
+    notify({
+      userIds: userId,
+      title: 'You are now Head of a project',
+      message: `${serviceName} — ${clientName}`,
+      type: 'info',
+      link: `/clients/${clientId}`,
+    }),
+
+  projectAssignedMember: (userIds: string | string[], serviceName: string, clientName: string, clientId: string) =>
+    notify({
+      userIds,
+      title: 'Added to a project team',
+      message: `${serviceName} — ${clientName}`,
+      type: 'info',
+      link: `/clients/${clientId}`,
+    }),
+
+  // ---- Internal (employee) tickets ----
+  employeeTicketRaised: (userIds: string | string[], ticketNumber: string, subject: string, ticketId: string) =>
+    notify({
+      userIds,
+      title: `New internal ticket ${ticketNumber}`,
+      message: subject,
+      type: 'ticket',
+      link: `/my-tickets/${ticketId}`,
+    }),
+
+  employeeTicketReply: (userIds: string | string[], ticketNumber: string, ticketId: string) =>
+    notify({
+      userIds,
+      title: `Reply on ${ticketNumber}`,
+      message: 'New reply on your internal ticket',
+      type: 'ticket',
+      link: `/my-tickets/${ticketId}`,
+    }),
+
+  // ---- Support (client) tickets ----
+  supportTicketReply: (userIds: string | string[], ticketNumber: string, ticketId: string) =>
+    notify({
+      userIds,
+      title: `Reply on ${ticketNumber}`,
+      message: 'New reply on a support ticket',
+      type: 'ticket',
+      link: `/tickets/${ticketId}`,
+    }),
+
+  // ---- Leads ----
+  leadAssigned: (userId: string, leadNumber: string, leadId: string) =>
+    notify({
+      userIds: userId,
+      title: 'New Lead Assigned',
+      message: leadNumber,
+      type: 'lead',
+      link: `/leads/${leadId}`,
+    }),
+
+  leaveApproved: (userId: string, dateRange: string) =>
+    notify({
+      userIds: userId,
+      title: 'Leave Approved',
+      message: dateRange,
+      type: 'success',
+      link: `/leaves`,
+    }),
+
+  leaveRejected: (userId: string, dateRange: string, reason?: string) =>
+    notify({
+      userIds: userId,
+      title: 'Leave Rejected',
+      message: `${dateRange}${reason ? ` — ${reason}` : ''}`,
+      type: 'error',
+      link: `/leaves`,
+    }),
+
+  birthday: (userIds: string[], employeeName: string) =>
+    notify({
+      userIds,
+      title: 'Birthday Today!',
+      message: `Wish ${employeeName} a happy birthday`,
+      type: 'birthday',
+    }),
+}

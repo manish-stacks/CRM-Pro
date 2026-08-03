@@ -1,0 +1,360 @@
+'use client'
+import { useState, useEffect, useCallback } from 'react'
+import Link from 'next/link'
+import { useAuth } from '@/hooks/useAuth'
+import api from '@/lib/axios'
+import { Button, Input, Select, SearchSelect, Modal, EmptyState, Pagination, Badge } from '@/components/ui'
+import { formatDate, getInitials } from '@/lib/utils'
+import {
+  Users2, Plus, Search, Filter, X, Package, User, Building2,
+  UserPlus, Trash2, Loader2, Briefcase, Shield
+} from 'lucide-react'
+import toast from 'react-hot-toast'
+
+export default function ProjectsPage() {
+  const { user, isAtLeast } = useAuth()
+  const canManage = isAtLeast('MANAGER')
+
+  const [assignments, setAssignments] = useState<any[]>([])
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1)
+  const [loading, setLoading] = useState(true)
+  const [showFilter, setShowFilter] = useState(false)
+  const [filters, setFilters] = useState({ clientId: '', departmentId: '', isActive: 'true' })
+  const [filterClientLabel, setFilterClientLabel] = useState('')
+
+  const [modal, setModal] = useState<'none' | 'assign'>('none')
+  const [saving, setSaving] = useState(false)
+  const [departments, setDepartments] = useState<any[]>([])
+  const [employees, setEmployees] = useState<any[]>([])
+  const [clientServices, setClientServices] = useState<any[]>([])
+  const [memberSearch, setMemberSearch] = useState('')
+
+  const [form, setForm] = useState({
+    clientId: '', clientServiceId: '', managerId: '', memberIds: [] as string[], role: 'MEMBER',
+  })
+  const [formClientLabel, setFormClientLabel] = useState('')
+
+  const fetch_ = useCallback(async () => {
+    setLoading(true)
+    try {
+      const p: Record<string, string> = { page: String(page), limit: '20' }
+      Object.entries(filters).forEach(([k, v]) => { if (v) p[k] = v })
+      const r = await api.get(`/projects?${new URLSearchParams(p)}`)
+      setAssignments(r.data.data || [])
+      setTotal(r.data.total || 0)
+    } catch { toast.error('Failed') }
+    finally { setLoading(false) }
+  }, [page, filters])
+
+  useEffect(() => { fetch_() }, [fetch_])
+
+  useEffect(() => {
+    api.get('/departments').then(r => setDepartments(r.data.data || [])).catch(() => {})
+    api.get('/employees?limit=500&status=true').then(r => setEmployees(r.data.data || [])).catch(() => {})
+  }, [])
+
+  // When client picked, load its services
+  useEffect(() => {
+    if (form.clientId) {
+      api.get(`/clients/${form.clientId}/services`).then(r => setClientServices(r.data.data || [])).catch(() => {})
+    } else setClientServices([])
+  }, [form.clientId])
+
+  // Auto-suggest the department head as manager when a service is picked
+  useEffect(() => {
+    if (!form.clientServiceId) return
+    const svc = clientServices.find((s: any) => s.id === form.clientServiceId)
+    const deptId = svc?.departmentId
+    if (!deptId) return
+    const dept = departments.find((d: any) => d.id === deptId)
+    const headUserId = dept?.manager?.user?.id
+    if (headUserId) setForm(p => ({ ...p, managerId: p.managerId || headUserId }))
+  }, [form.clientServiceId, clientServices, departments])
+
+  const openAssign = () => {
+    setForm({ clientId: '', clientServiceId: '', managerId: '', memberIds: [], role: 'MEMBER' })
+    setFormClientLabel('')
+    setMemberSearch('')
+    setModal('assign')
+  }
+
+  const toggleMember = (uid: string) => {
+    setForm(p => ({
+      ...p,
+      memberIds: p.memberIds.includes(uid) ? p.memberIds.filter(x => x !== uid) : [...p.memberIds, uid],
+    }))
+  }
+
+  const assign = async () => {
+    if (!form.clientServiceId) { toast.error('Select a service'); return }
+    if (!form.managerId && form.memberIds.length === 0) { toast.error('Pick manager or members'); return }
+    setSaving(true)
+    try {
+      const r = await api.post('/projects', {
+        clientServiceId: form.clientServiceId,
+        managerId: form.managerId || undefined,
+        memberIds: form.memberIds,
+        role: form.role,
+      })
+      toast.success(`Assigned ${r.data.data?.count || 0} person(s)`)
+      setModal('none')
+      fetch_()
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Failed')
+    } finally { setSaving(false) }
+  }
+
+  const remove = async (assignId: string) => {
+    if (!confirm('Remove this assignment?')) return
+    try {
+      await api.delete(`/projects/${assignId}`)
+      toast.success('Removed')
+      fetch_()
+    } catch { toast.error('Failed') }
+  }
+
+  const activeFilterCount = Object.values(filters).filter(v => v && v !== 'true').length
+
+  // Manager (dept head) dropdown — only actual department heads, deduped by user id
+  const managerOptions = departments
+    .filter((d: any) => d.manager?.user?.id)
+    .reduce((acc: any[], d: any) => {
+      if (!acc.some(o => o.value === d.manager.user.id)) {
+        acc.push({ value: d.manager.user.id, label: `${d.manager.user.name} (${d.name})` })
+      }
+      return acc
+    }, [])
+
+  // Team Members — grouped by department: head first, then that department's employees.
+  const memberQuery = memberSearch.trim().toLowerCase()
+  const filteredEmployees = employees.filter((e: any) =>
+    !memberQuery || (e.user?.name || '').toLowerCase().includes(memberQuery) || (e.employeeId || '').toLowerCase().includes(memberQuery)
+  )
+  const groupedMembers = departments
+    .map((d: any) => {
+      const headUserId = d.manager?.user?.id
+      const deptEmployees = filteredEmployees.filter((e: any) => e.departmentId === d.id)
+      const sorted = [...deptEmployees].sort((a: any, b: any) => {
+        const aHead = a.user?.id === headUserId ? 0 : 1
+        const bHead = b.user?.id === headUserId ? 0 : 1
+        return aHead - bHead
+      })
+      return { dept: d, employees: sorted }
+    })
+    .filter((g: any) => g.employees.length > 0)
+  const noDeptEmployees = filteredEmployees.filter((e: any) => !e.departmentId)
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Project Assignments</h1>
+          <p className="text-sm text-gray-500 mt-1">Connect client services with the dept manager and team members</p>
+        </div>
+        {canManage && <Button onClick={openAssign}><UserPlus size={14} /> Assign Team</Button>}
+      </div>
+
+      <div className="card">
+        <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-2 flex-wrap">
+          <SearchSelect
+            placeholder="Search client..."
+            value={filters.clientId}
+            valueLabel={filterClientLabel}
+            onSelect={(id, label) => { setFilters(p => ({ ...p, clientId: id })); setFilterClientLabel(label); setPage(1) }}
+            fetchOptions={async (q) => {
+              const r = await api.get(`/clients?search=${encodeURIComponent(q)}&limit=20`)
+              return [{ value: '', label: 'All clients' }, ...(r.data.data || []).map((c: any) => ({ value: c.id, label: c.clientName }))]
+            }}
+            className="max-w-xs"
+          />
+          <select value={filters.departmentId} onChange={e => { setFilters(p => ({...p, departmentId: e.target.value})); setPage(1) }} className="max-w-xs input">
+            <option value="">All departments</option>
+            {departments.map((d: any) => <option key={d.id} value={d.id}>{d.name}</option>)}
+          </select>
+          <select value={filters.isActive} onChange={e => { setFilters(p => ({...p, isActive: e.target.value})); setPage(1) }} className="max-w-xs input">
+            <option value="true">Active only</option>
+            <option value="false">Inactive</option>
+            <option value="">All</option>
+          </select>
+          <span className="text-xs text-gray-500 ml-auto">{total} assignments</span>
+        </div>
+
+        <div className="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Client & Service</th>
+                <th>Department</th>
+                <th>Manager</th>
+                <th>Members</th>
+                <th>Assigned</th>
+                <th>Status</th>
+                {canManage && <th className="text-right">Actions</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr><td colSpan={7} className="text-center py-8"><Loader2 className="animate-spin inline text-gray-400" /></td></tr>
+              ) : assignments.length === 0 ? (
+                <tr><td colSpan={7}><EmptyState icon={<Briefcase size={40} />} title="No assignments" description="Assign team members to client services" /></td></tr>
+              ) : (
+                // Group by clientServiceId — show manager row + member rows
+                Object.values(assignments.reduce((acc: any, a: any) => {
+                  const key = a.clientService.id
+                  if (!acc[key]) acc[key] = { service: a.clientService, manager: null, members: [], assignedAt: a.assignedAt, isActive: a.isActive }
+                  if (a.role === 'MANAGER' || a.managerId) acc[key].manager = a
+                  else acc[key].members.push(a)
+                  return acc
+                }, {})).map((group: any) => (
+                  <tr key={group.service.id} className="hover:bg-slate-50">
+                    <td>
+                      <Link href={`/clients/${group.service.client.id}`} className="hover:text-brand-600">
+                        <p className="font-medium text-sm">{group.service.client.clientName}</p>
+                        <p className="text-xs text-gray-500 flex items-center gap-1"><Package size={10} /> {group.service.serviceName}</p>
+                      </Link>
+                    </td>
+                    <td>
+                      {group.service.department ? (
+                        <span className="badge bg-slate-100 text-slate-700 text-xs">{group.service.department.name}</span>
+                      ) : <span className="text-xs text-gray-400">—</span>}
+                    </td>
+                    <td>
+                      {group.manager?.manager ? (
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-6 h-6 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center text-xs font-bold">
+                            {getInitials(group.manager.manager.name)}
+                          </div>
+                          <span className="text-sm">{group.manager.manager.name}</span>
+                          {canManage && group.manager.isActive && (
+                            <button onClick={() => remove(group.manager.id)} className="text-red-500 hover:bg-red-50 rounded p-0.5" title="Remove"><Trash2 size={11} /></button>
+                          )}
+                        </div>
+                      ) : <span className="text-xs text-gray-400">— No manager —</span>}
+                    </td>
+                    <td>
+                      {group.members.length === 0 ? <span className="text-xs text-gray-400">—</span> : (
+                        <div className="flex flex-wrap gap-1">
+                          {group.members.map((m: any) => (
+                            <div key={m.id} className="flex items-center gap-1 bg-brand-50 border border-brand-100 rounded px-2 py-0.5 text-xs">
+                              <div className="w-4 h-4 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[9px] font-bold">
+                                {getInitials(m.member?.name || 'X')}
+                              </div>
+                              <span>{m.member?.name}</span>
+                              {canManage && m.isActive && (
+                                <button onClick={() => remove(m.id)} className="text-red-500 hover:bg-red-100 rounded" title="Remove"><X size={10} /></button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </td>
+                    <td className="text-xs text-gray-500">{formatDate(group.assignedAt)}</td>
+                    <td>
+                      {group.isActive ? <span className="badge bg-emerald-100 text-emerald-700">Active</span> : <span className="badge bg-gray-100 text-gray-600">Inactive</span>}
+                    </td>
+                    {canManage && (
+                      <td className="text-right">
+                        <button onClick={() => {
+                          setForm({ clientId: group.service.client.id, clientServiceId: group.service.id, managerId: '', memberIds: [], role: 'MEMBER' })
+                          setFormClientLabel(group.service.client.clientName)
+                          setMemberSearch('')
+                          setModal('assign')
+                        }} className="btn-ghost btn-sm !p-1.5" title="Add more">
+                          <UserPlus size={13} />
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+        <div className="px-5 py-3 border-t border-gray-100">
+          <Pagination page={page} totalPages={Math.ceil(total / 20)} onChange={setPage} />
+        </div>
+      </div>
+
+      {/* Assign Modal */}
+      <Modal open={modal === 'assign'} onClose={() => setModal('none')} title="Assign Team to Project">
+        <div className="space-y-3">
+          <SearchSelect
+            label="Client *"
+            placeholder="Search client by name or company..."
+            value={form.clientId}
+            valueLabel={formClientLabel}
+            onSelect={(id, label) => { setForm(p => ({ ...p, clientId: id, clientServiceId: '' })); setFormClientLabel(label) }}
+            fetchOptions={async (q) => {
+              const r = await api.get(`/clients?search=${encodeURIComponent(q)}&limit=20`)
+              return (r.data.data || []).map((c: any) => ({ value: c.id, label: `${c.clientName} — ${c.companyName}` }))
+            }}
+          />
+          <Select label="Service *" value={form.clientServiceId} onChange={e => setForm(p => ({...p, clientServiceId: e.target.value}))} disabled={!form.clientId} options={[{ value: '', label: form.clientId ? 'Pick a service...' : 'Pick client first' }, ...clientServices.map((s: any) => ({ value: s.id, label: `${s.serviceName} — ${s.status}` }))]} />
+          <Select label="Manager (dept head)" value={form.managerId} onChange={e => setForm(p => ({...p, managerId: e.target.value}))} options={[{ value: '', label: '— No manager —' }, ...managerOptions]} />
+
+          <div>
+            <label className="label">Team Members</label>
+            <input
+              className="input mb-2"
+              placeholder="Search team members by name or ID..."
+              value={memberSearch}
+              onChange={e => setMemberSearch(e.target.value)}
+            />
+            <div className="max-h-60 overflow-y-auto border rounded-lg divide-y divide-gray-100">
+              {groupedMembers.length === 0 && noDeptEmployees.length === 0 ? (
+                <p className="text-xs text-gray-400 p-3">No employees found</p>
+              ) : (
+                <>
+                  {groupedMembers.map((g: any) => (
+                    <div key={g.dept.id}>
+                      <p className="px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500 bg-gray-50">{g.dept.name}</p>
+                      {g.employees.map((e: any) => {
+                        const uid = e.user?.id
+                        const isHead = uid === g.dept.manager?.user?.id
+                        return (
+                          <label key={e.id} className="flex items-center gap-2 p-2 hover:bg-gray-50 cursor-pointer text-sm">
+                            <input type="checkbox" checked={form.memberIds.includes(uid)} onChange={() => toggleMember(uid)} />
+                            <div className="w-6 h-6 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-xs font-bold">
+                              {getInitials(e.user?.name || 'X')}
+                            </div>
+                            <div className="flex-1">
+                              <p>{e.user?.name} {isHead && <span className="text-[10px] text-purple-600 font-semibold">· HEAD</span>}</p>
+                              <p className="text-xs text-gray-500">{g.dept.name} · {e.user?.role}</p>
+                            </div>
+                          </label>
+                        )
+                      })}
+                    </div>
+                  ))}
+                  {noDeptEmployees.length > 0 && (
+                    <div>
+                      <p className="px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500 bg-gray-50">No Department</p>
+                      {noDeptEmployees.map((e: any) => (
+                        <label key={e.id} className="flex items-center gap-2 p-2 hover:bg-gray-50 cursor-pointer text-sm">
+                          <input type="checkbox" checked={form.memberIds.includes(e.user?.id)} onChange={() => toggleMember(e.user?.id)} />
+                          <div className="w-6 h-6 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-xs font-bold">
+                            {getInitials(e.user?.name || 'X')}
+                          </div>
+                          <div className="flex-1">
+                            <p>{e.user?.name}</p>
+                            <p className="text-xs text-gray-500">No dept · {e.user?.role}</p>
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+            <p className="text-xs text-gray-500 mt-1">{form.memberIds.length} selected</p>
+          </div>
+          <div className="flex justify-end gap-2 pt-1">
+            <Button variant="secondary" onClick={() => setModal('none')}>Cancel</Button>
+            <Button onClick={assign} loading={saving}><UserPlus size={13} /> Assign</Button>
+          </div>
+        </div>
+      </Modal>
+    </div>
+  )
+}

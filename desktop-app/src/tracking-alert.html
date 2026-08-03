@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8" />
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 100%; height: 100%;
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: transparent;
+    overflow: hidden;
+    -webkit-app-region: no-drag;
+  }
+  .card {
+    width: 100%; height: 100%;
+    background: #ffffff;
+    border-radius: 16px;
+    border: 1px solid #f1d0d0;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.25);
+    display: flex;
+    flex-direction: column;
+    padding: 28px 26px 20px;
+    -webkit-app-region: drag;
+  }
+  .icon-wrap {
+    width: 52px; height: 52px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #ff5a5f, #e53935);
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 16px;
+    box-shadow: 0 6px 16px rgba(229,57,53,0.35);
+    -webkit-app-region: no-drag;
+  }
+  .icon-wrap svg { width: 26px; height: 26px; }
+  h1 {
+    font-size: 17px;
+    font-weight: 700;
+    color: #1a1a1a;
+    margin-bottom: 8px;
+    -webkit-app-region: no-drag;
+  }
+  p {
+    font-size: 13.5px;
+    line-height: 1.55;
+    color: #6b6b6b;
+    flex: 1;
+    -webkit-app-region: no-drag;
+  }
+  .actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 18px;
+    -webkit-app-region: no-drag;
+  }
+  button {
+    -webkit-app-region: no-drag;
+    border: none;
+    border-radius: 10px;
+    padding: 10px 22px;
+    font-size: 13.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+  }
+  button:active { transform: scale(0.97); }
+  #ok {
+    background: linear-gradient(135deg, #ff5a5f, #e53935);
+    color: #fff;
+    box-shadow: 0 6px 14px rgba(229,57,53,0.35);
+  }
+  #ok:hover { box-shadow: 0 8px 18px rgba(229,57,53,0.45); }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon-wrap">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"></circle>
+        <line x1="12" y1="8" x2="12" y2="13"></line>
+        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+      </svg>
+    </div>
+    <h1>Still Checked In</h1>
+    <p>You're currently punched in. Please punch out from the dashboard first, then close the app.</p>
+    <div class="actions">
+      <button id="ok">Got it</button>
+    </div>
+  </div>
+  <script>
+    document.getElementById('ok').addEventListener('click', () => window.close());
+    document.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === 'Escape') window.close(); });
+  </script>
+</body>
+</html>
