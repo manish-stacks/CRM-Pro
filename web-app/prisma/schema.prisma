@@ -603,6 +603,9 @@ model Lead {
   followUpDate         DateTime?
   followUpTime         String?   // "14:30"
 
+  callbackDate         DateTime?
+  callbackTime         String?   // "14:30"
+
   // Meeting scheduling (when MEETING_SCHEDULED)
   meetingDate          DateTime?
   meetingTime          String?   // "10:00"

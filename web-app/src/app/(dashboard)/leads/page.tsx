@@ -70,6 +70,8 @@ function LeadsPageInner({ forceMine = false }: { forceMine?: boolean }) {
     companyName: '', clientName: '', clientPhone: '', clientEmail: '',
     alternatePhone: '', link: '', address: '', city: '', state: '',
     source: 'WEBSITE', service: '', price: '',
+    callbackDate: '',
+    callbackTime: '',
     status: 'NEW', remark: '', ...defaultFollowUp(),
   })
 
@@ -135,6 +137,8 @@ function LeadsPageInner({ forceMine = false }: { forceMine?: boolean }) {
     setForm({
       companyName: '', clientName: '', clientPhone: '', clientEmail: '',
       alternatePhone: '', link: '', address: '', city: '', state: '',
+      callbackDate: '',
+      callbackTime: '',
       source: 'WEBSITE', service: '', price: '',
       status: 'NEW', remark: '', ...defaultFollowUp(),
     })
@@ -146,6 +150,14 @@ function LeadsPageInner({ forceMine = false }: { forceMine?: boolean }) {
       toast.error('Client name and phone required')
       return
     }
+    if (
+      form.status === 'CALLBACK' &&
+      (!form.callbackDate || !form.callbackTime)
+    ) {
+      toast.error('Please select callback date and time')
+      return
+    }
+
     setSaving(true)
     try {
       await api.post('/leads', form)
@@ -268,7 +280,7 @@ function LeadsPageInner({ forceMine = false }: { forceMine?: boolean }) {
     URL.revokeObjectURL(url)
   }
 
-  
+
   const activeFilterCount = Object.entries(filters).filter(([k, v]) => k !== 'sortBy' && v).length
 
   const statusPill = (status: string) => {
@@ -397,7 +409,11 @@ function LeadsPageInner({ forceMine = false }: { forceMine?: boolean }) {
                 <th>Contact</th>
                 <th>Status</th>
                 <th>Assigned To</th>
-                <th>Follow-up / Meeting</th>
+            <th>Follow-up</th>
+<th>Callback</th>
+<th>Meeting</th>
+
+
                 <th>Remark</th>
                 <th>Created</th>
                 <th className="text-right">Actions</th>
@@ -405,9 +421,9 @@ function LeadsPageInner({ forceMine = false }: { forceMine?: boolean }) {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={isAdminUser ? 10 : 9} className="text-center py-8 text-gray-400"><Loader2 className="animate-spin inline" /></td></tr>
+                <tr><td colSpan={isAdminUser ? 12 : 11} className="text-center py-8 text-gray-400"><Loader2 className="animate-spin inline" /></td></tr>
               ) : leads.length === 0 ? (
-                <tr><td colSpan={isAdminUser ? 10 : 9}><EmptyState icon={<Users size={40} />} title="No leads" description="No leads match your filters" /></td></tr>
+                <tr><td colSpan={isAdminUser ? 12 : 11}><EmptyState icon={<Users size={40} />} title="No leads" description="No leads match your filters" /></td></tr>
               ) : leads.map(l => (
                 <tr key={l.id} className="hover:bg-slate-50">
                   {isAdminUser && (
@@ -439,23 +455,54 @@ function LeadsPageInner({ forceMine = false }: { forceMine?: boolean }) {
                       </div>
                     ) : <span className="text-gray-400 text-xs">—</span>}
                   </td>
-                  <td className="text-xs">
-                    {l.meetingDate ? (
-                      <div className="text-purple-700 font-medium">
-                        <p>🎯 {formatDate(l.meetingDate)}</p>
-                        <p className="text-[10px]">{l.meetingSlot || l.meetingTime}</p>
-                        {l.meetingAssignedTo && <p className="text-[10px] text-gray-500">→ {l.meetingAssignedTo.name}</p>}
-                        {l.status !== 'MEETING_SCHEDULED' && (
-                          <p className="text-[10px] text-gray-400">({l.status.replace(/_/g, ' ').toLowerCase()})</p>
-                        )}
-                      </div>
-                    ) : l.followUpDate ? (
-                      <div className="text-yellow-700">
-                        <p>📞 {formatDate(l.followUpDate)}</p>
-                        {l.followUpTime && <p className="text-[10px]">{l.followUpTime}</p>}
-                      </div>
-                    ) : <span className="text-gray-400">—</span>}
-                  </td>
+<td className="text-xs">
+  {l.followUpDate ? (
+    <div className="text-yellow-700">
+      <p>📞 {formatDate(l.followUpDate)}</p>
+      {l.followUpTime && (
+        <p className="text-[10px]">{l.followUpTime}</p>
+      )}
+    </div>
+  ) : (
+    <span className="text-gray-400">—</span>
+  )}
+</td>
+
+<td className="text-xs">
+  {l.status === 'CALLBACK' && l.callbackDate ? (
+    <div className="text-cyan-700 font-medium">
+      <p>📲 {formatDate(l.callbackDate)}</p>
+
+      {l.callbackTime && (
+        <p className="text-[10px]">{l.callbackTime}</p>
+      )}
+    </div>
+  ) : (
+    <span className="text-gray-400">—</span>
+  )}
+</td>
+
+<td className="text-xs">
+  {l.meetingDate ? (
+    <div className="text-purple-700 font-medium">
+      <p>🎯 {formatDate(l.meetingDate)}</p>
+
+      <p className="text-[10px]">
+        {l.meetingSlot || l.meetingTime}
+      </p>
+
+      {l.meetingAssignedTo && (
+        <p className="text-[10px] text-gray-500">
+          → {l.meetingAssignedTo.name}
+        </p>
+      )}
+    </div>
+  ) : (
+    <span className="text-gray-400">—</span>
+  )}
+</td>
+
+
                   <td className="text-xs text-gray-600 max-w-[180px]">
                     {l.remark ? (
                       <button onClick={() => setViewRemark(l.remark)} className="truncate block text-left hover:text-brand-600 hover:underline w-full">
@@ -507,11 +554,82 @@ function LeadsPageInner({ forceMine = false }: { forceMine?: boolean }) {
             <Input label="Service Pitched" value={form.service} onChange={e => setForm(p => ({ ...p, service: e.target.value }))} placeholder="e.g. Website + SEO" />
             <Input label="Est. Price (₹)" type="number" value={form.price} onChange={e => setForm(p => ({ ...p, price: e.target.value }))} placeholder="25000" />
           </div>
-          <div className="grid grid-cols-3 gap-3">
-            <Select label="Lead Status" value={form.status} onChange={e => setForm(p => ({ ...p, status: e.target.value }))} options={STATUSES.filter(s => !['CONVERTED', 'CLOSED', 'MEETING_SCHEDULED'].includes(s.key)).map(s => ({ value: s.key, label: s.label }))} />
-            <Input label="Follow-up Date" type="date" value={form.followUpDate} onChange={e => setForm(p => ({ ...p, followUpDate: e.target.value }))} />
-            <Input label="Follow-up Time" type="time" value={form.followUpTime} onChange={e => setForm(p => ({ ...p, followUpTime: e.target.value }))} />
+          <div
+            className={`grid gap-3 ${form.status === 'CALLBACK'
+                ? 'grid-cols-5'
+                : 'grid-cols-3'
+              }`}
+          >
+            <Select
+              label="Lead Status"
+              value={form.status}
+              onChange={(e) =>
+                setForm((p) => ({
+                  ...p,
+                  status: e.target.value,
+                }))
+              }
+              options={STATUSES.filter(
+                (s) => !['CONVERTED', 'CLOSED', 'MEETING_SCHEDULED'].includes(s.key)
+              ).map((s) => ({
+                value: s.key,
+                label: s.label,
+              }))}
+            />
+
+            <Input
+              label="Follow-up Date"
+              type="date"
+              value={form.followUpDate}
+              onChange={(e) =>
+                setForm((p) => ({
+                  ...p,
+                  followUpDate: e.target.value,
+                }))
+              }
+            />
+
+            <Input
+              label="Follow-up Time"
+              type="time"
+              value={form.followUpTime}
+              onChange={(e) =>
+                setForm((p) => ({
+                  ...p,
+                  followUpTime: e.target.value,
+                }))
+              }
+            />
+
+            {form.status === 'CALLBACK' && (
+              <>
+                <Input
+                  label="Callback Date"
+                  type="date"
+                  value={form.callbackDate}
+                  onChange={(e) =>
+                    setForm((p) => ({
+                      ...p,
+                      callbackDate: e.target.value,
+                    }))
+                  }
+                />
+
+                <Input
+                  label="Callback Time"
+                  type="time"
+                  value={form.callbackTime}
+                  onChange={(e) =>
+                    setForm((p) => ({
+                      ...p,
+                      callbackTime: e.target.value,
+                    }))
+                  }
+                />
+              </>
+            )}
           </div>
+
           <Textarea label="Remark" value={form.remark} onChange={e => setForm(p => ({ ...p, remark: e.target.value }))}
             placeholder="First call notes, client's response, etc." rows={3} />
           <div className="flex justify-end gap-2 pt-2">

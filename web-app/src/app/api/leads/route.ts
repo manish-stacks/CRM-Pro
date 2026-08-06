@@ -78,7 +78,7 @@ export async function GET(req: NextRequest) {
   if (dateFrom || dateTo) {
     where.createdAt = {}
     if (dateFrom) where.createdAt.gte = new Date(dateFrom)
-    if (dateTo)   where.createdAt.lte = new Date(dateTo + 'T23:59:59')
+    if (dateTo) where.createdAt.lte = new Date(dateTo + 'T23:59:59')
   }
   if (followUpDate) {
     const d = dateOnly(followUpDate)
@@ -169,9 +169,9 @@ export async function GET(req: NextRequest) {
       // 'created' is the previous newest-first default.
       orderBy: sortBy === 'followup'
         ? [
-            { meetingDate: { sort: 'desc', nulls: 'last' } },
-            { followUpDate: { sort: 'desc', nulls: 'last' } },
-          ]
+          { meetingDate: { sort: 'desc', nulls: 'last' } },
+          { followUpDate: { sort: 'desc', nulls: 'last' } },
+        ]
         : { createdAt: 'desc' },
     }),
     prisma.lead.count({ where }),
@@ -193,6 +193,7 @@ export async function POST(req: NextRequest) {
     companyName, clientName, clientPhone, clientEmail, alternatePhone,
     link, address, city, state, source, service, productPitched, price,
     status, remark, notes, followUpDate, followUpTime,
+    callbackDate, callbackTime,
     assignedToId,
   } = body
 
@@ -254,6 +255,8 @@ export async function POST(req: NextRequest) {
             notes: notes || null,
             followUpDate: followUpDate ? new Date(followUpDate) : null,
             followUpTime: followUpTime || null,
+            callbackDate: callbackDate ? new Date(callbackDate) : null,
+            callbackTime: callbackTime || null,
             createdById: session.userId,
             assignedToId: finalAssigneeId,
           },
@@ -304,7 +307,7 @@ export async function POST(req: NextRequest) {
 
     // Notify assignee if the lead was assigned to someone other than the creator
     if (finalAssigneeId && finalAssigneeId !== session.userId) {
-      Notifications.leadAssigned(finalAssigneeId, lead.leadNumber, lead.id).catch(() => {})
+      Notifications.leadAssigned(finalAssigneeId, lead.leadNumber, lead.id).catch(() => { })
     }
 
     return successStatusResponse(lead, 201)
