@@ -77,6 +77,11 @@ export async function POST(req: NextRequest) {
     // ADMIN-ONLY employment
     position, salary, workMode, departmentId, joiningDate,
     dateOfBirth,
+    // Marketing territory — required for MARKETING_EXECUTIVE so the telecaller's
+    // "book a meeting by area" picker and /api/marketing/areas see them straight
+    // away. Previously area could only be set later via the edit screen, so a
+    // newly added marketing person never appeared in any area.
+    area,
   } = body
 
   if (!name || !email || !password) return errorResponse('Name, email, password required')
@@ -107,6 +112,7 @@ export async function POST(req: NextRequest) {
             departmentId: departmentId || null,
             joiningDate: joiningDate ? new Date(joiningDate) : null,
             dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
+            area: area ? String(area).trim() : null,
           },
         },
       },
@@ -118,7 +124,7 @@ export async function POST(req: NextRequest) {
       action: 'CREATE',
       entityType: 'Employee',
       entityId: user.id,
-      metadata: { employeeId, role, departmentId },
+      metadata: { employeeId, role, departmentId, area: area || null },
     })
 
     // Welcome email + WhatsApp with login credentials — best-effort, don't

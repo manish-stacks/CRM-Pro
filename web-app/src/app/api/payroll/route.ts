@@ -3,7 +3,8 @@
 import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/auth'
-import { successResponse, getPaginationParams } from '@/lib/api'
+import { successResponse, errorResponse, getPaginationParams } from '@/lib/api'
+import { logFromRequest } from '@/lib/audit'
 
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req)
@@ -75,4 +76,55 @@ export async function GET(req: NextRequest) {
     prisma.payslip.count({ where }),
   ])
   return successResponse(payslips, total)
+}
+
+// DELETE /api/payroll  { ids: string[] }
+// Admin-only BULK delete of payslips (also handles a single id).
+// Guard: a payslip already marked PAID is never bulk-deleted — you'd be wiping
+// the record of money that actually went out. Delete those one by one from the
+// row action if you really mean it.
+export async function DELETE(req: NextRequest) {
+  const auth = await requireAuth(req, 'ADMIN')
+  if (auth instanceof Response) return auth
+  const session = (auth as any).session
+
+  let ids: string[] = []
+  let force = false
+  try {
+    const body = await req.json()
+    ids = Array.isArray(body?.ids) ? body.ids.filter((x: any) => typeof x === 'string' && x) : []
+    force = !!body?.force
+  } catch {
+    return errorResponse('Invalid request body')
+  }
+  if (ids.length === 0) return errorResponse('No payslip ids provided')
+
+  const slips = await prisma.payslip.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, status: true, month: true, year: true, employeeId: true },
+  })
+  if (slips.length === 0) return errorResponse('No matching payslips found')
+
+  const paid = slips.filter(s => s.status === 'PAID')
+  const deletable = force ? slips : slips.filter(s => s.status !== 'PAID')
+
+  if (deletable.length === 0) {
+    return errorResponse('All selected payslips are already marked PAID and were not deleted')
+  }
+
+  const { count } = await prisma.payslip.deleteMany({
+    where: { id: { in: deletable.map(s => s.id) } },
+  })
+
+  await logFromRequest(req, {
+    userId: session.userId,
+    action: 'DELETE',
+    entityType: 'Payroll',
+    metadata: { count, skippedPaid: force ? 0 : paid.length, ids: deletable.map(s => s.id) },
+  })
+
+  return successResponse({
+    deleted: count,
+    skippedPaid: force ? 0 : paid.length,
+  })
 }

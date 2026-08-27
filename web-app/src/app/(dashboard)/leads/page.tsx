@@ -37,6 +37,26 @@ function defaultFollowUp() {
   return { followUpDate, followUpTime: '11:00' }
 }
 
+const EMPTY_FILTERS = {
+  status: '', source: '', assignedToId: '', meetingAssignedToId: '', createdById: '',
+  search: '', dateFrom: '', dateTo: '',
+  due: '', followUpFrom: '', followUpTo: '', callbackFrom: '', callbackTo: '',
+  meetingFrom: '', meetingTo: '', city: '', service: '', hasMeeting: '', hasEmail: '',
+  minPrice: '', maxPrice: '',
+  // Default sort: soonest pending action first, so a follow-up/ringing lead you
+  // scheduled for tomorrow shows at the TOP of tomorrow's list.
+  sortBy: 'nextaction',
+}
+
+const DUE_CHIPS = [
+  { key: '', label: 'All' },
+  { key: 'overdue', label: 'Overdue' },
+  { key: 'today', label: 'Today' },
+  { key: 'tomorrow', label: 'Tomorrow' },
+  { key: 'week', label: 'Next 7 days' },
+  { key: 'none', label: 'No date set' },
+]
+
 function LeadsPageInner({ forceMine = false }: { forceMine?: boolean }) {
   const { user, isAtLeast } = useAuth()
   const canSeeAll = isAtLeast('MANAGER')
@@ -51,9 +71,7 @@ function LeadsPageInner({ forceMine = false }: { forceMine?: boolean }) {
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
   const [showFilter, setShowFilter] = useState(false)
-  const [filters, setFilters] = useState({
-    status: '', source: '', assignedToId: '', meetingAssignedToId: '', createdById: '', search: '', dateFrom: '', dateTo: '', sortBy: '',
-  })
+  const [filters, setFilters] = useState({ ...EMPTY_FILTERS })
   const [telecallers, setTelecallers] = useState<any[]>([])
   const [marketingPersons, setMarketingPersons] = useState<any[]>([])
   const [admins, setAdmins] = useState<any[]>([])
@@ -282,6 +300,8 @@ function LeadsPageInner({ forceMine = false }: { forceMine?: boolean }) {
 
 
   const activeFilterCount = Object.entries(filters).filter(([k, v]) => k !== 'sortBy' && v).length
+  const setF = (patch: Record<string, string>) => { setFilters(p => ({ ...p, ...patch })); setPage(1) }
+  const resetFilters = () => { setFilters({ ...EMPTY_FILTERS }); setPage(1) }
 
   const statusPill = (status: string) => {
     const s = STATUSES.find(x => x.key === status)
@@ -328,7 +348,7 @@ function LeadsPageInner({ forceMine = false }: { forceMine?: boolean }) {
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input type="text" className="input pl-9 text-sm" placeholder="Search name, phone, email, lead#"
                 value={filters.search}
-                onChange={e => { setFilters(p => ({ ...p, search: e.target.value })); setPage(1) }} />
+                onChange={e => setF({ search: e.target.value })} />
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -343,18 +363,33 @@ function LeadsPageInner({ forceMine = false }: { forceMine?: boolean }) {
           </div>
         </div>
 
+        {/* Quick "next action due" chips */}
+        <div className="px-5 py-2.5 flex items-center gap-2 flex-wrap border-b border-gray-100 bg-white">
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Due</span>
+          {DUE_CHIPS.map(c => (
+            <button key={c.key || 'all'} onClick={() => setF({ due: c.key })}
+              className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+                filters.due === c.key
+                  ? 'bg-brand-600 text-white border-brand-600'
+                  : 'bg-white text-gray-600 border-gray-300 hover:border-brand-400 hover:text-brand-600'}`}>
+              {c.label}
+            </button>
+          ))}
+          <span className="ml-auto text-[11px] text-gray-400">Sorted by soonest action</span>
+        </div>
+
         {showFilter && (
           <div className="px-5 py-4 bg-gray-50 border-b border-gray-100 grid grid-cols-2 md:grid-cols-6 gap-3">
-            <select value={filters.status} onChange={e => { setFilters(p => ({ ...p, status: e.target.value })); setPage(1) }} className="input">
+            <select value={filters.status} onChange={e => setF({ status: e.target.value })} className="input">
               <option value="">Status: All</option>
               {STATUSES.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
             </select>
-            <select value={filters.source} onChange={e => { setFilters(p => ({ ...p, source: e.target.value })); setPage(1) }} className="input">
+            <select value={filters.source} onChange={e => setF({ source: e.target.value })} className="input">
               <option value="">Source: All</option>
               {SOURCES.map(s => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
             </select>
             {canSeeAll && (
-              <select value={filters.assignedToId} onChange={e => { setFilters(p => ({ ...p, assignedToId: e.target.value })); setPage(1) }} className="input">
+              <select value={filters.assignedToId} onChange={e => setF({ assignedToId: e.target.value })} className="input">
                 <option value="">Telecaller: All</option>
                 {telecallers.map((u: any) => <option key={u.id} value={u.id}>{u.name}</option>)}
                 {admins.length > 0 && (
@@ -365,28 +400,103 @@ function LeadsPageInner({ forceMine = false }: { forceMine?: boolean }) {
               </select>
             )}
             {canSeeAll && (
-              <select value={filters.meetingAssignedToId} onChange={e => { setFilters(p => ({ ...p, meetingAssignedToId: e.target.value })); setPage(1) }} className="input">
+              <select value={filters.meetingAssignedToId} onChange={e => setF({ meetingAssignedToId: e.target.value })} className="input">
                 <option value="">Marketing Person: All</option>
                 {marketingPersons.map((u: any) => <option key={u.id} value={u.id}>{u.name}</option>)}
               </select>
             )}
             {canSeeAll && (
-              <select value={filters.createdById} onChange={e => { setFilters(p => ({ ...p, createdById: e.target.value })); setPage(1) }} className="input">
+              <select value={filters.createdById} onChange={e => setF({ createdById: e.target.value })} className="input">
                 <option value="">Added By: All</option>
                 {[...telecallers, ...marketingPersons, ...admins].map((u: any) => <option key={u.id} value={u.id}>{u.name}</option>)}
               </select>
             )}
-            <input type="date" className="input text-xs" placeholder="From"
-              value={filters.dateFrom} onChange={e => { setFilters(p => ({ ...p, dateFrom: e.target.value })); setPage(1) }} />
-            <input type="date" className="input text-xs" placeholder="To"
-              value={filters.dateTo} onChange={e => { setFilters(p => ({ ...p, dateTo: e.target.value })); setPage(1) }} />
-            <select value={filters.sortBy} onChange={e => { setFilters(p => ({ ...p, sortBy: e.target.value })); setPage(1) }} className="input">
-              <option value="">Sort: Default</option>
-              <option value="followup">Sort: Follow-up / Meeting</option>
-              <option value="created">Sort: Created (newest)</option>
+            <select value={filters.hasMeeting} onChange={e => setF({ hasMeeting: e.target.value })} className="input">
+              <option value="">Meeting: Any</option>
+              <option value="yes">Meeting booked</option>
+              <option value="no">No meeting</option>
             </select>
+
+            <input className="input text-xs" placeholder="City" value={filters.city}
+              onChange={e => setF({ city: e.target.value })} />
+            <input className="input text-xs" placeholder="Service pitched" value={filters.service}
+              onChange={e => setF({ service: e.target.value })} />
+            <input className="input text-xs" type="number" placeholder="Min ₹" value={filters.minPrice}
+              onChange={e => setF({ minPrice: e.target.value })} />
+            <input className="input text-xs" type="number" placeholder="Max ₹" value={filters.maxPrice}
+              onChange={e => setF({ maxPrice: e.target.value })} />
+            <select value={filters.hasEmail} onChange={e => setF({ hasEmail: e.target.value })} className="input">
+              <option value="">Email: Any</option>
+              <option value="yes">Has email</option>
+              <option value="no">No email</option>
+            </select>
+            <select value={filters.sortBy} onChange={e => setF({ sortBy: e.target.value })} className="input">
+              <option value="nextaction">Sort: Next action (soonest)</option>
+              <option value="created">Sort: Newest first</option>
+              <option value="oldest">Sort: Oldest first</option>
+              <option value="updated">Sort: Recently updated</option>
+              <option value="followup">Sort: Follow-up / Meeting (latest)</option>
+              <option value="name">Sort: Client name (A-Z)</option>
+            </select>
+
+            {/* ---- Date ranges, clearly grouped so it's obvious which date is which ---- */}
+            <div className="col-span-full pt-3 border-t border-gray-200 mt-1 space-y-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Date ranges</p>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="bg-white border border-gray-200 rounded-lg p-2.5">
+                  <p className="text-[11px] font-semibold text-gray-600 mb-1.5">📅 Lead created between</p>
+                  <div className="flex items-center gap-2">
+                    <input type="date" className="input text-xs flex-1" value={filters.dateFrom}
+                      onChange={e => setF({ dateFrom: e.target.value })} />
+                    <span className="text-xs text-gray-400">to</span>
+                    <input type="date" className="input text-xs flex-1" value={filters.dateTo}
+                      onChange={e => setF({ dateTo: e.target.value })} />
+                  </div>
+                </div>
+
+                <div className="bg-white border border-gray-200 rounded-lg p-2.5">
+                  <p className="text-[11px] font-semibold text-yellow-700 mb-1.5">📞 Follow-up date between</p>
+                  <div className="flex items-center gap-2">
+                    <input type="date" className="input text-xs flex-1" value={filters.followUpFrom}
+                      onChange={e => setF({ followUpFrom: e.target.value })} />
+                    <span className="text-xs text-gray-400">to</span>
+                    <input type="date" className="input text-xs flex-1" value={filters.followUpTo}
+                      onChange={e => setF({ followUpTo: e.target.value })} />
+                  </div>
+                </div>
+
+                <div className="bg-white border border-gray-200 rounded-lg p-2.5">
+                  <p className="text-[11px] font-semibold text-cyan-700 mb-1.5">📲 Callback date between</p>
+                  <div className="flex items-center gap-2">
+                    <input type="date" className="input text-xs flex-1" value={filters.callbackFrom}
+                      onChange={e => setF({ callbackFrom: e.target.value })} />
+                    <span className="text-xs text-gray-400">to</span>
+                    <input type="date" className="input text-xs flex-1" value={filters.callbackTo}
+                      onChange={e => setF({ callbackTo: e.target.value })} />
+                  </div>
+                </div>
+
+                <div className="bg-white border border-gray-200 rounded-lg p-2.5">
+                  <p className="text-[11px] font-semibold text-purple-700 mb-1.5">🎯 Meeting date between</p>
+                  <div className="flex items-center gap-2">
+                    <input type="date" className="input text-xs flex-1" value={filters.meetingFrom}
+                      onChange={e => setF({ meetingFrom: e.target.value })} />
+                    <span className="text-xs text-gray-400">to</span>
+                    <input type="date" className="input text-xs flex-1" value={filters.meetingTo}
+                      onChange={e => setF({ meetingTo: e.target.value })} />
+                  </div>
+                </div>
+              </div>
+
+              <p className="text-[11px] text-gray-400">
+                Ek hi date chahiye to From aur To dono me wahi date daal do. Quick options ke liye
+                upar wale <b>Due</b> chips use karo — wo teeno dates pe ek saath lagte hain.
+              </p>
+            </div>
+
             {activeFilterCount > 0 && (
-              <button onClick={() => { setFilters({ status: '', source: '', assignedToId: '', meetingAssignedToId: '', createdById: '', search: '', dateFrom: '', dateTo: '', sortBy: '' }); setPage(1) }}
+              <button onClick={resetFilters}
                 className="text-xs text-red-600 hover:underline flex items-center gap-1 col-span-full">
                 <X size={12} /> Clear all
               </button>
@@ -404,14 +514,15 @@ function LeadsPageInner({ forceMine = false }: { forceMine?: boolean }) {
                       onChange={toggleSelectAll} />
                   </th>
                 )}
+                <th className="w-12">#</th>
                 <th>Lead#</th>
                 <th>Client</th>
                 <th>Contact</th>
                 <th>Status</th>
                 <th>Assigned To</th>
-            <th>Follow-up</th>
-<th>Callback</th>
-<th>Meeting</th>
+                <th>Follow-up</th>
+                <th>Callback</th>
+                <th>Meeting</th>
 
 
                 <th>Remark</th>
@@ -421,9 +532,9 @@ function LeadsPageInner({ forceMine = false }: { forceMine?: boolean }) {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={isAdminUser ? 12 : 11} className="text-center py-8 text-gray-400"><Loader2 className="animate-spin inline" /></td></tr>
+                <tr><td colSpan={isAdminUser ? 13 : 12} className="text-center py-8 text-gray-400"><Loader2 className="animate-spin inline" /></td></tr>
               ) : leads.length === 0 ? (
-                <tr><td colSpan={isAdminUser ? 12 : 11}><EmptyState icon={<Users size={40} />} title="No leads" description="No leads match your filters" /></td></tr>
+                <tr><td colSpan={isAdminUser ? 13 : 12}><EmptyState icon={<Users size={40} />} title="No leads" description="No leads match your filters" /></td></tr>
               ) : leads.map(l => (
                 <tr key={l.id} className="hover:bg-slate-50">
                   {isAdminUser && (
@@ -432,6 +543,7 @@ function LeadsPageInner({ forceMine = false }: { forceMine?: boolean }) {
                         onChange={() => toggleSelect(l.id)} />
                     </td>
                   )}
+                  <td className="text-xs font-semibold text-gray-500">{l.serialNo ?? ((page - 1) * 20 + leads.indexOf(l) + 1)}</td>
                   <td className="font-mono text-xs text-gray-600">{l.leadNumber}</td>
                   <td>
                     <p className="font-medium text-gray-900 text-sm">{l.clientName}</p>
@@ -455,52 +567,52 @@ function LeadsPageInner({ forceMine = false }: { forceMine?: boolean }) {
                       </div>
                     ) : <span className="text-gray-400 text-xs">—</span>}
                   </td>
-<td className="text-xs">
-  {l.followUpDate ? (
-    <div className="text-yellow-700">
-      <p>📞 {formatDate(l.followUpDate)}</p>
-      {l.followUpTime && (
-        <p className="text-[10px]">{l.followUpTime}</p>
-      )}
-    </div>
-  ) : (
-    <span className="text-gray-400">—</span>
-  )}
-</td>
+                  <td className="text-xs">
+                    {l.followUpDate ? (
+                      <div className="text-yellow-700">
+                        <p>📞 {formatDate(l.followUpDate)}</p>
+                        {l.followUpTime && (
+                          <p className="text-[10px]">{l.followUpTime}</p>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-gray-400">—</span>
+                    )}
+                  </td>
 
-<td className="text-xs">
-  {l.status === 'CALLBACK' && l.callbackDate ? (
-    <div className="text-cyan-700 font-medium">
-      <p>📲 {formatDate(l.callbackDate)}</p>
+                  <td className="text-xs">
+                    {l.status === 'CALLBACK' && l.callbackDate ? (
+                      <div className="text-cyan-700 font-medium">
+                        <p>📲 {formatDate(l.callbackDate)}</p>
 
-      {l.callbackTime && (
-        <p className="text-[10px]">{l.callbackTime}</p>
-      )}
-    </div>
-  ) : (
-    <span className="text-gray-400">—</span>
-  )}
-</td>
+                        {l.callbackTime && (
+                          <p className="text-[10px]">{l.callbackTime}</p>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-gray-400">—</span>
+                    )}
+                  </td>
 
-<td className="text-xs">
-  {l.meetingDate ? (
-    <div className="text-purple-700 font-medium">
-      <p>🎯 {formatDate(l.meetingDate)}</p>
+                  <td className="text-xs">
+                    {l.meetingDate ? (
+                      <div className="text-purple-700 font-medium">
+                        <p>🎯 {formatDate(l.meetingDate)}</p>
 
-      <p className="text-[10px]">
-        {l.meetingSlot || l.meetingTime}
-      </p>
+                        <p className="text-[10px]">
+                          {l.meetingSlot || l.meetingTime}
+                        </p>
 
-      {l.meetingAssignedTo && (
-        <p className="text-[10px] text-gray-500">
-          → {l.meetingAssignedTo.name}
-        </p>
-      )}
-    </div>
-  ) : (
-    <span className="text-gray-400">—</span>
-  )}
-</td>
+                        {l.meetingAssignedTo && (
+                          <p className="text-[10px] text-gray-500">
+                            → {l.meetingAssignedTo.name}
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-gray-400">—</span>
+                    )}
+                  </td>
 
 
                   <td className="text-xs text-gray-600 max-w-[180px]">
@@ -556,8 +668,8 @@ function LeadsPageInner({ forceMine = false }: { forceMine?: boolean }) {
           </div>
           <div
             className={`grid gap-3 ${form.status === 'CALLBACK'
-                ? 'grid-cols-5'
-                : 'grid-cols-3'
+              ? 'grid-cols-5'
+              : 'grid-cols-3'
               }`}
           >
             <Select

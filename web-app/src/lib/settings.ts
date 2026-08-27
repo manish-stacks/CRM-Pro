@@ -115,4 +115,17 @@ export const Settings = {
   payrollTdsPercent: () => getSetting<number>('payroll_tds_percent', 5),          // % above exempt slab
   payrollTdsAnnualThreshold: () => getSetting<number>('payroll_tds_annual_threshold', 500000),
   payrollTdsMonthlyExempt: () => getSetting<number>('payroll_tds_monthly_exempt', 41667),
+
+  // ---- Payroll: LOP (Loss of Pay) policy ----
+  // Company holidays / office-closed days: JSON array of "YYYY-MM-DD".
+  // These days are NOT counted as working days, so they are never deducted.
+  companyHolidays: () => getSetting<string[]>('company_holidays', []),
+  // How many leaves in a month are PAID. Anything beyond this is LOP.
+  payrollPaidLeavesPerMonth: () => getSetting<number>('payroll_paid_leaves_per_month', 1),
+  // Late-mark policy: every N late punch-ins = 1 half day (0.5 day) LOP.
+  payrollLatesPerHalfDay: () => getSetting<number>('payroll_lates_per_halfday', 4),
+  // Half-day attendance = how much LOP (0.5 = half salary for that day).
+  payrollHalfDayLop: () => getSetting<number>('payroll_halfday_lop', 0.5),
+  // When generating for the CURRENT month, don't count future dates as absent.
+  payrollCountFutureDays: () => getSetting<boolean>('payroll_count_future_days', false),
 }

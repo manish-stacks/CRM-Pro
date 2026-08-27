@@ -1,9 +1,9 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { useParams, useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
-import { Button, Badge, Modal, Input, Select, Textarea } from '@/components/ui'
+import { Button, Badge, Modal, Input, Select, Textarea, Pagination } from '@/components/ui'
 import { formatDate, formatCurrency, getInitials } from '@/lib/utils'
 import { ArrowLeft, User, Briefcase, CreditCard, FileText, Phone, Mail, Building2, Calendar, MapPin, Shield, Droplets, HeartPulse, KeyRound, Camera, Monitor, Loader2, X, Clock, Trash2 } from 'lucide-react'
 import Link from 'next/link'
@@ -36,6 +36,33 @@ export default function EmployeeDetailPage() {
   const [emp, setEmp] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState('overview')
+
+  // ---- Attendance tab: server-side filtering + pagination ----
+  const ATT_LIMIT = 15
+  const [att, setAtt] = useState<any[]>([])
+  const [attTotal, setAttTotal] = useState(0)
+  const [attPage, setAttPage] = useState(1)
+  const [attLoading, setAttLoading] = useState(false)
+  const [attFilters, setAttFilters] = useState({ month: '', status: '', workMode: '', late: '', dateFrom: '', dateTo: '' })
+
+  const fetchAttendance = useCallback(async () => {
+    if (!id) return
+    setAttLoading(true)
+    try {
+      const p: Record<string, string> = {
+        employeeId: String(id), page: String(attPage), limit: String(ATT_LIMIT),
+      }
+      Object.entries(attFilters).forEach(([k, v]) => { if (v) p[k] = v })
+      const r = await api.get(`/attendance?${new URLSearchParams(p)}`)
+      setAtt(r.data.data || [])
+      setAttTotal(r.data.total || 0)
+    } catch {
+      setAtt([]); setAttTotal(0)
+    } finally { setAttLoading(false) }
+  }, [id, attPage, attFilters])
+
+  useEffect(() => { if (tab === 'attendance') fetchAttendance() }, [tab, fetchAttendance])
+  const setAttF = (patch: Record<string, string>) => { setAttFilters(p => ({ ...p, ...patch })); setAttPage(1) }
 
   const [departments, setDepartments] = useState<any[]>([])
   const [allEmployees, setAllEmployees] = useState<any[]>([])
@@ -390,24 +417,75 @@ export default function EmployeeDetailPage() {
       {/* Attendance */}
       {tab === 'attendance' && (
         <div className="card overflow-hidden">
-          <div className="card-header"><h3 className="font-semibold text-gray-900">Recent Attendance</h3></div>
+          <div className="card-header flex items-center justify-between flex-wrap gap-2">
+            <h3 className="font-semibold text-gray-900">Attendance</h3>
+            <span className="text-xs text-gray-500">{attTotal} record(s)</span>
+          </div>
+
+          <div className="px-5 py-3 bg-gray-50 border-b border-gray-100 grid grid-cols-2 md:grid-cols-6 gap-2">
+            <input type="month" className="input text-xs" value={attFilters.month}
+              onChange={e => setAttF({ month: e.target.value, dateFrom: '', dateTo: '' })} />
+            <select className="input text-xs" value={attFilters.status}
+              onChange={e => setAttF({ status: e.target.value })}>
+              <option value="">Status: All</option>
+              <option value="PRESENT">Present</option>
+              <option value="ABSENT">Absent</option>
+              <option value="HALF_DAY">Half Day</option>
+              <option value="LEAVE">Leave</option>
+              <option value="HOLIDAY">Holiday</option>
+            </select>
+            <select className="input text-xs" value={attFilters.workMode}
+              onChange={e => setAttF({ workMode: e.target.value })}>
+              <option value="">Mode: All</option>
+              <option value="WFO">WFO</option>
+              <option value="WFH">WFH</option>
+              <option value="FIELD">Field</option>
+            </select>
+            <select className="input text-xs" value={attFilters.late}
+              onChange={e => setAttF({ late: e.target.value })}>
+              <option value="">Late: Any</option>
+              <option value="true">Late only</option>
+              <option value="false">On time only</option>
+            </select>
+            <input type="date" className="input text-xs" title="From" value={attFilters.dateFrom}
+              onChange={e => setAttF({ dateFrom: e.target.value, month: '' })} />
+            <input type="date" className="input text-xs" title="To" value={attFilters.dateTo}
+              onChange={e => setAttF({ dateTo: e.target.value, month: '' })} />
+            <button
+              onClick={() => { setAttFilters({ month: '', status: '', workMode: '', late: '', dateFrom: '', dateTo: '' }); setAttPage(1) }}
+              className="text-xs text-red-600 hover:underline flex items-center gap-1 col-span-full">
+              <X size={12} /> Clear filters
+            </button>
+          </div>
+
           <table>
-            <thead><tr><th>Date</th><th>In</th><th>Out</th><th>Hours</th><th>Status</th></tr></thead>
+            <thead><tr><th>Date</th><th>In</th><th>Out</th><th>Hours</th><th>Mode</th><th>Late</th><th>Status</th></tr></thead>
             <tbody>
-              {(emp.attendance || []).slice(0, 20).map((a: any) => (
+              {attLoading ? (
+                <tr><td colSpan={7} className="text-center py-6 text-gray-400"><Loader2 size={16} className="animate-spin inline" /></td></tr>
+              ) : att.length === 0 ? (
+                <tr><td colSpan={7} className="text-center py-6 text-gray-400 text-sm">No attendance records</td></tr>
+              ) : att.map((a: any) => (
                 <tr key={a.id}>
                   <td className="text-sm">{formatDate(a.date)}</td>
                   <td className="text-sm text-gray-600">{a.punchIn ? new Date(a.punchIn).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '—'}</td>
                   <td className="text-sm text-gray-600">{a.punchOut ? new Date(a.punchOut).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '—'}</td>
                   <td className="text-sm">{a.hoursWorked?.toFixed(1) || '—'}h</td>
+                  <td className="text-xs text-gray-600">{a.workMode || '—'}</td>
+                  <td className="text-xs">
+                    {a.isLate
+                      ? <span className="badge bg-amber-100 text-amber-700">Late {a.lateBy ? `${a.lateBy}m` : ''}</span>
+                      : <span className="text-gray-300">—</span>}
+                  </td>
                   <td><Badge status={a.status} /></td>
                 </tr>
               ))}
-              {(!emp.attendance || emp.attendance.length === 0) && (
-                <tr><td colSpan={5} className="text-center py-6 text-gray-400 text-sm">No attendance records</td></tr>
-              )}
             </tbody>
           </table>
+
+          <div className="px-5 py-3 border-t border-gray-100">
+            <Pagination page={attPage} totalPages={Math.max(1, Math.ceil(attTotal / ATT_LIMIT))} onChange={setAttPage} />
+          </div>
         </div>
       )}
 

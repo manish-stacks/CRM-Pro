@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useAuth } from '@/hooks/useAuth'
 import { StatCard } from '@/components/ui'
+import { PunchOutConfirmModal } from '@/components/PunchOutConfirmModal'
 import { CelebrationWidget } from '@/components/dashboard/CelebrationWidget'
 import { Users, Target, FileText, DollarSign, Clock, UserCheck, LogIn, LogOut, Wifi, CalendarCheck, AlertTriangle, CheckCircle2, MapPin, Briefcase, Home, Loader2 } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
@@ -72,7 +73,14 @@ export default function DashboardPage() {
     }
   }, [user?.role])
 
+  // Punch Out asks for confirmation first (see PunchOutConfirmModal) — a
+  // mis-click here used to end someone's whole working day silently.
+  const [confirmOut, setConfirmOut] = useState(false)
+
   const handlePunch = async (workMode: string = 'WFO') => {
+    const isOut = todayAttendance?.punchIn && !todayAttendance?.punchOut
+    if (isOut && !confirmOut) { setConfirmOut(true); return }
+    setConfirmOut(false)
     setPunching(true)
     try {
       const action = todayAttendance?.punchIn && !todayAttendance?.punchOut ? 'punch_out' : 'punch_in'
@@ -259,6 +267,15 @@ export default function DashboardPage() {
                     isPunchedIn ? <><LogOut size={15} /> Punch Out</> :
                       <><LogIn size={15} /> Punch In</>}
                 </button>
+
+                {/* Confirm before ending the day */}
+                <PunchOutConfirmModal
+                  open={confirmOut}
+                  onClose={() => setConfirmOut(false)}
+                  onConfirm={() => handlePunch()}
+                  loading={punching}
+                  punchInAt={todayAttendance?.punchIn}
+                />
                 <p className="text-xs text-gray-500 text-center">
                   <MapPin size={10} className="inline mr-0.5" />
                   Location will be recorded

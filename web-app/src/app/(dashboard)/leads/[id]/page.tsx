@@ -53,7 +53,7 @@ export default function LeadDetailPage() {
   const [lead, setLead] = useState<any>(null)
   const [loading, setLoading] = useState(true)
 
-  const [modal, setModal] = useState<'none' | 'activity' | 'meeting' | 'reassign' | 'convert' | 'lost' | 'notInterested' | 'edit' | 'noAnswer' | 'reschedule'>('none')
+  const [modal, setModal] = useState<'none' | 'activity' | 'meeting' | 'reassign' | 'convert' | 'lost' | 'notInterested' | 'edit' | 'noAnswer' | 'reschedule' | 'cancelMeeting'>('none')
   const [saving, setSaving] = useState(false)
 
   const [executives, setExecutives] = useState<any[]>([])
@@ -72,6 +72,7 @@ export default function LeadDetailPage() {
   const [slotsLoading, setSlotsLoading] = useState(false)
   // Reschedule / No-answer forms
   const [rescheduleForm, setRescheduleForm] = useState({ meetingDate: '', meetingTime: '', notes: '' })
+  const [cancelNotes, setCancelNotes] = useState('')
   const [noAnswerReason, setNoAnswerReason] = useState('')
   // Reassign form
   const [reassignForm, setReassignForm] = useState({ toUserId: '', reason: '' })
@@ -197,6 +198,26 @@ export default function LeadDetailPage() {
       await api.post(`/leads/${id}/meeting`, meetForm)
       toast.success('Meeting scheduled — WhatsApp sent to client')
       setModal('none')
+      fetchLead()
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Failed')
+    } finally { setSaving(false) }
+  }
+
+  // Cancel the assigned meeting. The note is mandatory — it goes straight to
+  // the lead's creator + telecaller so they can re-assign the meeting to a
+  // different marketing person.
+  const cancelMeeting = async () => {
+    if (cancelNotes.trim().length < 3) {
+      toast.error('Please write why the meeting is being cancelled')
+      return
+    }
+    setSaving(true)
+    try {
+      await api.post(`/leads/${id}/meeting/cancel`, { notes: cancelNotes.trim() })
+      toast.success('Meeting cancelled — telecaller notified to re-assign')
+      setModal('none')
+      setCancelNotes('')
       fetchLead()
     } catch (e: any) {
       toast.error(e.response?.data?.error || 'Failed')
@@ -396,6 +417,12 @@ export default function LeadDetailPage() {
               <button onClick={openReschedule} disabled={saving}
                 className="badge bg-indigo-600 text-white hover:bg-indigo-700">
                 <RotateCcw size={11} /> Reschedule
+              </button>
+            )}
+            {lead.status === 'MEETING_SCHEDULED' && (canTL || lead.meetingAssignedToId === user?.id) && (
+              <button onClick={() => { setCancelNotes(''); setModal('cancelMeeting') }} disabled={saving}
+                className="badge bg-red-600 text-white hover:bg-red-700">
+                <Ban size={11} /> Cancel Meeting
               </button>
             )}
             {(lead.status === 'MEETING_DONE' || canTL || lead.assignedToId === user?.id) && (
@@ -713,6 +740,30 @@ export default function LeadDetailPage() {
           <div className="flex justify-end gap-2 pt-1">
             <Button variant="secondary" onClick={() => setModal('none')}>Cancel</Button>
             <Button onClick={markNoAnswer} loading={saving} className="!bg-amber-600 hover:!bg-amber-700">Confirm No Answer</Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Cancel Meeting Modal */}
+      <Modal open={modal === 'cancelMeeting'} onClose={() => setModal('none')} title="Cancel Meeting">
+        <div className="space-y-3">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-900">
+            This un-assigns <b>{lead.meetingAssignedTo?.name || 'the marketing person'}</b>, frees the slot,
+            and moves the lead back to <b>FOLLOW UP</b>. The telecaller who added this lead gets your note
+            and can re-assign the meeting to another marketing person.
+          </div>
+          <Textarea
+            label="Reason / notes *"
+            value={cancelNotes}
+            onChange={e => setCancelNotes(e.target.value)}
+            rows={3}
+            placeholder="e.g. Client postponed indefinitely / marketing person on leave / area changed"
+          />
+          <div className="flex justify-end gap-2 pt-1">
+            <Button variant="secondary" onClick={() => setModal('none')}>Back</Button>
+            <Button onClick={cancelMeeting} loading={saving} className="!bg-red-600 hover:!bg-red-700">
+              Cancel Meeting & Notify
+            </Button>
           </div>
         </div>
       </Modal>

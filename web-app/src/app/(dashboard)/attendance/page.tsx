@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useAuth } from '@/hooks/useAuth'
 import api from '@/lib/axios'
+import { PunchOutConfirmModal } from '@/components/PunchOutConfirmModal'
 import { getCurrentGeo } from '@/lib/geolocation'
 import { formatDate, formatDateTime, getInitials, getStatusColor } from '@/lib/utils'
 import { Badge, EmptyState, Pagination } from '@/components/ui'
@@ -200,9 +201,16 @@ export default function AttendancePage() {
   const isPunchedIn = today?.punchIn && !today?.punchOut
   const isPunchedOut = today?.punchIn && today?.punchOut
 
+  // Punch Out is irreversible for the day — confirm via PunchOutConfirmModal
+  // (window.confirm can be suppressed by the browser and looks off-brand).
+  const [confirmOut, setConfirmOut] = useState(false)
+
   const handlePunch = async (workMode: string = 'WFO') => {
-    setPunching(true)
     const action = isPunchedIn ? 'punch_out' : 'punch_in'
+    if (action === 'punch_out' && !confirmOut) { setConfirmOut(true); return }
+    setConfirmOut(false)
+
+    setPunching(true)
     const loadingToast = toast.loading('Getting your location...')
 
     try {
@@ -370,6 +378,15 @@ export default function AttendancePage() {
                         isPunchedIn ? <><LogOut size={15} /> Punch Out</> :
                           <><LogIn size={15} /> Punch In</>}
                     </button>
+
+                    {/* Confirm before ending the day */}
+                    <PunchOutConfirmModal
+                      open={confirmOut}
+                      onClose={() => setConfirmOut(false)}
+                      onConfirm={() => handlePunch()}
+                      loading={punching}
+                      punchInAt={today?.punchIn}
+                    />
                     <p className="text-xs text-gray-500 text-center">
                       <MapPin size={10} className="inline mr-0.5" />
                       Location will be recorded

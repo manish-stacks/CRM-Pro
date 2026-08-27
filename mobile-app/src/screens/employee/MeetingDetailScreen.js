@@ -61,6 +61,8 @@ export default function MeetingDetailScreen({ route, navigation }) {
   const [rescheduleNotes, setRescheduleNotes] = useState('');
   const [showNoAnswer, setShowNoAnswer] = useState(false);
   const [noAnswerReason, setNoAnswerReason] = useState('');
+  const [showCancel, setShowCancel] = useState(false);
+  const [cancelNotes, setCancelNotes] = useState('');
 
   // Proposals (telecaller creates, marketing person can view for context)
   const [proposals, setProposals] = useState([]);
@@ -271,6 +273,29 @@ export default function MeetingDetailScreen({ route, navigation }) {
     } finally { setSaving(false); }
   };
 
+  // Cancel the meeting entirely. Notes are mandatory: the lead's creator and
+  // telecaller get them in a push so they can re-assign this meeting to a
+  // different marketing person.
+  const submitCancel = async () => {
+    if (cancelNotes.trim().length < 3) {
+      Alert.alert('Note required', 'Please write why you are cancelling this meeting. The telecaller needs this to re-assign it.');
+      return;
+    }
+    setSaving(true);
+    try {
+      await EmployeeAPI.cancelMeeting(meetingId, { notes: cancelNotes.trim() });
+      setShowCancel(false);
+      setCancelNotes('');
+      Alert.alert(
+        'Meeting Cancelled',
+        'Your note has been sent to the telecaller who added this lead. They will re-assign the meeting to another marketing person.'
+      );
+      fetchDetail();
+    } catch (e) {
+      showActionError(e);
+    } finally { setSaving(false); }
+  };
+
   const submitReschedule = async () => {
     if (!rescheduleDate || !rescheduleTime) {
       Alert.alert('Missing info', 'Pick a new date and time (after office hours).');
@@ -448,6 +473,13 @@ export default function MeetingDetailScreen({ route, navigation }) {
                   <Ionicons name="time-outline" size={18} color="#6366F1" />
                   <Text style={[s.actionRowTxt, { color: '#6366F1' }]}>Reschedule (after office hours)</Text>
                   <Ionicons name="chevron-forward" size={16} color="#6366F1" />
+                </TouchableOpacity>
+              )}
+              {data.status === 'MEETING_SCHEDULED' && (
+                <TouchableOpacity style={[s.actionRow, { borderColor: colors.border }]} onPress={() => { setCancelNotes(''); setShowCancel(true); }} disabled={saving}>
+                  <Ionicons name="close-circle-outline" size={18} color="#EF4444" />
+                  <Text style={[s.actionRowTxt, { color: '#EF4444' }]}>Cancel Meeting (needs a note)</Text>
+                  <Ionicons name="chevron-forward" size={16} color="#EF4444" />
                 </TouchableOpacity>
               )}
               {data.status === 'MEETING_SCHEDULED' && (
@@ -676,6 +708,41 @@ export default function MeetingDetailScreen({ route, navigation }) {
           </ScrollView>
         </View>
       </Modal>
+      {/* Cancel Meeting Modal */}
+      <Modal visible={showCancel} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowCancel(false)}>
+        <View style={[s.modal, { backgroundColor: colors.bg, paddingTop: 40 }]}>
+          <View style={s.modalHeader}>
+            <Text style={[s.modalTitle, { color: colors.text }]}>Cancel Meeting</Text>
+            <TouchableOpacity onPress={() => setShowCancel(false)}>
+              <Ionicons name="close" size={24} color={colors.text2} />
+            </TouchableOpacity>
+          </View>
+          <ScrollView style={{ padding: 20 }} keyboardShouldPersistTaps="handled">
+            <View style={{ backgroundColor: 'rgba(239,68,68,0.1)', borderRadius: 12, padding: 12, marginBottom: 16 }}>
+              <Text style={{ color: '#EF4444', fontSize: 12, lineHeight: 18 }}>
+                This releases your slot and un-assigns you from this meeting. The
+                telecaller who added the lead gets your note and can re-assign the
+                meeting to another marketing person.
+              </Text>
+            </View>
+            <Text style={s.fieldLabel}>WHY ARE YOU CANCELLING? *</Text>
+            <View style={[s.fieldWrap, { backgroundColor: colors.bg2, borderColor: colors.border, alignItems: 'flex-start' }]}>
+              <TextInput
+                style={{ flex: 1, fontSize: 14, paddingVertical: 12, color: colors.text, minHeight: 90, textAlignVertical: 'top' }}
+                placeholder="e.g. Client postponed indefinitely / I am on leave that day / area changed"
+                placeholderTextColor={colors.text3}
+                value={cancelNotes}
+                onChangeText={setCancelNotes}
+                multiline
+              />
+            </View>
+            <TouchableOpacity onPress={submitCancel} disabled={saving} style={{ backgroundColor: '#EF4444', borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 20 }}>
+              {saving ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>Cancel Meeting & Notify</Text>}
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+      </Modal>
+
       {/* New Proposal Modal */}
       <Modal visible={showProposal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowProposal(false)}>
         <View style={[s.modal, { backgroundColor: colors.bg, paddingTop: 40 }]}>

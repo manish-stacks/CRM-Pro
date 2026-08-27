@@ -41,6 +41,17 @@ import EmployeeChangePasswordScreen from '../screens/employee/EmployeeChangePass
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
+// Screens that must keep the bottom menu visible but must NOT get their own
+// tab button. Previously these lived in the root Stack ABOVE the tab
+// navigator, which is exactly why the bottom menu disappeared on Meeting
+// Detail / Client Detail / Add Client / Leaves / Edit Profile etc.
+// Registering them as hidden tabs keeps navigation.navigate('X', params)
+// working exactly as before, but the tab bar now stays on screen everywhere.
+const HIDDEN_TAB = {
+  tabBarButton: () => null,
+  tabBarItemStyle: { display: 'none' },
+};
+
 // ─── Client Bottom Tabs ───────────────────────────────────────────────────────
 function ClientTabs() {
   const { colors } = useTheme();
@@ -75,6 +86,16 @@ function ClientTabs() {
       <Tab.Screen name="Payments" component={PaymentsScreen} />
       <Tab.Screen name="Support" component={SupportScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
+
+      {/* --- hidden tabs: keep the bottom menu visible on these screens --- */}
+      <Tab.Screen name="ServiceDetail" component={ServiceDetailScreen} options={HIDDEN_TAB} />
+      <Tab.Screen name="Renewals" component={RenewalsScreen} options={HIDDEN_TAB} />
+      <Tab.Screen name="Proposals" component={ProposalsScreen} options={HIDDEN_TAB} />
+      <Tab.Screen name="AllTickets" component={AllTicketsScreen} options={HIDDEN_TAB} />
+      <Tab.Screen name="Notifications" component={NotificationsScreen} options={HIDDEN_TAB} />
+      <Tab.Screen name="EditProfile" component={EditProfileScreen} options={HIDDEN_TAB} />
+      <Tab.Screen name="ChangePassword" component={ChangePasswordScreen} options={HIDDEN_TAB} />
+      <Tab.Screen name="NotificationsSettings" component={NotificationsSettingsScreen} options={HIDDEN_TAB} />
     </Tab.Navigator>
   );
 }
@@ -114,6 +135,15 @@ function EmployeeTabs() {
       <Tab.Screen name="Clients" component={ClientsScreen} />
       <Tab.Screen name="Visits" component={VisitsScreen} />
       <Tab.Screen name="EmpProfile" component={EmployeeProfileScreen} options={{ tabBarLabel: 'Profile' }} />
+
+      {/* --- hidden tabs: keep the bottom menu visible on these screens --- */}
+      <Tab.Screen name="MeetingDetail" component={MeetingDetailScreen} options={HIDDEN_TAB} />
+      <Tab.Screen name="ClientDetail" component={ClientDetailScreen} options={HIDDEN_TAB} />
+      <Tab.Screen name="AddClient" component={AddClientScreen} options={HIDDEN_TAB} />
+      <Tab.Screen name="Leaves" component={LeavesScreen} options={HIDDEN_TAB} />
+      <Tab.Screen name="EmployeeEditProfile" component={EmployeeEditProfileScreen} options={HIDDEN_TAB} />
+      <Tab.Screen name="EmployeeChangePassword" component={EmployeeChangePasswordScreen} options={HIDDEN_TAB} />
+      <Tab.Screen name="Notifications" component={NotificationsScreen} options={HIDDEN_TAB} />
     </Tab.Navigator>
   );
 }
@@ -133,25 +163,15 @@ export default function AppNavigator({ navRef }) {
           </>
         ) : role === 'employee' ? (
           <>
+            {/* All employee screens now live INSIDE EmployeeTabs as hidden
+                tabs, so the bottom menu never disappears. */}
             <Stack.Screen name="EmployeeMain" component={EmployeeTabs} />
-            <Stack.Screen name="MeetingDetail" component={MeetingDetailScreen} />
-            <Stack.Screen name="ClientDetail" component={ClientDetailScreen} />
-            <Stack.Screen name="AddClient" component={AddClientScreen} options={{ tabBarLabel: 'Add Client' }} />
-            <Stack.Screen name="Leaves" component={LeavesScreen} options={{ tabBarLabel: 'Leaves' }} />
-            <Stack.Screen name="EmployeeEditProfile" component={EmployeeEditProfileScreen} />
-            <Stack.Screen name="EmployeeChangePassword" component={EmployeeChangePasswordScreen} />
           </>
         ) : (
           <>
+            {/* Same for the client side — everything is a hidden tab inside
+                ClientTabs so the bottom menu stays put. */}
             <Stack.Screen name="Main" component={ClientTabs} />
-            <Stack.Screen name="ServiceDetail" component={ServiceDetailScreen} />
-            <Stack.Screen name="Renewals" component={RenewalsScreen} />
-            <Stack.Screen name="Proposals" component={ProposalsScreen} />
-            <Stack.Screen name="AllTickets" component={AllTicketsScreen} />
-            <Stack.Screen name="Notifications" component={NotificationsScreen} />
-            <Stack.Screen name="EditProfile" component={EditProfileScreen} />
-            <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
-            <Stack.Screen name="NotificationsSettings" component={NotificationsSettingsScreen} />
           </>
         )}
       </Stack.Navigator>

@@ -27,6 +27,9 @@ export async function GET(req: NextRequest) {
   const dateFrom = searchParams.get('dateFrom')   // YYYY-MM-DD
   const dateTo = searchParams.get('dateTo')       // YYYY-MM-DD
   const search = searchParams.get('search')       // employee name / employeeId
+  const employeeId = searchParams.get('employeeId') // single employee (user detail page)
+  const late = searchParams.get('late')            // 'true' -> only late punch-ins
+  const workMode = searchParams.get('workMode')    // WFO | WFH | FIELD
 
   const where: any = {}
 
@@ -44,6 +47,9 @@ export async function GET(req: NextRequest) {
   }
 
   if (status) where.status = status
+  if (late === 'true') where.isLate = true
+  if (late === 'false') where.isLate = false
+  if (workMode) where.workMode = workMode
 
   // Role-based visibility
   // Non-admins: see own + team (dept they head + direct reports). Covers EMPLOYEE-role heads.
@@ -59,6 +65,18 @@ export async function GET(req: NextRequest) {
       where: { departmentId }, select: { id: true },
     })
     where.employeeId = { in: deptEmps.map(e => e.id) }
+  }
+
+  // Single-employee filter (used by the employee detail page's Attendance tab).
+  // Non-admins can only pass an employeeId that is already inside their scope.
+  if (employeeId) {
+    if (['SUPER_ADMIN', 'ADMIN'].includes(session.role)) {
+      where.employeeId = employeeId
+    } else if (where.employeeId?.in) {
+      where.employeeId = where.employeeId.in.includes(employeeId)
+        ? employeeId
+        : { in: ['__none__'] }
+    }
   }
 
   if (search && ['SUPER_ADMIN', 'ADMIN', 'MANAGER'].includes(session.role)) {

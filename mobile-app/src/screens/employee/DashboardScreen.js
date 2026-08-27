@@ -112,7 +112,26 @@ export default function DashboardScreen({ navigation }) {
 
   const s = styles(colors);
 
+  // Punch/Check OUT is irreversible for the day, so ask first. A mis-tap here
+  // used to instantly end the shift and stop location tracking.
+  const confirmCheckOut = () =>
+    new Promise((resolve) => {
+      Alert.alert(
+        'Punch Out?',
+        'This ends your working day. You will not be able to punch in again today.\n\nAre you sure you want to punch out?',
+        [
+          { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+          { text: 'Yes, Punch Out', style: 'destructive', onPress: () => resolve(true) },
+        ],
+        { cancelable: true, onDismiss: () => resolve(false) }
+      );
+    });
+
   const handleCheckInOut = async () => {
+    if (checkedIn) {
+      const ok = await confirmCheckOut();
+      if (!ok) return;
+    }
     try {
       setChecking(true);
 

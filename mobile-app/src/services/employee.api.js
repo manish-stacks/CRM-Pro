@@ -70,6 +70,9 @@ export const EmployeeAPI = {
   markMeetingDone: (id, data) => AxiosInstance.post(`/mobile/meetings/${id}/done`, data),
   noAnswerMeeting: (id, data) => AxiosInstance.post(`/mobile/meetings/${id}/no-answer`, data),
   rescheduleMeeting: (id, data) => AxiosInstance.post(`/mobile/meetings/${id}/reschedule`, data),
+  // Cancel an assigned meeting. `notes` is MANDATORY — it is what the
+  // telecaller / lead creator sees in the "re-assign needed" notification.
+  cancelMeeting: (id, data) => AxiosInstance.post(`/mobile/meetings/${id}/cancel`, data),
   closeMeeting: (id, data) => AxiosInstance.post(`/mobile/meetings/${id}/close`, data),
 
   // Visits

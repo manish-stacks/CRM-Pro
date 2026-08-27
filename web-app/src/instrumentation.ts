@@ -56,10 +56,16 @@ export async function register() {
   cron.schedule('0 3 * * *', async () => {
     try {
       const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-      const { count } = await prisma.activityLog.deleteMany({
-        where: { createdAt: { lt: cutoff } },
-      })
-      console.log(`[audit-log-cleanup] Deleted ${count} audit log(s) older than 7 days.`)
+      // 1-week retention across every log table, not just ActivityLog.
+      const [audit, logins, notifs] = await Promise.all([
+        prisma.activityLog.deleteMany({ where: { createdAt: { lt: cutoff } } }),
+        prisma.loginActivity.deleteMany({ where: { loginAt: { lt: cutoff } } }),
+        // Unread notifications are kept — only already-read ones are purged.
+        prisma.notification.deleteMany({ where: { createdAt: { lt: cutoff }, isRead: true } }),
+      ])
+      console.log(
+        `[log-cleanup] 7-day purge — audit:${audit.count} logins:${logins.count} readNotifications:${notifs.count}`
+      )
     } catch (err) {
       console.error('[audit-log-cleanup-cron] failed:', err)
     }

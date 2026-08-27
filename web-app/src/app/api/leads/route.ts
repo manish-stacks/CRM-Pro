@@ -50,21 +50,56 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url)
   const { skip, limit } = getPaginationParams(searchParams)
-  const status = searchParams.get('status')
-  const source = searchParams.get('source')
-  const assignedToId = searchParams.get('assignedToId')
-  const meetingAssignedToId = searchParams.get('meetingAssignedToId')
-  const createdById = searchParams.get('createdById')
-  const search = searchParams.get('search')
-  const dateFrom = searchParams.get('dateFrom')
-  const dateTo = searchParams.get('dateTo')
-  const followUpDate = searchParams.get('followUpDate') // YYYY-MM-DD
-  const meetingDate = searchParams.get('meetingDate')
-  const sortBy = searchParams.get('sortBy') || '' // 'followup' | 'created' | '' (default — plain newest-first, same as before)
+  const g = (k: string) => searchParams.get(k)?.trim() || ''
+
+  const status = g('status')                       // single, or comma list
+  const source = g('source')
+  const assignedToId = g('assignedToId')
+  const meetingAssignedToId = g('meetingAssignedToId')
+  const createdById = g('createdById')
+  const search = g('search')
+  const dateFrom = g('dateFrom')                   // created between
+  const dateTo = g('dateTo')
+  const followUpDate = g('followUpDate')           // exact day
+  const followUpFrom = g('followUpFrom')
+  const followUpTo = g('followUpTo')
+  const callbackDate = g('callbackDate')
+  const callbackFrom = g('callbackFrom')
+  const callbackTo = g('callbackTo')
+  const meetingDate = g('meetingDate')
+  const meetingFrom = g('meetingFrom')
+  const meetingTo = g('meetingTo')
+  const city = g('city')
+  const state = g('state')
+  const service = g('service')
+  const minPrice = g('minPrice')
+  const maxPrice = g('maxPrice')
+  const hasMeeting = g('hasMeeting')               // 'yes' | 'no'
+  const hasEmail = g('hasEmail')                   // 'yes' | 'no'
+  const due = g('due')                             // today | tomorrow | overdue | week | none
+  const sortBy = g('sortBy')                       // nextaction | followup | created | oldest | updated | name
 
   const where: any = {}
-  if (status) where.status = status
-  if (source) where.source = source
+  if (status) {
+    const list = status.split(',').map(x => x.trim()).filter(Boolean)
+    where.status = list.length > 1 ? { in: list } : list[0]
+  }
+  if (source) {
+    const list = source.split(',').map(x => x.trim()).filter(Boolean)
+    where.source = list.length > 1 ? { in: list } : list[0]
+  }
+  if (city) where.city = { contains: city }
+  if (state) where.state = { contains: state }
+  if (service) where.service = { contains: service }
+  if (minPrice || maxPrice) {
+    where.price = {}
+    if (minPrice) where.price.gte = Number(minPrice)
+    if (maxPrice) where.price.lte = Number(maxPrice)
+  }
+  if (hasMeeting === 'yes') where.meetingDate = { not: null }
+  if (hasMeeting === 'no') where.meetingDate = null
+  if (hasEmail === 'yes') where.clientEmail = { not: null }
+  if (hasEmail === 'no') where.clientEmail = null
 
   if (search) {
     where.OR = [
@@ -73,6 +108,10 @@ export async function GET(req: NextRequest) {
       { companyName: { contains: search } },
       { clientPhone: { contains: search } },
       { clientEmail: { contains: search } },
+      { alternatePhone: { contains: search } },
+      { city: { contains: search } },
+      { service: { contains: search } },
+      { remark: { contains: search } },
     ]
   }
   if (dateFrom || dateTo) {
@@ -80,44 +119,66 @@ export async function GET(req: NextRequest) {
     if (dateFrom) where.createdAt.gte = new Date(dateFrom)
     if (dateTo) where.createdAt.lte = new Date(dateTo + 'T23:59:59')
   }
-  if (followUpDate) {
-    const d = dateOnly(followUpDate)
+
+  // ---- date helpers (all @db.Date columns, so UTC-midnight boundaries) ----
+  const dayRange = (ymd: string) => {
+    const d = dateOnly(ymd)
     const next = new Date(d); next.setUTCDate(d.getUTCDate() + 1)
-    where.followUpDate = { gte: d, lt: next }
+    return { gte: d, lt: next }
   }
-  if (meetingDate) {
-    const d = dateOnly(meetingDate)
-    const next = new Date(d); next.setUTCDate(d.getUTCDate() + 1)
-    where.meetingDate = { gte: d, lt: next }
+  const between = (from: string, to: string) => {
+    const r: any = {}
+    if (from) r.gte = dateOnly(from)
+    if (to) { const t = dateOnly(to); t.setUTCDate(t.getUTCDate() + 1); r.lt = t }
+    return r
   }
+
+  if (followUpDate) where.followUpDate = dayRange(followUpDate)
+  else if (followUpFrom || followUpTo) where.followUpDate = between(followUpFrom, followUpTo)
+
+  if (callbackDate) where.callbackDate = dayRange(callbackDate)
+  else if (callbackFrom || callbackTo) where.callbackDate = between(callbackFrom, callbackTo)
+
+  if (meetingDate) where.meetingDate = dayRange(meetingDate)
+  else if (meetingFrom || meetingTo) where.meetingDate = between(meetingFrom, meetingTo)
 
   // Role-based visibility.
-  // NOTE: `where.OR` may already be taken by the search filter, so visibility
-  // rules go into `where.AND` — Prisma ANDs all top-level keys together.
   const and: any[] = []
-  // Team leads / department heads who aren't MANAGER-role still need the team view
   let canFilterOthers = ['SUPER_ADMIN', 'ADMIN', 'MANAGER'].includes(session.role)
 
+  // ---- "Due" quick filter -------------------------------------------------
+  // Next action = whichever of followUp / callback / meeting is set. A lead is
+  // "due today" if ANY of those three lands today. This is what makes a
+  // follow-up you booked yesterday for tomorrow show up in tomorrow's list.
+  if (due) {
+    const today = dateOnly(new Date())
+    const plus = (n: number) => { const d = new Date(today); d.setUTCDate(d.getUTCDate() + n); return d }
+    let range: any = null
+    if (due === 'today') range = { gte: today, lt: plus(1) }
+    else if (due === 'tomorrow') range = { gte: plus(1), lt: plus(2) }
+    else if (due === 'week') range = { gte: today, lt: plus(7) }
+    else if (due === 'overdue') range = { lt: today }
+
+    if (due === 'none') {
+      and.push({ followUpDate: null, callbackDate: null, meetingDate: null })
+    } else if (range) {
+      const notClosed = { status: { notIn: ['CONVERTED', 'CLOSED', 'NOT_INTERESTED'] } }
+      and.push(notClosed)
+      and.push({
+        OR: [
+          { followUpDate: range },
+          { callbackDate: range },
+          { meetingDate: range },
+        ],
+      })
+    }
+  }
+
   if (session.role === 'TELECALLER') {
-    // Own leads only — the ones assigned to them OR the ones they added themselves
-    and.push({
-      OR: [
-        { assignedToId: session.userId },
-        { createdById: session.userId },
-      ],
-    })
+    and.push({ OR: [{ assignedToId: session.userId }, { createdById: session.userId }] })
   } else if (session.role === 'MARKETING_EXECUTIVE') {
-    // Meetings assigned to them, plus anything they added
-    and.push({
-      OR: [
-        { meetingAssignedToId: session.userId },
-        { createdById: session.userId },
-      ],
-    })
+    and.push({ OR: [{ meetingAssignedToId: session.userId }, { createdById: session.userId }] })
   } else if (session.role === 'MANAGER') {
-    // A MANAGER is a team lead (e.g. a telecalling TL) — there can be more
-    // than one, so scope to their own team (dept they head + direct reports),
-    // not every lead company-wide.
     const team = await getTeamUserIds(session.userId)
     and.push({
       OR: [
@@ -127,9 +188,6 @@ export async function GET(req: NextRequest) {
       ],
     })
   } else if (session.role === 'EMPLOYEE') {
-    // Regular employees see nothing — UNLESS they head a department / have
-    // direct reports (a team lead on an EMPLOYEE role), in which case they
-    // see their whole team's leads and can filter within it.
     const team = await getTeamUserIds(session.userId)
     if (!team.canSeeTeam) return successResponse([], 0)
     canFilterOthers = true
@@ -143,12 +201,40 @@ export async function GET(req: NextRequest) {
   }
   // ADMIN, SUPER_ADMIN see all (respecting filters)
 
-  // Filters — only for roles allowed to look at other people's leads
   if (assignedToId && canFilterOthers) and.push({ assignedToId })
   if (meetingAssignedToId && canFilterOthers) and.push({ meetingAssignedToId })
   if (createdById && canFilterOthers) and.push({ createdById })
 
   if (and.length) where.AND = and
+
+  // ---- Sorting ------------------------------------------------------------
+  // 'nextaction' (default) = soonest pending action first. A lead you set to
+  // ring/follow-up tomorrow therefore floats to the top of tomorrow's list.
+  let orderBy: any
+  switch (sortBy) {
+    case 'created':
+      orderBy = { createdAt: 'desc' }; break
+    case 'oldest':
+      orderBy = { createdAt: 'asc' }; break
+    case 'updated':
+      orderBy = { updatedAt: 'desc' }; break
+    case 'name':
+      orderBy = { clientName: 'asc' }; break
+    case 'followup':
+      orderBy = [
+        { meetingDate: { sort: 'desc', nulls: 'last' } },
+        { followUpDate: { sort: 'desc', nulls: 'last' } },
+      ]; break
+    case 'nextaction':
+      orderBy = [
+        { followUpDate: { sort: 'asc', nulls: 'last' } },
+        { callbackDate: { sort: 'asc', nulls: 'last' } },
+        { meetingDate: { sort: 'asc', nulls: 'last' } },
+        { createdAt: 'desc' },
+      ]; break
+    default:
+      orderBy = { createdAt: 'desc' }
+  }
 
   const [leads, total] = await Promise.all([
     prisma.lead.findMany({
@@ -159,24 +245,14 @@ export async function GET(req: NextRequest) {
         meetingAssignedTo: { select: { id: true, name: true, role: true, phone: true } },
         _count: { select: { activities: true, proposals: true } },
       },
-      // 'followup' mirrors the on-screen "Follow-up / Meeting" column, which
-      // shows meetingDate when set, else followUpDate — so sort primarily by
-      // meetingDate (latest date first) then followUpDate as a tiebreaker for
-      // rows with no meeting. `nulls: 'last'` is required here — MySQL sorts
-      // NULL as the smallest value in ASC order, so without it every lead
-      // with no date at all (the "—" rows) would float above leads that
-      // actually have a follow-up/meeting date, regardless of sort direction.
-      // 'created' is the previous newest-first default.
-      orderBy: sortBy === 'followup'
-        ? [
-          { meetingDate: { sort: 'desc', nulls: 'last' } },
-          { followUpDate: { sort: 'desc', nulls: 'last' } },
-        ]
-        : { createdAt: 'desc' },
+      orderBy,
     }),
     prisma.lead.count({ where }),
   ])
-  return successResponse(leads, total)
+
+  // Serial number, continuous across pages (page 2 starts at 21, etc.)
+  const withSerial = leads.map((l, i) => ({ ...l, serialNo: skip + i + 1 }))
+  return successResponse(withSerial, total)
 }
 
 export async function POST(req: NextRequest) {

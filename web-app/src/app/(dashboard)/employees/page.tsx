@@ -36,7 +36,7 @@ export default function EmployeesPage() {
     name: '', email: '', phone: '', password: '',
     role: 'EMPLOYEE', position: '', departmentId: '',
     salary: '', workMode: 'WFO', joiningDate: new Date().toISOString().split('T')[0],
-    dateOfBirth: '',
+    dateOfBirth: '', area: '',
   })
   const [toggleReason, setToggleReason] = useState('')
 
@@ -68,7 +68,7 @@ export default function EmployeesPage() {
       name: '', email: '', phone: '', password: '',
       role: 'EMPLOYEE', position: '', departmentId: '',
       salary: '', workMode: 'WFO', joiningDate: new Date().toISOString().split('T')[0],
-      dateOfBirth: '',
+      dateOfBirth: '', area: '',
     })
     setModal('add')
   }
@@ -76,6 +76,10 @@ export default function EmployeesPage() {
   const create = async () => {
     if (!form.name || !form.email || !form.password) { toast.error('Name, email, password required'); return }
     if (form.password.length < 6) { toast.error('Password must be at least 6 characters'); return }
+    if (form.role === 'MARKETING_EXECUTIVE' && !form.area.trim()) {
+      toast.error('Marketing Area is required for a Marketing Executive')
+      return
+    }
 
     setSaving(true)
     try {
@@ -306,6 +310,26 @@ export default function EmployeesPage() {
             <Input label="Joining Date" type="date" value={form.joiningDate} onChange={e => setForm(p => ({ ...p, joiningDate: e.target.value }))} />
             <Input label="Date of Birth" type="date" value={form.dateOfBirth} onChange={e => setForm(p => ({ ...p, dateOfBirth: e.target.value }))} />
           </div>
+
+          {/* Marketing territory — only relevant for a marketing person, but it
+              MUST be captured here, otherwise the new executive won't show up in
+              the telecaller's "book a meeting by area" picker until someone
+              edits them later. */}
+          {form.role === 'MARKETING_EXECUTIVE' && (
+            <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 space-y-2">
+              <Input
+                label="Marketing Area / Territory *"
+                value={form.area}
+                onChange={e => setForm(p => ({ ...p, area: e.target.value }))}
+                placeholder="e.g. Pitampura, Rohini, South Delhi"
+              />
+              <p className="text-[11px] text-purple-700">
+                Meetings are assigned by area. Use the exact same spelling as other
+                executives covering the same territory so they group together.
+              </p>
+            </div>
+          )}
+
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="secondary" onClick={() => setModal('none')}>Cancel</Button>
             <Button onClick={create} loading={saving}>Create Employee</Button>

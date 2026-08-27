@@ -3,7 +3,7 @@
 // were not in publicPaths — middleware required an employee 'auth-token'.
 // Now the client portal has its own path/cookie tree; middleware handles both.
 import { NextRequest, NextResponse } from 'next/server'
-import { verifyToken } from './lib/auth'
+import { verifyToken, signToken, SESSION_MAX_AGE, REFRESH_WINDOW_DAYS } from './lib/auth'
 import { isMobileBrowserUA, isMobileAllowedPath, MOBILE_BLOCK_HTML, MOBILE_BLOCK_MESSAGE } from './lib/mobileGuard'
 
 // Fully public paths (no auth of any kind required)
@@ -129,7 +129,34 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(new URL('/dashboard', req.url))
   }
 
-  return NextResponse.next()
+  // ---- Sliding session refresh ------------------------------------------
+  // If the token is inside its last REFRESH_WINDOW_DAYS, silently mint a new
+  // one and re-set the cookie. An actively-used account therefore never hits
+  // the expiry wall, which is what was logging people out mid-work.
+  const res = NextResponse.next()
+  const fromCookie = !!req.cookies.get('auth-token')?.value
+  if (fromCookie && payload.exp) {
+    const msLeft = payload.exp * 1000 - Date.now()
+    if (msLeft < REFRESH_WINDOW_DAYS * 24 * 60 * 60 * 1000) {
+      try {
+        const fresh = await signToken({
+          userId: payload.userId,
+          email: payload.email,
+          role: payload.role,
+          name: payload.name,
+        })
+        res.cookies.set('auth-token', fresh, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax',
+          maxAge: SESSION_MAX_AGE,
+          path: '/',
+        })
+      } catch { /* refresh is best-effort — never block the request */ }
+    }
+  }
+
+  return res
 }
 
 export const config = {

@@ -45,15 +45,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const fetchUser = useCallback(async () => {
     try {
-      const res = await fetch('/api/auth/me')
+      const res = await fetch('/api/auth/me', { credentials: 'include', cache: 'no-store' })
       if (res.ok) {
         const data = await res.json()
         setUser(data)
-      } else {
+      } else if (res.status === 401) {
         setUser(null)
       }
+      // Any other status (500/502/gateway timeout) -> keep the current session
+      // in state instead of wiping it. Nulling the user on every hiccup is what
+      // made the CRM look like it randomly logged itself out.
     } catch {
-      setUser(null)
+      // Network blip / offline -> do NOT clear the session.
     } finally {
       setLoading(false)
     }

@@ -3,8 +3,11 @@
 // (node-cron), and can also be hit manually / by an external scheduler
 // (e.g. cron-job.org, Vercel Cron) using the same secret pattern as the
 // other /api/cron/* routes.
-// Deletes ActivityLog (shown in UI as "Audit Log") rows older than
-// RETENTION_DAYS, so the table doesn't grow forever.
+//
+// 1-WEEK RETENTION. Anything older than RETENTION_DAYS is deleted:
+//   - ActivityLog   (shown in the UI as "Audit Log")
+//   - LoginActivity (Login history on the profile / employee pages)
+//   - Notification  (only ones already READ — unread ones are kept)
 // Protected by CRON_SECRET env var — pass ?secret=... or X-Cron-Secret header.
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
@@ -21,9 +24,18 @@ export async function GET(req: NextRequest) {
 
   const cutoff = new Date(Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000)
 
-  const { count: deleted } = await prisma.activityLog.deleteMany({
-    where: { createdAt: { lt: cutoff } },
-  })
+  const [audit, logins, notifs] = await Promise.all([
+    prisma.activityLog.deleteMany({ where: { createdAt: { lt: cutoff } } }),
+    prisma.loginActivity.deleteMany({ where: { loginAt: { lt: cutoff } } }),
+    prisma.notification.deleteMany({ where: { createdAt: { lt: cutoff }, isRead: true } }),
+  ])
 
-  return NextResponse.json({ success: true, deletedAuditLogs: deleted })
+  return NextResponse.json({
+    success: true,
+    retentionDays: RETENTION_DAYS,
+    cutoff,
+    deletedAuditLogs: audit.count,
+    deletedLoginActivities: logins.count,
+    deletedReadNotifications: notifs.count,
+  })
 }

@@ -13,13 +13,24 @@ export interface JWTPayload {
   email: string
   role: string
   name: string
+  /** epoch seconds — set by jose, present on verified tokens */
+  exp?: number
+  iat?: number
 }
+
+// Session lifetime. Was 7d, which is why users kept getting logged out.
+// Now 30d + a sliding refresh in middleware.ts: every request within the
+// last REFRESH_WINDOW_DAYS of expiry silently re-issues a fresh 30d token,
+// so an active user is effectively never logged out.
+export const SESSION_DAYS = 30
+export const SESSION_MAX_AGE = 60 * 60 * 24 * SESSION_DAYS
+export const REFRESH_WINDOW_DAYS = 20
 
 export async function signToken(payload: JWTPayload): Promise<string> {
   return await new SignJWT(payload as unknown as Record<string, unknown>)
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
-    .setExpirationTime('7d')
+    .setExpirationTime(`${SESSION_DAYS}d`)
     .sign(JWT_SECRET)
 }
 
