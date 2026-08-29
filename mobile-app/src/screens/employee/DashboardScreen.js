@@ -15,6 +15,7 @@ import {
   startTracking, stopTracking, getCurrentLocation, reverseGeocode, flushQueue, getPermissionStatus,
 } from '../../services/LocationTracker';
 import LocationDisclosureModal from '../../components/LocationDisclosureModal';
+import PunchOutConfirmModal from '../../components/PunchOutConfirmModal';
 
 const StatCard = ({ icon, label, value, color, bg }) => {
   const { colors } = useTheme();
@@ -48,6 +49,9 @@ export default function DashboardScreen({ navigation }) {
   const [checkedIn, setCheckedIn] = useState(false);
   const [checking, setChecking] = useState(false);
   const [showDisclosure, setShowDisclosure] = useState(false);
+  // Punch-out confirmation sheet + the punch-in timestamp we show inside it.
+  const [showPunchOut, setShowPunchOut] = useState(false);
+  const [punchInAt, setPunchInAt] = useState(null);
   const disclosureResolver = useRef(null);
 
   // Prominent Disclosure gate (Google Play requirement): before requesting
@@ -95,6 +99,7 @@ export default function DashboardScreen({ navigation }) {
       const res = await EmployeeAPI.getAttendanceStatus();
       const st = res.data?.data || {};
       setCheckedIn(!!st.isCheckedIn);
+      setPunchInAt(st.punchIn || st.checkInTime || st.attendance?.punchIn || null);
       // If checked in but tracking not running (e.g. app restarted), resume it
       if (st.isCheckedIn) {
         startTrackingWithDisclosure().catch(() => { });
@@ -112,26 +117,15 @@ export default function DashboardScreen({ navigation }) {
 
   const s = styles(colors);
 
-  // Punch/Check OUT is irreversible for the day, so ask first. A mis-tap here
-  // used to instantly end the shift and stop location tracking.
-  const confirmCheckOut = () =>
-    new Promise((resolve) => {
-      Alert.alert(
-        'Punch Out?',
-        'This ends your working day. You will not be able to punch in again today.\n\nAre you sure you want to punch out?',
-        [
-          { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
-          { text: 'Yes, Punch Out', style: 'destructive', onPress: () => resolve(true) },
-        ],
-        { cancelable: true, onDismiss: () => resolve(false) }
-      );
-    });
+  // Punch/Check OUT is irreversible for the day, so it goes through
+  // PunchOutConfirmModal first. A mis-tap used to instantly end the shift and
+  // stop location tracking with nothing but a two-button system alert.
+  const handleCheckInOut = () => {
+    if (checkedIn) { setShowPunchOut(true); return; }
+    doCheckInOut();
+  };
 
-  const handleCheckInOut = async () => {
-    if (checkedIn) {
-      const ok = await confirmCheckOut();
-      if (!ok) return;
-    }
+  const doCheckInOut = async () => {
     try {
       setChecking(true);
 
@@ -165,11 +159,14 @@ export default function DashboardScreen({ navigation }) {
         await stopTracking();
         await AsyncStorage.removeItem('attendanceId');
         setCheckedIn(false);
-        Alert.alert('Checked Out', 'You are now off duty. Location sharing stopped.');
+        setPunchInAt(null);
+        setShowPunchOut(false);
+        Alert.alert('Punched Out', 'You are now off duty. Location sharing stopped.');
       }
 
       fetchDashboard();
     } catch (e) {
+      setShowPunchOut(false);
       Alert.alert('Error', e.message || 'Action failed');
     } finally {
       setChecking(false);
@@ -190,6 +187,14 @@ export default function DashboardScreen({ navigation }) {
         visible={showDisclosure}
         onAllow={handleDisclosureAllow}
         onDeny={handleDisclosureDeny}
+      />
+
+      <PunchOutConfirmModal
+        visible={showPunchOut}
+        onCancel={() => setShowPunchOut(false)}
+        onConfirm={doCheckInOut}
+        loading={checking}
+        punchInAt={punchInAt}
       />
       <ScrollView
         showsVerticalScrollIndicator={false}

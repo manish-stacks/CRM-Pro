@@ -8,7 +8,7 @@ import {
   Target, FileText, Users2, CreditCard, BarChart3, Settings,
   Briefcase, Package, Bell, ChevronDown, ChevronRight, LogOut,
   User, Menu, X, Video, UserCheck, Shield, MessageSquare, AlertCircle, MapPin, MapPinned, Wallet, AlarmClock, StickyNote, Mail,
-  MessageSquareCode
+  MessageSquareCode, CalendarClock
 } from 'lucide-react'
 
 interface NavItem {
@@ -36,6 +36,9 @@ const NAV: NavItem[] = [
       { label: 'Leads', href: '/leads', icon: Target, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'TELECALLER'] },
       { label: 'My Leads', href: '/leads/my', icon: Target, roles: ['MANAGER'] },
       { label: 'My Meetings', href: '/marketing', icon: Video, roles: ['SUPER_ADMIN', 'ADMIN', 'MARKETING_EXECUTIVE'] },
+      // Whole-team availability grid. Telecallers had to open a lead and start
+      // the booking flow just to see who was free — this shows the full board.
+      { label: 'Slot Board', href: '/meeting-slots', icon: CalendarClock, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'TELECALLER', 'MARKETING_EXECUTIVE'] },
       { label: 'Proposals', href: '/proposals', icon: FileText, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'MARKETING_EXECUTIVE', ] },
       { label: 'Invoices', href: '/invoices', icon: CreditCard, roles: ['SUPER_ADMIN', 'ADMIN', 'MARKETING_EXECUTIVE'] },
       { label: 'Clients', href: '/clients', icon: Users2, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'MARKETING_EXECUTIVE'] },
