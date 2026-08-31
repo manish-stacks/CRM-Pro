@@ -5,6 +5,17 @@ import api from '@/lib/axios'
 import { PunchOutConfirmModal } from '@/components/PunchOutConfirmModal'
 import { getCurrentGeo } from '@/lib/geolocation'
 import { formatDate, formatDateTime, getInitials, getStatusColor } from '@/lib/utils'
+
+// Hours are stored as a DECIMAL (7.59 = 7 hours 35 minutes), which everyone
+// kept misreading as 7:59 — that's why the totals "looked short". Render them
+// as h/m everywhere and keep the decimal in the tooltip.
+const hm = (h?: number | null) => {
+  if (h == null) return '—'
+  const mins = Math.round(h * 60)
+  const hrs = Math.floor(mins / 60)
+  const m = mins % 60
+  return hrs > 0 ? `${hrs}h ${String(m).padStart(2, '0')}m` : `${m}m`
+}
 import { Badge, EmptyState, Pagination } from '@/components/ui'
 import {
   Clock, LogIn, LogOut, MapPin, Monitor, Smartphone, Tablet as TabletIcon,
@@ -31,6 +42,7 @@ export default function AttendancePage() {
   const [records, setRecords] = useState<any[]>([])
   const [total, setTotal] = useState(0)
   const [lateTotal, setLateTotal] = useState(0)
+  const [totals, setTotals] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [today, setToday] = useState<any>(null)
   const [punching, setPunching] = useState(false)
@@ -73,6 +85,7 @@ export default function AttendancePage() {
       setRecords(r.data.data || [])
       setTotal(r.data.total || 0)
       setLateTotal(r.data.lateTotal || 0)
+      setTotals(r.data.totals || null)
     } catch { toast.error('Failed to load attendance') }
     finally { setLoading(false) }
   }, [page, filters, isAdminUser])
@@ -313,7 +326,7 @@ export default function AttendancePage() {
             </div>
             {today?.punchIn && (
               <p className="text-sm text-gray-600 mt-3 tabular-nums">
-                {isPunchedOut ? `Worked: ${today.hoursWorked?.toFixed(2)}h` : `Working: ${fmtDuration(workedSecs)}`}
+                {isPunchedOut ? `Worked: ${hm(today.hoursWorked)}` : `Working: ${fmtDuration(workedSecs)}`}
               </p>
             )}
             {today?.punchInAddress && (
@@ -344,7 +357,7 @@ export default function AttendancePage() {
                   <div className="text-center">
                     <p className="text-sm text-gray-500">✅ Day complete</p>
                     <p className="text-xs text-gray-400 mt-0.5">
-                      {today.hoursWorked?.toFixed(2)}h · {today.status}
+                      {hm(today.hoursWorked)} · {today.status}
                     </p>
                   </div>
                 )}
@@ -397,7 +410,7 @@ export default function AttendancePage() {
                   <div className="text-center">
                     <p className="text-sm text-gray-500">✅ Day complete</p>
                     <p className="text-xs text-gray-400 mt-0.5">
-                      {today.hoursWorked?.toFixed(2)}h · {today.status}
+                      {hm(today.hoursWorked)} · {today.status}
                     </p>
                   </div>
                 )}
@@ -502,6 +515,23 @@ export default function AttendancePage() {
               <span className="badge bg-red-100 text-red-700 flex items-center gap-1">
                 <AlertTriangle size={11} /> {lateTotal} Late
               </span>
+            )}
+            {totals && totals.recordsWithHours > 0 && (
+              <>
+                <span className="badge bg-brand-50 text-brand-700"
+                  title={`${totals.hoursWorked} decimal hours across ${totals.recordsWithHours} completed shift(s)`}>
+                  Total {hm(totals.hoursWorked)}
+                </span>
+                <span className="badge bg-gray-100 text-gray-600" title="Average per completed shift">
+                  Avg {hm(totals.avgHours)}
+                </span>
+                {totals.openShifts > 0 && (
+                  <span className="badge bg-emerald-50 text-emerald-700"
+                    title="Shifts still running — their hours aren't banked until punch out">
+                    +{totals.openShifts} still on duty ({hm(totals.hoursIncludingOpen - totals.hoursWorked)} so far)
+                  </span>
+                )}
+              </>
             )}
           </div>
           <div className="flex items-center gap-2">
@@ -650,7 +680,9 @@ export default function AttendancePage() {
                   <td className="text-sm tabular-nums">
                     {r.punchOut ? new Date(r.punchOut).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '—'}
                   </td>
-                  <td className="text-sm tabular-nums font-medium">{r.hoursWorked?.toFixed(2) || '—'}</td>
+                  <td className="text-sm tabular-nums font-medium" title={r.hoursWorked != null ? `${r.hoursWorked} decimal hours` : ''}>
+                    {hm(r.hoursWorked)}
+                  </td>
                   <td><Badge status={r.workMode} /></td>
                   <td><Badge status={r.status} /></td>
                   <td>

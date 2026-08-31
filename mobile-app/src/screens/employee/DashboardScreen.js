@@ -17,16 +17,27 @@ import {
 import LocationDisclosureModal from '../../components/LocationDisclosureModal';
 import PunchOutConfirmModal from '../../components/PunchOutConfirmModal';
 
-const StatCard = ({ icon, label, value, color, bg }) => {
+// Every stat card is tappable — it drops you straight into the matching
+// filtered list instead of leaving you to find it yourself.
+const StatCard = ({ icon, label, value, color, bg, onPress }) => {
   const { colors } = useTheme();
+  const Wrap = onPress ? TouchableOpacity : View;
   return (
-    <View style={[statStyles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+    <Wrap
+      {...(onPress ? { onPress, activeOpacity: 0.7 } : {})}
+      style={[statStyles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
+    >
       <View style={[statStyles.iconWrap, { backgroundColor: bg }]}>
         <Ionicons name={icon} size={20} color={color} />
       </View>
       <Text style={[statStyles.value, { color: colors.text }]}>{value ?? '—'}</Text>
       <Text style={[statStyles.label, { color: colors.text2 }]}>{label}</Text>
-    </View>
+      {onPress && (
+        <View style={statStyles.arrow}>
+          <Ionicons name="chevron-forward" size={12} color={colors.text3} />
+        </View>
+      )}
+    </Wrap>
   );
 };
 
@@ -38,6 +49,7 @@ const statStyles = StyleSheet.create({
   iconWrap: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   value: { fontSize: 24, fontWeight: '800' },
   label: { fontSize: 11, fontWeight: '600', textAlign: 'center' },
+  arrow: { position: 'absolute', top: 10, right: 10, opacity: 0.5 },
 });
 
 export default function DashboardScreen({ navigation }) {
@@ -292,21 +304,25 @@ export default function DashboardScreen({ navigation }) {
               icon="videocam-outline" label="Open Meetings"
               value={data?.open_meetings}
               color="#A855F7" bg="rgba(168,85,247,0.12)"
+              onPress={() => navigation.navigate('Meetings', { tab: 'all' })}
             />
             <StatCard
               icon="calendar-outline" label="Today's Meetings"
               value={data?.today_meetings}
               color="#3B82F6" bg="rgba(59,130,246,0.12)"
+              onPress={() => navigation.navigate('Meetings', { tab: 'today' })}
             />
             <StatCard
               icon="checkmark-done-circle-outline" label="Converted"
               value={data?.converted}
               color="#22C55E" bg="rgba(34,197,94,0.12)"
+              onPress={() => navigation.navigate('Meetings', { tab: 'converted' })}
             />
             <StatCard
               icon="trending-up-outline" label="Conversion Rate"
               value={data?.conversion_rate != null ? `${data.conversion_rate}%` : '—'}
               color="#F59E0B" bg="rgba(245,158,11,0.12)"
+              onPress={() => navigation.navigate('Meetings', { tab: 'done' })}
             />
           </View>
 
@@ -316,21 +332,25 @@ export default function DashboardScreen({ navigation }) {
               icon="people-outline" label="Total Clients"
               value={data?.total_clients ?? data?.totalClients}
               color="#3B82F6" bg="rgba(59,130,246,0.12)"
+              onPress={() => navigation.navigate('Clients')}
             />
             <StatCard
               icon="calendar-outline" label="Today Visits"
               value={data?.today_visits ?? data?.todayVisits}
               color="#22C55E" bg="rgba(34,197,94,0.12)"
+              onPress={() => navigation.navigate('Visits', { tab: 'today' })}
             />
             <StatCard
               icon="time-outline" label="Pending Visits"
               value={data?.pending_visits ?? data?.pendingVisits}
               color="#F59E0B" bg="rgba(245,158,11,0.12)"
+              onPress={() => navigation.navigate('Visits', { tab: 'pending' })}
             />
             <StatCard
               icon="checkmark-circle-outline" label="Completed"
               value={data?.completed_visits ?? data?.completedVisits}
               color="#A855F7" bg="rgba(168,85,247,0.12)"
+              onPress={() => navigation.navigate('Visits', { tab: 'completed' })}
             />
           </View>
 

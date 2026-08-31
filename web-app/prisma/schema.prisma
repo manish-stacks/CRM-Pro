@@ -38,6 +38,7 @@ model User {
   // NOTE: @db.Text is required — FCM tokens are far longer than MySQL's default
   // VARCHAR(191) that Prisma would otherwise use, and would be truncated.
   fcmToken         String?   @db.Text
+  webPushTokens    WebPushToken[]
   expoPushToken    String?   // legacy Expo push token
   pushPlatform     String?   // "android" | "ios"
   pushTokenAt      DateTime? // last time the device registered
@@ -75,6 +76,8 @@ model User {
   sentMessages           Message[]            @relation("SentMessages")
   receivedMessages       Message[]            @relation("ReceivedMessages")
   chatMemberships        ChatMember[]
+  messageDeletions       MessageDeletion[]
+  messageMentions        MessageMention[]
   createdTickets         SupportTicket[]      @relation("TicketCreator")
   assignedTickets        SupportTicket[]      @relation("TicketAssignee")
   supportTicketReplies   SupportTicketReply[] @relation("SupportTicketReplyAuthor")
@@ -506,6 +509,27 @@ model Leave {
   @@index([startDate, endDate])
   @@index([approvedBy])
   @@map("leaves")
+}
+
+// Browser (Chrome/Edge/Firefox) push subscriptions.
+//
+// User.fcmToken holds ONE mobile device token. A person can have several
+// browsers (office desktop, laptop, home PC), so web tokens live in their own
+// table — one row per browser — instead of fighting over that single column.
+// The token itself is a normal FCM registration token, so it goes out through
+// exactly the same FCM v1 sender as mobile.
+model WebPushToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique @db.VarChar(255)
+  userAgent String?  @db.Text
+  createdAt DateTime @default(now())
+  lastSeen  DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("web_push_tokens")
 }
 
 model LeaveBalance {
@@ -1032,11 +1056,42 @@ model Message {
   chatGroup      ChatGroup? @relation(fields: [chatGroupId], references: [id], onDelete: Cascade)
   sender         User       @relation("SentMessages", fields: [senderId], references: [id])
   receiver       User?      @relation("ReceivedMessages", fields: [receiverId], references: [id])
+  deletions      MessageDeletion[]
+  mentions       MessageMention[]
 
   @@index([chatGroupId, createdAt])
   @@index([senderId])
   @@index([receiverId])
   @@map("messages")
+}
+
+// "Delete for me" — one row per user who has hidden this message on their
+// side. The message itself is untouched for everyone else.
+model MessageDeletion {
+  id        String   @id @default(cuid())
+  messageId String
+  userId    String
+  deletedAt DateTime @default(now())
+
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+  @@map("message_deletions")
+}
+
+// @mention tagging inside a message.
+model MessageMention {
+  id        String   @id @default(cuid())
+  messageId String
+  userId    String
+  createdAt DateTime @default(now())
+
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+  @@map("message_mentions")
 }
 
 model SupportTicket {

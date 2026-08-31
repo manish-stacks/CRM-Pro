@@ -55,10 +55,28 @@ export async function GET(req: NextRequest) {
   })
 
   if (employees.length === 0) {
+    // Still hand back the full roster + areas so the dropdowns stay usable
+    // even when the current filter matches nobody.
+    const [emptyAreas, emptyExecs] = await Promise.all([
+      prisma.employee.findMany({
+        where: { area: { not: null }, user: { role: 'MARKETING_EXECUTIVE', isActive: true } },
+        select: { area: true },
+        distinct: ['area'],
+        orderBy: { area: 'asc' },
+      }),
+      prisma.employee.findMany({
+        where: { user: { role: 'MARKETING_EXECUTIVE', isActive: true } },
+        select: { area: true, user: { select: { id: true, name: true } } },
+      }),
+    ])
     return successResponse({
-      date, slots: slotDefs, executives: [], areas: [],
+      date, slots: slotDefs, executives: [],
+      areas: emptyAreas.map(a => a.area).filter(Boolean),
+      allExecutives: emptyExecs
+        .map(e => ({ id: e.user.id, name: e.user.name, area: e.area || 'No area set' }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
       officeStart, officeEnd, slotMinutes,
-      summary: { executives: 0, totalSlots: 0, booked: 0, free: 0 },
+      summary: { executives: 0, totalSlots: 0, booked: 0, free: 0, onLeave: 0 },
     })
   }
 
@@ -93,9 +111,10 @@ export async function GET(req: NextRequest) {
       startDate: { lte: day },
       endDate: { gte: day },
     },
-    select: { employeeId: true, type: true },
+    // NOTE: the column is `leaveType`, not `type`.
+    select: { employeeId: true, leaveType: true },
   })
-  const leaveMap = new Map(leaves.map(l => [l.employeeId, l.type]))
+  const leaveMap = new Map(leaves.map(l => [l.employeeId, l.leaveType]))
 
   // ---- Build the grid ---------------------------------------------------
   let bookedCount = 0
@@ -142,14 +161,22 @@ export async function GET(req: NextRequest) {
     }
   }).sort((a, b) => a.area.localeCompare(b.area) || a.name.localeCompare(b.name))
 
-  // Every territory that exists (for the filter dropdown), not just the
-  // filtered ones — otherwise picking an area empties its own dropdown.
-  const allAreas = await prisma.employee.findMany({
-    where: { area: { not: null }, user: { role: 'MARKETING_EXECUTIVE', isActive: true } },
-    select: { area: true },
-    distinct: ['area'],
-    orderBy: { area: 'asc' },
-  })
+  // Every territory AND every executive that exists — for the filter
+  // dropdowns. These deliberately ignore the current filters, otherwise
+  // picking an area/person would empty the dropdown you just used.
+  const [allAreas, allExecs] = await Promise.all([
+    prisma.employee.findMany({
+      where: { area: { not: null }, user: { role: 'MARKETING_EXECUTIVE', isActive: true } },
+      select: { area: true },
+      distinct: ['area'],
+      orderBy: { area: 'asc' },
+    }),
+    prisma.employee.findMany({
+      where: { user: { role: 'MARKETING_EXECUTIVE', isActive: true } },
+      select: { area: true, user: { select: { id: true, name: true } } },
+      orderBy: [{ area: 'asc' }],
+    }),
+  ])
 
   return successResponse({
     date,
@@ -157,6 +184,9 @@ export async function GET(req: NextRequest) {
     slots: slotDefs,
     executives,
     areas: allAreas.map(a => a.area).filter(Boolean),
+    allExecutives: allExecs
+      .map(e => ({ id: e.user.id, name: e.user.name, area: e.area || 'No area set' }))
+      .sort((a, b) => a.name.localeCompare(b.name)),
     summary: {
       executives: executives.length,
       totalSlots: executives.length * slotDefs.length,

@@ -24,13 +24,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const before = searchParams.get('before')  // pagination cursor
   const limit = Math.min(parseInt(searchParams.get('limit') || '50'), 100)
 
-  const where: any = { chatGroupId: id, isDeleted: false }
+  const where: any = { chatGroupId: id, isDeleted: false, deletions: { none: { userId: session.userId } } }
   if (before) where.createdAt = { lt: new Date(before) }
 
   const messages = await prisma.message.findMany({
     where, take: limit,
     include: {
       sender: { select: { id: true, name: true, avatar: true, role: true } },
+      mentions: { include: { user: { select: { id: true, name: true } } } },
     },
     orderBy: { createdAt: 'desc' },
   })
@@ -52,8 +53,26 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const membership = await assertMember(id, session.userId)
   if (!membership) return errorResponse('Not a member of this chat', 403)
 
-  const { content, attachmentUrl, attachmentType, attachmentName, replyToId } = await req.json()
+  const { content, attachmentUrl, attachmentType, attachmentName, replyToId, mentionUserIds } = await req.json()
   if (!content?.trim() && !attachmentUrl) return errorResponse('Content or attachment required')
+
+  // Active members of this group, for validating/auto-detecting @mentions.
+  const groupMembers = await prisma.chatMember.findMany({
+    where: { chatGroupId: id, isActive: true },
+    include: { user: { select: { id: true, name: true } } },
+  })
+
+  // Prefer explicit mentionUserIds from the client (from an @-picker). Fall
+  // back to scanning the text for "@Full Name" against actual members.
+  let mentionedIds: string[] = Array.isArray(mentionUserIds)
+    ? mentionUserIds.filter((uid: string) => groupMembers.some(m => m.userId === uid))
+    : []
+  if (!mentionedIds.length && content) {
+    mentionedIds = groupMembers
+      .filter(m => m.userId !== session.userId && content.includes(`@${m.user.name}`))
+      .map(m => m.userId)
+  }
+  mentionedIds = Array.from(new Set(mentionedIds)).filter(uid => uid !== session.userId)
 
   const message = await prisma.message.create({
     data: {
@@ -64,8 +83,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       attachmentType: attachmentType || null,
       attachmentName: attachmentName || null,
       replyToId: replyToId || null,
+      mentions: mentionedIds.length ? { create: mentionedIds.map(uid => ({ userId: uid })) } : undefined,
     },
-    include: { sender: { select: { name: true, avatar: true } } },
+    include: { sender: { select: { name: true, avatar: true } }, mentions: { include: { user: { select: { id: true, name: true } } } } },
   })
 
   // Bump group updatedAt
@@ -89,6 +109,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       type: 'chat',
       link: `/chat?group=${id}`,
       metadata: { screen: 'Chat', groupId: id, senderName: message.sender.name, senderAvatar: message.sender.avatar || null },
+    })
+  }
+
+  // Extra ping for anyone specifically @mentioned, on top of the general
+  // new-message notification above.
+  if (mentionedIds.length) {
+    await notify({
+      userIds: mentionedIds,
+      title: group.type === 'DIRECT' ? message.sender.name : (group.name || message.sender.name),
+      message: `${message.sender.name} mentioned you: ${message.content?.trim().slice(0, 80) || ''}`,
+      type: 'chat',
+      link: `/chat?group=${id}`,
+      metadata: { screen: 'Chat', groupId: id, senderName: message.sender.name, mention: true },
     })
   }
 

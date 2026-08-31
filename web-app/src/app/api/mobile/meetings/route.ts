@@ -26,10 +26,21 @@ export async function GET(req: NextRequest) {
 
   const where: any = { meetingAssignedToId: session.userId }
 
+  // A meeting stays in this list until it is either finished (marked done /
+  // deal decided) or CANCELLED — and cancelling is the ONLY thing that clears
+  // meetingAssignedToId, so cancelled ones drop out on their own.
+  //
+  // CALLBACK is included on purpose: "client didn't pick up" moves the lead to
+  // CALLBACK and frees the slot, but the marketing person still owns it and
+  // has to rebook it. Excluding CALLBACK is what made those meetings disappear
+  // the moment they were marked no-answer.
+  const ACTIVE = ['MEETING_SCHEDULED', 'CALLBACK', 'FOLLOW_UP']
+  const HISTORY = ['CONVERTED', 'CLOSED', 'NOT_INTERESTED', 'MEETING_SCHEDULED', 'MEETING_DONE', 'CALLBACK', 'FOLLOW_UP']
+
   if (status && status !== 'all') where.status = status.toUpperCase()
-  else if (range === 'past') where.status = { in: ['CONVERTED', 'CLOSED', 'NOT_INTERESTED', 'MEETING_SCHEDULED', 'MEETING_DONE'] }
-  else if (!range && scope !== 'all') where.status = { in: ['MEETING_SCHEDULED', 'MEETING_DONE'] }
-  else if (range && range !== 'all') where.status = { in: ['MEETING_SCHEDULED', 'MEETING_DONE'] }
+  else if (range === 'past') where.status = { in: HISTORY }
+  else if (range === 'rebook') where.status = { in: ['CALLBACK', 'FOLLOW_UP'] }
+  else where.status = { in: ACTIVE }
 
   if (search) {
     where.OR = [
@@ -60,6 +71,12 @@ export async function GET(req: NextRequest) {
     where.meetingDate = { gte: today.start, lte: end }
   } else if (range === 'past') {
     where.meetingDate = { lt: today.start }
+    // Past + an explicit range = "show me my history between these dates".
+    if (dateFrom) where.meetingDate.gte = dayRange(dateFrom).start
+    if (dateTo) where.meetingDate.lte = dayRange(dateTo).end
+  } else if (range === 'rebook') {
+    // Slot was freed (no-answer) — no date on it yet, needs rebooking.
+    where.meetingDate = null
   } else if (dateFrom || dateTo) {
     where.meetingDate = {}
     if (dateFrom) where.meetingDate.gte = dayRange(dateFrom).start
@@ -73,7 +90,7 @@ export async function GET(req: NextRequest) {
     meetingLocation: true, meetingLat: true, meetingLng: true, meetingNotes: true,
   }
 
-  const base = { meetingAssignedToId: session.userId, status: { in: ['MEETING_SCHEDULED', 'MEETING_DONE'] } }
+  const base = { meetingAssignedToId: session.userId, status: { in: ACTIVE } }
   const [leads, counts] = await Promise.all([
     prisma.lead.findMany({
       where,
@@ -82,14 +99,26 @@ export async function GET(req: NextRequest) {
       select,
     }),
     (async () => {
-      const [all, todayC, tomorrowC, upcoming, past] = await Promise.all([
+      const weekEnd = new Date(today.start.getTime() + 7 * 86400000 - 1)
+      const [all, todayC, tomorrowC, upcoming, week, done, past] = await Promise.all([
         prisma.lead.count({ where: base }),
         prisma.lead.count({ where: { ...base, meetingDate: { gte: today.start, lte: today.end } } }),
         prisma.lead.count({ where: { ...base, meetingDate: { gte: tomorrow.start, lte: tomorrow.end } } }),
         prisma.lead.count({ where: { ...base, meetingDate: { gt: today.end } } }),
+        prisma.lead.count({ where: { ...base, meetingDate: { gte: today.start, lte: weekEnd } } }),
+        // "Meeting Done" tab badge — these no longer appear in the active tabs.
+        prisma.lead.count({ where: { meetingAssignedToId: session.userId, status: 'MEETING_DONE' } }),
         prisma.lead.count({ where: { meetingAssignedToId: session.userId, meetingDate: { lt: today.start } } }),
       ])
-      return { all, today: todayC, tomorrow: tomorrowC, upcoming, past }
+      // Freed slots still sitting with this person, waiting to be rebooked.
+      const rebook = await prisma.lead.count({
+        where: {
+          meetingAssignedToId: session.userId,
+          status: { in: ['CALLBACK', 'FOLLOW_UP'] },
+          meetingDate: null,
+        },
+      })
+      return { all, today: todayC, tomorrow: tomorrowC, upcoming, week, done, past, rebook }
     })(),
   ])
 

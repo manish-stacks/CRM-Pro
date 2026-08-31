@@ -8,7 +8,7 @@ import { formatDate, getInitials } from '@/lib/utils'
 import {
   Target, Video, CalendarClock, CheckCircle2, XCircle, Ban,
   Phone, MapPin, TrendingUp, Users, Award, ArrowRight,
-  Building2, Clock, Loader2, Search, X, CalendarDays
+  Building2, Clock, Loader2, Search, X, CalendarDays, RotateCcw
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -21,9 +21,16 @@ const RANGE_TABS = [
   { key: 'past', label: 'Past' },
 ]
 
+const shiftDate = (iso: string, days: number) => {
+  const d = new Date(iso + 'T00:00:00')
+  d.setDate(d.getDate() + days)
+  return d.toISOString().slice(0, 10)
+}
+
 const STATUS_OPTIONS = [
   { value: '', label: 'All status' },
   { value: 'MEETING_SCHEDULED', label: 'Meeting Scheduled' },
+  { value: 'MEETING_DONE', label: 'Meeting Done (deal pending)' },
   { value: 'CONVERTED', label: 'Converted' },
   { value: 'CLOSED', label: 'Closed / Lost' },
   { value: 'NOT_INTERESTED', label: 'Not Interested' },
@@ -32,6 +39,7 @@ const STATUS_OPTIONS = [
 
 const STATUS_COLORS: Record<string, string> = {
   MEETING_SCHEDULED: 'bg-purple-100 text-purple-700',
+  MEETING_DONE: 'bg-teal-100 text-teal-700',
   CONVERTED: 'bg-emerald-100 text-emerald-700',
   CLOSED: 'bg-slate-100 text-slate-700',
   NOT_INTERESTED: 'bg-red-100 text-red-700',
@@ -54,12 +62,31 @@ export default function MarketingDashboardPage() {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [statusF, setStatusF] = useState('')
+
+  // ---- Slot-by-slot day view ----
+  // A flat meeting list doesn't show the gaps. This lays the whole day out
+  // slot by slot so the marketing person sees booked + free in one look.
+  const [schedDate, setSchedDate] = useState(new Date().toISOString().slice(0, 10))
+  const [sched, setSched] = useState<any>(null)
+  const [schedLoading, setSchedLoading] = useState(false)
   const [search, setSearch] = useState('')
   const [showAdvanced, setShowAdvanced] = useState(false)
 
   const clearFilters = () => {
     setRange(''); setExactDate(''); setDateFrom(''); setDateTo(''); setStatusF(''); setSearch('')
   }
+  useEffect(() => {
+    let alive = true
+    setSchedLoading(true)
+    const p = new URLSearchParams({ date: schedDate, days: '1' })
+    if (selectedUserId) p.set('userId', selectedUserId)
+    api.get(`/marketing/schedule?${p}`)
+      .then(r => { if (alive) setSched(r.data.data?.days?.[0] || null) })
+      .catch(() => { if (alive) setSched(null) })
+      .finally(() => { if (alive) setSchedLoading(false) })
+    return () => { alive = false }
+  }, [schedDate, selectedUserId])
+
   const hasFilter = !!(range || exactDate || dateFrom || dateTo || statusF || search)
 
   const fetch_ = useCallback(async () => {
@@ -253,6 +280,173 @@ export default function MarketingDashboardPage() {
                   {l.meetingNotes && <p className="text-xs text-gray-600 mt-1 italic line-clamp-1">{l.meetingNotes}</p>}
                 </div>
                 <ArrowRight size={16} className="text-gray-400 group-hover:text-purple-600" />
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Freed slots waiting to be rebooked — "client didn't pick up" leaves
+          the lead here, still owned by this marketing person. */}
+      {data.toRebook?.length > 0 && (
+        <div className="card p-5 border-amber-200 bg-amber-50/40">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="font-bold text-gray-900 flex items-center gap-2">
+                <RotateCcw size={16} className="text-amber-600" /> Needs Rebooking
+              </h2>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Slot free ho gaya (no answer), lekin lead abhi bhi aapke paas hai — naya slot book karo
+              </p>
+            </div>
+            <span className="badge bg-amber-100 text-amber-700">{data.toRebook.length}</span>
+          </div>
+          <div className="space-y-2">
+            {data.toRebook.map((l: any) => (
+              <Link key={l.id} href={`/leads/${l.id}`}
+                className="flex items-center gap-3 bg-white rounded-lg p-3 border border-amber-100 hover:border-amber-300 hover:shadow-sm transition-all">
+                <div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center flex-shrink-0">
+                  <RotateCcw size={17} className="text-amber-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-semibold text-gray-900 text-sm">{l.clientName}</p>
+                    <span className={`badge ${STATUS_COLORS[l.status] || 'bg-gray-100 text-gray-600'}`}>
+                      {l.status.replace(/_/g, ' ')}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-gray-500 mt-1 flex-wrap">
+                    {l.companyName && <span className="flex items-center gap-1"><Building2 size={10} /> {l.companyName}</span>}
+                    {l.clientPhone && <span className="flex items-center gap-1"><Phone size={10} /> {l.clientPhone}</span>}
+                  </div>
+                </div>
+                <span className="text-xs font-semibold text-amber-700 flex-shrink-0">Rebook →</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ---- Slot-by-slot day view ---- */}
+      <div className="card p-5">
+        <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
+          <div>
+            <h2 className="font-bold text-gray-900 flex items-center gap-2">
+              <CalendarDays size={16} className="text-brand-600" /> Day by Slot
+            </h2>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Pura din ek nazar me — kaunsa slot booked hai, kaunsa khali
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setSchedDate(d => shiftDate(d, -1))} className="btn-secondary !px-2" title="Previous day">
+              <ArrowRight size={14} className="rotate-180" />
+            </button>
+            <input type="date" value={schedDate} onChange={e => setSchedDate(e.target.value)}
+              className="input !w-auto text-sm" />
+            <button onClick={() => setSchedDate(d => shiftDate(d, 1))} className="btn-secondary !px-2" title="Next day">
+              <ArrowRight size={14} />
+            </button>
+            <button onClick={() => setSchedDate(new Date().toISOString().slice(0, 10))}
+              className="badge bg-gray-100 text-gray-600 hover:bg-gray-200">Today</button>
+            {sched && (
+              <span className="text-xs text-gray-500 ml-1">
+                {sched.bookedCount} booked · {sched.freeCount} free
+              </span>
+            )}
+          </div>
+        </div>
+
+        {schedLoading ? (
+          <div className="py-10 text-center text-gray-400"><Loader2 size={18} className="animate-spin inline" /></div>
+        ) : !sched?.slots?.length ? (
+          <p className="text-sm text-gray-500 text-center py-6">No slots configured for this day.</p>
+        ) : (
+          <div className="space-y-2">
+            {sched.slots.map((sl: any, i: number) => (
+              sl.lead ? (
+                <Link key={`${sl.label}-${i}`} href={`/leads/${sl.lead.id}`}
+                  className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-3 hover:border-brand-300 hover:shadow-sm transition-all">
+                  <div className="w-24 flex-shrink-0">
+                    <p className="text-sm font-bold text-gray-900">{sl.start || sl.label}</p>
+                    {sl.end && <p className="text-[11px] text-gray-400">to {sl.end}</p>}
+                  </div>
+                  <div className="flex-1 min-w-0 border-l border-gray-200 pl-3">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-semibold text-gray-900 text-sm">
+                        {sl.lead.company || sl.lead.client_name}
+                      </p>
+                      <span className={`badge ${STATUS_COLORS[sl.lead.status] || 'bg-gray-100 text-gray-600'}`}>
+                        {sl.lead.status.replace(/_/g, ' ')}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-gray-500 mt-1 flex-wrap">
+                      {sl.lead.company && sl.lead.client_name && (
+                        <span className="flex items-center gap-1"><Users size={10} /> {sl.lead.client_name}</span>
+                      )}
+                      {sl.lead.phone && <span className="flex items-center gap-1"><Phone size={10} /> {sl.lead.phone}</span>}
+                      {sl.lead.city && <span className="flex items-center gap-1"><MapPin size={10} /> {sl.lead.city}</span>}
+                      {sl.lead.telecaller && <span className="text-gray-400">by {sl.lead.telecaller}</span>}
+                    </div>
+                  </div>
+                  <ArrowRight size={14} className="text-gray-300 flex-shrink-0" />
+                </Link>
+              ) : (
+                <div key={`${sl.label}-${i}`}
+                  className="flex items-center gap-3 rounded-lg border border-dashed border-emerald-300 bg-emerald-50/40 p-3">
+                  <div className="w-24 flex-shrink-0">
+                    <p className="text-sm font-bold text-emerald-700">{sl.start || sl.label}</p>
+                    {sl.end && <p className="text-[11px] text-emerald-600/70">to {sl.end}</p>}
+                  </div>
+                  <span className="text-sm font-medium text-emerald-700 border-l border-emerald-200 pl-3">Free</span>
+                </div>
+              )
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Meeting Done — held meetings whose deal is still undecided.
+          These leave "Today's Meetings" the moment they're marked done. */}
+      <div className="card p-5 border-teal-200 bg-teal-50/40">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="font-bold text-gray-900 flex items-center gap-2">
+              <CheckCircle2 size={16} className="text-teal-600" /> Meeting Done — Deal Pending
+            </h2>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Meeting ho chuki hai, ab Converted ya Lost mark karna baaki hai
+            </p>
+          </div>
+          <span className="badge bg-teal-100 text-teal-700">{data.doneMeetings?.length || 0}</span>
+        </div>
+        {!data.doneMeetings?.length ? (
+          <p className="text-sm text-gray-500 text-center py-4">Nothing pending — sab deals decide ho chuki hain ✅</p>
+        ) : (
+          <div className="space-y-2">
+            {data.doneMeetings.map((l: any) => (
+              <Link key={l.id} href={`/leads/${l.id}`}
+                className="flex items-center gap-3 bg-white rounded-lg p-3 border border-teal-100 hover:border-teal-300 hover:shadow-sm transition-all">
+                <div className="w-10 h-10 rounded-lg bg-teal-100 flex items-center justify-center flex-shrink-0">
+                  <CheckCircle2 size={18} className="text-teal-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-semibold text-gray-900 text-sm">{l.clientName}</p>
+                    <span className={`badge ${STATUS_COLORS[l.status]}`}>{l.status.replace(/_/g, ' ')}</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-gray-500 mt-1 flex-wrap">
+                    {l.companyName && <span className="flex items-center gap-1"><Building2 size={10} /> {l.companyName}</span>}
+                    {l.meetingDate && (
+                      <span className="flex items-center gap-1">
+                        <CalendarClock size={10} />
+                        {new Date(l.meetingDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+                        {l.meetingSlot ? ` · ${l.meetingSlot}` : ''}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <span className="text-xs font-semibold text-teal-700 flex-shrink-0">Decide deal →</span>
               </Link>
             ))}
           </div>

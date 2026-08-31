@@ -147,14 +147,14 @@ const vStyles = StyleSheet.create({
   startBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 12, paddingVertical: 10, borderRadius: 10 },
 });
 
-export default function VisitsScreen({ navigation }) {
+export default function VisitsScreen({ navigation, route }) {
   const { colors } = useTheme();
   const [visits, setVisits] = useState([]);
   const [counts, setCounts] = useState({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const [tab, setTab] = useState('all');
+  const [tab, setTab] = useState(route?.params?.tab || 'all');
   const [pickedDate, setPickedDate] = useState('');   // exact date filter
   const [dateModal, setDateModal] = useState(false);
   const [search, setSearch] = useState('');
@@ -164,6 +164,15 @@ export default function VisitsScreen({ navigation }) {
   const [newVisit, setNewVisit] = useState({ client_id: '', client_name: '', visit_date: '', visit_time: '', purpose: '', location: '', notes: '' });
   const [submitting, setSubmitting] = useState(false);
   const [busyId, setBusyId] = useState(null);
+
+  // Dashboard stat cards deep-link into a tab; the screen is often already
+  // mounted, so watch the param instead of only reading it on mount.
+  useEffect(() => {
+    if (route?.params?.tab) {
+      setTab(route.params.tab);
+      setPickedDate('');
+    }
+  }, [route?.params?.tab]);
 
   const activeParams = useMemo(() => {
     if (pickedDate) return { date: pickedDate, ...(search ? { search } : {}) };

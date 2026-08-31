@@ -23,11 +23,29 @@ export async function GET(req: NextRequest) {
           user: { select: { id: true, name: true, email: true, avatar: true } },
         },
       },
-      _count: { select: { employees: true } },
+      _count: {
+        select: {
+          employees: { where: { user: { isActive: true } } },
+        },
+      },
     },
   })
 
-  return successResponse(departments, departments.length)
+  // Add inactive count alongside the existing active count (keeps
+  // `_count.employees` = active-only, for anything already relying on it).
+  const withInactive = await Promise.all(
+    departments.map(async (dept) => {
+      const inactiveCount = await prisma.employee.count({
+        where: { departmentId: dept.id, user: { isActive: false } },
+      })
+      return {
+        ...dept,
+        _count: { ...dept._count, employeesActive: dept._count.employees, employeesInactive: inactiveCount },
+      }
+    })
+  )
+
+  return successResponse(withInactive, withInactive.length)
 }
 
 export async function POST(req: NextRequest) {

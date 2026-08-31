@@ -10,7 +10,7 @@ import {
   ArrowLeft, Phone, Mail, MapPin, Globe, Calendar, User,
   Loader2, MessageSquare, PhoneCall, CalendarClock, ArrowRightLeft,
   CheckCircle2, XCircle, Ban, Video, Building2, FileText, ExternalLink,
-  History, Send, RotateCcw, Plus, IndianRupee, Pencil
+  History, Send, RotateCcw, Plus, IndianRupee, Pencil, Zap
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Swal from "sweetalert2";
@@ -73,6 +73,13 @@ export default function LeadDetailPage() {
   // Reschedule / No-answer forms
   const [rescheduleForm, setRescheduleForm] = useState({ meetingDate: '', meetingTime: '', notes: '' })
   const [cancelNotes, setCancelNotes] = useState('')
+  // Reschedule slot picker: 'slot' = pick a free office-hours slot from the
+  // assigned executive's calendar, 'after' = free-form time after office hours.
+  const [rescheduleMode, setRescheduleMode] = useState<'slot' | 'after'>('slot')
+  const [rsSlots, setRsSlots] = useState<any[]>([])
+  const [rsSlotsLoading, setRsSlotsLoading] = useState(false)
+  const [pickedSlot, setPickedSlot] = useState('')
+  const [rsNextAvailable, setRsNextAvailable] = useState<string | null>(null)
   const [noAnswerReason, setNoAnswerReason] = useState('')
   // Reassign form
   const [reassignForm, setReassignForm] = useState({ toUserId: '', reason: '' })
@@ -239,16 +246,45 @@ export default function LeadDetailPage() {
 
   const openReschedule = () => {
     setRescheduleForm({ meetingDate: lead?.meetingDate?.split('T')[0] || '', meetingTime: '', notes: '' })
+    setRescheduleMode('slot')
+    setPickedSlot('')
+    setRsSlots([])
     setModal('reschedule')
   }
 
-  const doReschedule = async () => {
-    if (!rescheduleForm.meetingDate || !rescheduleForm.meetingTime) {
-      toast.error('New date + time required'); return
+  // Load that day's slots for the assigned marketing person whenever the date
+  // (or the mode) changes, so the picker always reflects live availability.
+  useEffect(() => {
+    if (modal !== 'reschedule' || rescheduleMode !== 'slot' || !rescheduleForm.meetingDate) {
+      setRsSlots([]); return
     }
+    let alive = true
+    setRsSlotsLoading(true)
+    setPickedSlot('')
+    api.get(`/leads/${id}/meeting/slots?date=${rescheduleForm.meetingDate}`)
+      .then(r => {
+        if (!alive) return
+        setRsSlots(r.data.data?.slots || [])
+        setRsNextAvailable(r.data.data?.nextAvailable || null)
+      })
+      .catch(() => { if (alive) { setRsSlots([]); setRsNextAvailable(null) } })
+      .finally(() => { if (alive) setRsSlotsLoading(false) })
+    return () => { alive = false }
+  }, [modal, rescheduleMode, rescheduleForm.meetingDate, id])
+
+  const doReschedule = async () => {
+    if (!rescheduleForm.meetingDate) { toast.error('Pick a new date'); return }
+    if (rescheduleMode === 'slot' && !pickedSlot) { toast.error('Pick a free slot'); return }
+    if (rescheduleMode === 'after' && !rescheduleForm.meetingTime) { toast.error('Enter a time'); return }
     setSaving(true)
     try {
-      await api.post(`/leads/${id}/meeting/reschedule`, rescheduleForm)
+      await api.post(`/leads/${id}/meeting/reschedule`, {
+        meetingDate: rescheduleForm.meetingDate,
+        notes: rescheduleForm.notes,
+        ...(rescheduleMode === 'slot'
+          ? { meetingSlot: pickedSlot }
+          : { meetingTime: rescheduleForm.meetingTime }),
+      })
       toast.success('Meeting rescheduled')
       setModal('none')
       fetchLead()
@@ -771,15 +807,86 @@ export default function LeadDetailPage() {
       {/* Reschedule Modal */}
       <Modal open={modal === 'reschedule'} onClose={() => setModal('none')} title="Reschedule Meeting">
         <div className="space-y-3">
-          <div className="bg-brand-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-800">
-            {canTL
-              ? 'As Admin/TL you can reschedule to any time.'
-              : 'Self-reschedule is only allowed AFTER office hours — for daytime slots, ask the telecaller/Admin to rebook through the area picker.'}
+          {/* Mode switch — a free office slot (same system the telecaller books
+              through) or, for evening meetings, a raw after-hours time. */}
+          <div className="grid grid-cols-2 gap-2">
+            {[
+              { key: 'slot', label: 'Free office slot' },
+              { key: 'after', label: 'After office hours' },
+            ].map(m => (
+              <button key={m.key} onClick={() => setRescheduleMode(m.key as any)}
+                className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                  rescheduleMode === m.key
+                    ? 'bg-indigo-600 text-white border-indigo-600'
+                    : 'bg-white text-gray-600 border-gray-300 hover:border-indigo-400'}`}>
+                {m.label}
+              </button>
+            ))}
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <Input label="New Date *" type="date" value={rescheduleForm.meetingDate} onChange={e => setRescheduleForm(p => ({ ...p, meetingDate: e.target.value }))} />
-            <Input label="New Time *" type="time" value={rescheduleForm.meetingTime} onChange={e => setRescheduleForm(p => ({ ...p, meetingTime: e.target.value }))} />
-          </div>
+
+          <Input label="New Date *" type="date" value={rescheduleForm.meetingDate}
+            onChange={e => setRescheduleForm(p => ({ ...p, meetingDate: e.target.value }))} />
+
+          {rescheduleMode === 'slot' ? (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Pick a free slot *
+                {lead.meetingAssignedTo?.name && (
+                  <span className="text-gray-400 font-normal"> — {lead.meetingAssignedTo.name}'s calendar</span>
+                )}
+              </label>
+              {!rescheduleForm.meetingDate ? (
+                <p className="text-sm text-gray-400 py-2">Pehle date choose karo.</p>
+              ) : rsSlotsLoading ? (
+                <div className="py-4 text-center text-gray-400"><Loader2 size={16} className="animate-spin inline" /></div>
+              ) : rsSlots.length === 0 ? (
+                <p className="text-sm text-gray-400 py-2">
+                  Is din koi slot nahi mila. Doosri date try karo ya "After office hours" use karo.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {/* One tap: earliest free slot on this person's own calendar.
+                      A reschedule never moves the lead to another executive —
+                      that's what Cancel Meeting is for. */}
+                  {rsNextAvailable && (
+                    <button onClick={() => setPickedSlot(rsNextAvailable)}
+                      className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-700 text-xs font-semibold hover:bg-emerald-100">
+                      <Zap size={13} /> Next free slot — {rsNextAvailable}
+                      <span className="ml-auto">Use</span>
+                    </button>
+                  )}
+                  <div className="grid grid-cols-2 gap-2 max-h-56 overflow-y-auto">
+                  {rsSlots.map((sl: any) => (
+                    <button key={sl.label} disabled={!sl.available}
+                      onClick={() => setPickedSlot(sl.label)}
+                      className={`px-3 py-2 rounded-lg text-left border text-xs transition-colors ${
+                        pickedSlot === sl.label
+                          ? 'bg-indigo-600 text-white border-indigo-600'
+                          : sl.available
+                            ? 'bg-white border-gray-300 hover:border-indigo-400 text-gray-700'
+                            : 'bg-red-50 border-red-200 text-red-400 cursor-not-allowed'}`}>
+                      <span className="font-semibold block">{sl.label}</span>
+                      <span className="text-[10px] opacity-80">
+                        {sl.available ? 'Free' : `Booked${sl.bookedWith ? ` — ${sl.bookedWith}` : ''}`}
+                      </span>
+                    </button>
+                  ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <>
+              <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 text-xs text-indigo-800">
+                {canTL
+                  ? 'As Admin/TL you can set any time here.'
+                  : 'Without a slot, reschedule is only allowed AFTER office hours. For a daytime meeting, use "Free office slot" above.'}
+              </div>
+              <Input label="New Time *" type="time" value={rescheduleForm.meetingTime}
+                onChange={e => setRescheduleForm(p => ({ ...p, meetingTime: e.target.value }))} />
+            </>
+          )}
+
           <Textarea label="Notes (optional)" value={rescheduleForm.notes} onChange={e => setRescheduleForm(p => ({ ...p, notes: e.target.value }))} rows={2} placeholder="e.g. Client asked to meet in the evening" />
           <div className="flex justify-end gap-2 pt-1">
             <Button variant="secondary" onClick={() => setModal('none')}>Cancel</Button>

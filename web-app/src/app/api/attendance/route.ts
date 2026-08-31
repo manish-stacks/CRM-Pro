@@ -97,7 +97,7 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const [records, total, lateTotal] = await Promise.all([
+  const [records, total, lateTotal, agg, openShifts] = await Promise.all([
     prisma.attendance.findMany({
       where, skip, take: limit,
       include: {
@@ -112,10 +112,46 @@ export async function GET(req: NextRequest) {
     }),
     prisma.attendance.count({ where }),
     prisma.attendance.count({ where: { ...where, isLate: true } }),
+    // Totals across the WHOLE filtered set, not just the current page.
+    prisma.attendance.aggregate({
+      where,
+      _sum: { hoursWorked: true },
+      _count: { hoursWorked: true },
+    }),
+    // Shifts still running (punched in, not out). Their hours aren't stored
+    // yet, so the total would otherwise look short — we count them and add a
+    // live estimate below so the number matches what people expect.
+    prisma.attendance.findMany({
+      where: { ...where, punchIn: { not: null }, punchOut: null },
+      select: { punchIn: true },
+    }),
   ])
 
-  // NOTE: returns lateTotal for the *entire filtered set* (not just this page)
-  return NextResponse.json({ data: records, total, lateTotal }, { status: 200 })
+  const storedHours = agg._sum.hoursWorked || 0
+  const liveHours = openShifts.reduce((sum, r) => {
+    if (!r.punchIn) return sum
+    const h = (Date.now() - new Date(r.punchIn).getTime()) / 3600000
+    // Ignore anything absurd (someone forgot to punch out days ago).
+    return sum + (h > 0 && h < 24 ? h : 0)
+  }, 0)
+
+  const round2 = (n: number) => Math.round(n * 100) / 100
+
+  // NOTE: lateTotal / totals cover the *entire filtered set* (not just this page)
+  return NextResponse.json({
+    data: records,
+    total,
+    lateTotal,
+    totals: {
+      // Hours already banked (punched out).
+      hoursWorked: round2(storedHours),
+      // Plus a live estimate for shifts still in progress.
+      hoursIncludingOpen: round2(storedHours + liveHours),
+      openShifts: openShifts.length,
+      recordsWithHours: agg._count.hoursWorked,
+      avgHours: agg._count.hoursWorked ? round2(storedHours / agg._count.hoursWorked) : 0,
+    },
+  }, { status: 200 })
 }
 
 export async function POST(req: NextRequest) {

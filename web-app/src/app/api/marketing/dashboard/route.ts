@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
   const date = searchParams.get('date')
   const dateFrom = searchParams.get('dateFrom')
   const dateTo = searchParams.get('dateTo')
-  const statusFilter = searchParams.get('status')
+  const statusFilter = searchParams.get('status')  // supports MEETING_DONE too
   const search = searchParams.get('search')
 
   // meetingDate is a real timestamp, so day boundaries must be the true UTC
@@ -94,10 +94,14 @@ export async function GET(req: NextRequest) {
       })
     : null
 
+  // Today's list only carries meetings that still need doing. Once a meeting
+  // is marked MEETING_DONE it moves out of here and into `doneMeetings`,
+  // so the day's list actually shrinks as you work through it.
   const todayMeetings = await prisma.lead.findMany({
     where: {
       meetingAssignedToId: userId,
       meetingDate: { gte: todayStart, lte: todayEnd },
+      status: { notIn: ['MEETING_DONE', 'CONVERTED', 'CLOSED', 'NOT_INTERESTED'] },
     },
     include: {
       assignedTo: { select: { name: true, phone: true } },
@@ -128,6 +132,29 @@ export async function GET(req: NextRequest) {
     take: 30,
   })
 
+  // Freed slots still sitting with this person: "client didn't pick up" drops
+  // the lead to CALLBACK and clears the date, but it stays assigned to them —
+  // only Cancel Meeting hands it back. These need rebooking.
+  const toRebook = await prisma.lead.findMany({
+    where: {
+      meetingAssignedToId: userId,
+      status: { in: ['CALLBACK', 'FOLLOW_UP'] },
+      meetingDate: null,
+    },
+    include: { assignedTo: { select: { name: true } } },
+    orderBy: { updatedAt: 'desc' },
+    take: 30,
+  })
+
+  // Meetings that have been held but whose deal isn't decided yet — these are
+  // the ones waiting on a Converted / Lost call.
+  const doneMeetings = await prisma.lead.findMany({
+    where: { meetingAssignedToId: userId, status: 'MEETING_DONE' },
+    include: { assignedTo: { select: { name: true } } },
+    orderBy: [{ meetingDate: 'desc' }],
+    take: 30,
+  })
+
   const tomorrowCount = await prisma.lead.count({
     where: { meetingAssignedToId: userId, meetingDate: { gte: tmrStart, lte: tmrEnd }, status: 'MEETING_SCHEDULED' },
   })
@@ -146,6 +173,8 @@ export async function GET(req: NextRequest) {
     todayMeetings,
     upcomingMeetings,
     pastMeetings,
+    doneMeetings,
+    toRebook,
     filteredMeetings,          // null = no filter applied
     filterActive,
     stats: {
@@ -154,6 +183,8 @@ export async function GET(req: NextRequest) {
       openCount: meetingScheduled,
       todayCount: todayMeetings.length,
       tomorrowCount,
+      doneCount: doneMeetings.length,
+      toRebookCount: toRebook.length,
     },
   })
 }

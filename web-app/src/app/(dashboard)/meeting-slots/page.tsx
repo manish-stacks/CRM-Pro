@@ -19,11 +19,19 @@ import api from '@/lib/axios'
 import { formatCurrency } from '@/lib/utils'
 
 const todayStr = () => new Date().toISOString().split('T')[0]
-const shift = (d: string, days: number) => {
-  const dt = new Date(d + 'T00:00:00')
+const shift = (dateStr: string, days: number) => {
+  const [year, month, day] = dateStr.split('-').map(Number)
+
+  const dt = new Date(year, month - 1, day)
   dt.setDate(dt.getDate() + days)
-  return dt.toISOString().split('T')[0]
+
+  const yearPart = dt.getFullYear()
+  const monthPart = String(dt.getMonth() + 1).padStart(2, '0')
+  const dayPart = String(dt.getDate()).padStart(2, '0')
+
+  return `${yearPart}-${monthPart}-${dayPart}`
 }
+
 const pretty = (d: string) =>
   new Date(d + 'T00:00:00').toLocaleDateString('en-IN', {
     weekday: 'long', day: '2-digit', month: 'short', year: 'numeric',
@@ -34,6 +42,7 @@ export default function MeetingSlotsPage() {
   const [date, setDate] = useState(todayStr())
   const [area, setArea] = useState('')
   const [search, setSearch] = useState('')
+  const [executiveId, setExecutiveId] = useState('')
   const [onlyFree, setOnlyFree] = useState(false)
 
   const [data, setData] = useState<any>(null)
@@ -45,13 +54,14 @@ export default function MeetingSlotsPage() {
     try {
       const p = new URLSearchParams({ date })
       if (area) p.set('area', area)
+      if (executiveId) p.set('executiveId', executiveId)
       if (search) p.set('search', search)
       const r = await api.get(`/marketing/availability?${p}`)
       setData(r.data.data)
     } catch {
       setData(null)
     } finally { setLoading(false) }
-  }, [date, area, search])
+  }, [date, area, executiveId, search])
 
   useEffect(() => {
     const t = setTimeout(fetchBoard, search ? 350 : 0) // debounce the name search
@@ -115,9 +125,17 @@ export default function MeetingSlotsPage() {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          <select value={area} onChange={e => setArea(e.target.value)} className="input !w-auto text-sm">
+          <select value={area} onChange={e => { setArea(e.target.value); setExecutiveId('') }} className="input !w-auto text-sm">
             <option value="">All areas</option>
             {(data?.areas || []).map((a: string) => <option key={a} value={a}>{a}</option>)}
+          </select>
+          <select value={executiveId} onChange={e => setExecutiveId(e.target.value)} className="input !w-auto text-sm">
+            <option value="">All marketing persons</option>
+            {(data?.allExecutives || [])
+              .filter((x: any) => !area || x.area === area)
+              .map((x: any) => (
+                <option key={x.id} value={x.id}>{x.name} — {x.area}</option>
+              ))}
           </select>
           <div className="relative">
             <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -128,8 +146,8 @@ export default function MeetingSlotsPage() {
             <input type="checkbox" checked={onlyFree} onChange={e => setOnlyFree(e.target.checked)} />
             Only show people with free slots
           </label>
-          {(area || search || onlyFree) && (
-            <button onClick={() => { setArea(''); setSearch(''); setOnlyFree(false) }}
+          {(area || executiveId || search || onlyFree) && (
+            <button onClick={() => { setArea(''); setExecutiveId(''); setSearch(''); setOnlyFree(false) }}
               className="text-xs text-red-600 hover:underline flex items-center gap-1">
               <X size={12} /> Clear
             </button>

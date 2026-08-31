@@ -33,12 +33,21 @@ function callPhone(phone) {
   Linking.openURL(`tel:${phone}`).catch(() => {});
 }
 
+// Move an ISO date string by N days (slot-view day navigation).
+const shiftISO = (iso, days) => {
+  const d = new Date(iso + 'T00:00:00');
+  d.setDate(d.getDate() + days);
+  return toISO(d);
+};
+
 const TABS = [
   { key: 'today', label: 'Today', params: { range: 'today' } },
   { key: 'tomorrow', label: 'Tomorrow', params: { range: 'tomorrow' } },
   { key: 'upcoming', label: 'Upcoming', params: { range: 'upcoming' } },
   { key: 'week', label: 'Next 7 days', params: { range: 'week' } },
+  { key: 'rebook', label: 'To Rebook', params: { range: 'rebook' } },
   { key: 'done', label: 'Meeting Done', params: { status: 'meeting_done' } },
+  { key: 'converted', label: 'Converted', params: { status: 'converted' } },
   { key: 'all', label: 'All', params: {} },
   { key: 'past', label: 'Past', params: { range: 'past' } },
 ];
@@ -148,11 +157,23 @@ export default function MeetingsScreen({ route, navigation }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const [tab, setTab] = useState('today');
+  const [tab, setTab] = useState(route?.params?.tab || 'today');
   const [pickedDate, setPickedDate] = useState('');
   const [dateModal, setDateModal] = useState(false);
   const [search, setSearch] = useState('');
   const [showSearch, setShowSearch] = useState(false);
+
+  // 'list' = the usual card feed, 'slots' = the whole day laid out slot by
+  // slot (every office slot, booked or free) so the day is visible at a glance.
+  const [viewMode, setViewMode] = useState('list');
+  const [schedule, setSchedule] = useState(null);
+  const [scheduleLoading, setScheduleLoading] = useState(false);
+  const [scheduleDate, setScheduleDate] = useState(toISO(new Date()));
+  // Past-tab history filter — an explicit from/to range on top of "past", so a
+  // marketing person can pull up "meri last month ki meetings".
+  const [pastFrom, setPastFrom] = useState('');
+  const [pastTo, setPastTo] = useState('');
+  const [rangePicker, setRangePicker] = useState(null); // 'from' | 'to' | null
 
   // Current location — sent to the backend to calculate ETA
   const [coords, setCoords] = useState(null);
@@ -171,10 +192,13 @@ export default function MeetingsScreen({ route, navigation }) {
       : (TABS.find(t => t.key === tab) || TABS[0]).params;
     return {
       ...base,
+      // Date range only applies to the Past (history) tab.
+      ...(!pickedDate && tab === 'past' && pastFrom ? { dateFrom: pastFrom } : {}),
+      ...(!pickedDate && tab === 'past' && pastTo ? { dateTo: pastTo } : {}),
       ...(search ? { search } : {}),
       ...(coords ? { lat: coords.lat, lng: coords.lng } : {}),
     };
-  }, [tab, pickedDate, search, coords]);
+  }, [tab, pickedDate, search, coords, pastFrom, pastTo]);
 
   const fetchMeetings = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -191,11 +215,34 @@ export default function MeetingsScreen({ route, navigation }) {
   }, [activeParams]);
 
   useEffect(() => { fetchMeetings(); }, [fetchMeetings]);
+
+  const fetchSchedule = useCallback(async () => {
+    if (viewMode !== 'slots') return;
+    setScheduleLoading(true);
+    try {
+      const r = await EmployeeAPI.getMySchedule({ date: scheduleDate, days: 1 });
+      setSchedule(r.data?.data?.days?.[0] || null);
+    } catch {
+      setSchedule(null);
+    } finally { setScheduleLoading(false); }
+  }, [viewMode, scheduleDate]);
+
+  useEffect(() => { fetchSchedule(); }, [fetchSchedule]);
   useFocusEffect(useCallback(() => { fetchMeetings(true); }, [fetchMeetings]));
 
   useEffect(() => {
     if (route?.params?.refresh) fetchMeetings(true);
   }, [route?.params?.refresh]);
+
+  // Dashboard stat cards deep-link straight into a tab. The screen may already
+  // be mounted (it's a tab), so react to the param rather than only reading it
+  // on first render.
+  useEffect(() => {
+    if (route?.params?.tab) {
+      setTab(route.params.tab);
+      setPickedDate('');
+    }
+  }, [route?.params?.tab]);
 
   const onRefresh = () => { setRefreshing(true); fetchMeetings(true); };
 
@@ -205,6 +252,9 @@ export default function MeetingsScreen({ route, navigation }) {
     if (key === 'upcoming') return counts.upcoming;
     if (key === 'all') return counts.all;
     if (key === 'past') return counts.past;
+    if (key === 'week') return counts.week;
+    if (key === 'done') return counts.done;
+    if (key === 'rebook') return counts.rebook;
     return undefined;
   };
 
@@ -219,6 +269,15 @@ export default function MeetingsScreen({ route, navigation }) {
           </Text>
         </View>
         <View style={{ flexDirection: 'row', gap: 8 }}>
+          <TouchableOpacity
+            style={[s.iconBtn, {
+              backgroundColor: viewMode === 'slots' ? colors.primary : colors.bg2,
+              borderColor: viewMode === 'slots' ? colors.primary : colors.border,
+            }]}
+            onPress={() => setViewMode(v => (v === 'slots' ? 'list' : 'slots'))}
+          >
+            <Ionicons name="grid-outline" size={18} color={viewMode === 'slots' ? '#fff' : colors.text2} />
+          </TouchableOpacity>
           <TouchableOpacity
             style={[s.iconBtn, { backgroundColor: colors.bg2, borderColor: colors.border }]}
             onPress={() => setShowSearch(v => !v)}
@@ -263,6 +322,102 @@ export default function MeetingsScreen({ route, navigation }) {
         </View>
       ) : null}
 
+      {viewMode === 'slots' ? (
+        /* ---- Slot-by-slot view of one day ---- */
+        <View style={{ flex: 1 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingBottom: 10 }}>
+            <TouchableOpacity
+              onPress={() => setScheduleDate(shiftISO(scheduleDate, -1))}
+              style={[s.iconBtn, { backgroundColor: colors.bg2, borderColor: colors.border }]}>
+              <Ionicons name="chevron-back" size={16} color={colors.text2} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setScheduleDate(toISO(new Date()))}
+              style={{ flex: 1, alignItems: 'center' }}>
+              <Text style={{ fontSize: 13.5, fontWeight: '800', color: colors.text }}>
+                {prettyDate(scheduleDate)}
+              </Text>
+              {schedule ? (
+                <Text style={{ fontSize: 11, color: colors.text3, marginTop: 1 }}>
+                  {schedule.bookedCount} booked · {schedule.freeCount} free
+                </Text>
+              ) : null}
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setScheduleDate(shiftISO(scheduleDate, 1))}
+              style={[s.iconBtn, { backgroundColor: colors.bg2, borderColor: colors.border }]}>
+              <Ionicons name="chevron-forward" size={16} color={colors.text2} />
+            </TouchableOpacity>
+          </View>
+
+          {scheduleLoading ? (
+            <View style={s.center}><ActivityIndicator size="large" color={colors.primary} /></View>
+          ) : !schedule || schedule.slots.length === 0 ? (
+            <View style={s.empty}>
+              <Ionicons name="grid-outline" size={40} color={colors.text3} />
+              <Text style={[s.emptyTxt, { color: colors.text3 }]}>No slots for this day</Text>
+            </View>
+          ) : (
+            <ScrollView
+              contentContainerStyle={{ padding: 16, paddingTop: 0, paddingBottom: 30, gap: 8 }}
+              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchSchedule().finally(() => setRefreshing(false)); }} tintColor={colors.primary} />}
+            >
+              {schedule.slots.map((sl, i) => (
+                <TouchableOpacity
+                  key={`${sl.label}-${i}`}
+                  activeOpacity={sl.lead ? 0.8 : 1}
+                  disabled={!sl.lead}
+                  onPress={() => sl.lead && navigation.navigate('MeetingDetail', { meetingId: sl.lead.id })}
+                  style={{
+                    flexDirection: 'row', gap: 12, padding: 13, borderRadius: 14, borderWidth: 1.5,
+                    backgroundColor: sl.lead ? colors.card : 'transparent',
+                    borderColor: sl.lead ? colors.border : 'rgba(34,197,94,0.35)',
+                    borderStyle: sl.lead ? 'solid' : 'dashed',
+                  }}>
+                  <View style={{ width: 62 }}>
+                    <Text style={{ fontSize: 12, fontWeight: '800', color: sl.lead ? colors.text : '#16A34A' }}>
+                      {sl.start || sl.label}
+                    </Text>
+                    {sl.end ? (
+                      <Text style={{ fontSize: 10.5, color: colors.text3, marginTop: 1 }}>{sl.end}</Text>
+                    ) : null}
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    {sl.lead ? (
+                      <>
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }} numberOfLines={1}>
+                          {sl.lead.company || sl.lead.client_name}
+                        </Text>
+                        {sl.lead.company && sl.lead.client_name ? (
+                          <Text style={{ fontSize: 11.5, color: colors.text2, marginTop: 1 }} numberOfLines={1}>
+                            {sl.lead.client_name}
+                          </Text>
+                        ) : null}
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 4 }}>
+                          {sl.lead.city ? (
+                            <Text style={{ fontSize: 11, color: colors.text3 }}>📍 {sl.lead.city}</Text>
+                          ) : null}
+                          {sl.lead.telecaller ? (
+                            <Text style={{ fontSize: 11, color: colors.text3 }}>👤 {sl.lead.telecaller}</Text>
+                          ) : null}
+                        </View>
+                      </>
+                    ) : (
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: '#16A34A', paddingVertical: 4 }}>
+                        Free
+                      </Text>
+                    )}
+                  </View>
+                  {sl.lead ? (
+                    <Ionicons name="chevron-forward" size={16} color={colors.text3} style={{ alignSelf: 'center' }} />
+                  ) : null}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          )}
+        </View>
+      ) : (
+        <>
       {/* Filter tabs */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ maxHeight: 44 }} contentContainerStyle={s.tabsWrap}>
         {TABS.map(t => {
@@ -285,11 +440,38 @@ export default function MeetingsScreen({ route, navigation }) {
         })}
       </ScrollView>
 
+      {tab === 'past' && !pickedDate ? (
+        <View style={{ paddingHorizontal: 16, paddingBottom: 8, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <TouchableOpacity
+            onPress={() => setRangePicker('from')}
+            style={[s.activeFilter, { flex: 1, backgroundColor: colors.bg2, borderColor: pastFrom ? colors.primary : colors.border }]}>
+            <Ionicons name="calendar-outline" size={13} color={pastFrom ? colors.primary : colors.text3} />
+            <Text style={{ color: pastFrom ? colors.text : colors.text3, fontSize: 12, fontWeight: '700' }} numberOfLines={1}>
+              {pastFrom ? prettyDate(pastFrom) : 'From'}
+            </Text>
+          </TouchableOpacity>
+          <Text style={{ color: colors.text3, fontSize: 12 }}>→</Text>
+          <TouchableOpacity
+            onPress={() => setRangePicker('to')}
+            style={[s.activeFilter, { flex: 1, backgroundColor: colors.bg2, borderColor: pastTo ? colors.primary : colors.border }]}>
+            <Ionicons name="calendar-outline" size={13} color={pastTo ? colors.primary : colors.text3} />
+            <Text style={{ color: pastTo ? colors.text : colors.text3, fontSize: 12, fontWeight: '700' }} numberOfLines={1}>
+              {pastTo ? prettyDate(pastTo) : 'To'}
+            </Text>
+          </TouchableOpacity>
+          {(pastFrom || pastTo) ? (
+            <TouchableOpacity onPress={() => { setPastFrom(''); setPastTo(''); }}>
+              <Ionicons name="close-circle" size={18} color={colors.text3} />
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      ) : null}
+
       {loading ? (
         <View style={s.center}><ActivityIndicator size="large" color={colors.primary} /></View>
       ) : (
         <FlatList
-          data={meetings}proposals
+          data={meetings}
           style={{ flex: 1 }}
           keyExtractor={(m) => m.id}
           renderItem={({ item }) => (
@@ -312,6 +494,21 @@ export default function MeetingsScreen({ route, navigation }) {
           }
         />
       )}
+
+        </>
+      )}
+
+      {/* History range picker — same CalendarModal, reused for From and To. */}
+      <CalendarModal
+        visible={!!rangePicker}
+        value={rangePicker === 'from' ? pastFrom : pastTo}
+        title={rangePicker === 'from' ? 'History from' : 'History to'}
+        onClose={() => setRangePicker(null)}
+        onPick={(iso) => {
+          if (rangePicker === 'from') setPastFrom(iso); else setPastTo(iso);
+          setRangePicker(null);
+        }}
+      />
 
       <CalendarModal
         visible={dateModal}

@@ -52,7 +52,12 @@ export async function GET(req: NextRequest) {
   const search = searchParams.get('search')
 
   const where: any = { userId: session.userId }
+  // A visit that's been completed (or cancelled) drops out of the working
+  // tabs — All / Today / Upcoming / Overdue / a picked date — and shows up in
+  // the Completed tab instead. Explicitly asking for a status still works.
+  const ACTIVE_VISIT = ['PENDING', 'IN_PROGRESS']
   if (status && status !== 'all') where.status = status.toUpperCase()
+  else where.status = { in: ACTIVE_VISIT }
   if (search) {
     where.OR = [{ clientName: { contains: search } }, { purpose: { contains: search } }]
   }

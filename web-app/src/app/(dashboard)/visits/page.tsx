@@ -215,6 +215,7 @@ export default function VisitsPage() {
               <thead className="bg-gray-50 text-gray-500">
                 <tr>
                   <th className="text-left font-semibold px-4 py-3">Client</th>
+                  <th className="text-left font-semibold px-4 py-3">Telicaller</th>
                   <th className="text-left font-semibold px-4 py-3">Executive</th>
                   <th className="text-left font-semibold px-4 py-3">Date / Time</th>
                   <th className="text-left font-semibold px-4 py-3">Source</th>
@@ -225,6 +226,7 @@ export default function VisitsPage() {
               </thead>
               <tbody>
                 {rows.map(v => {
+                  
                   const overdue = v.scheduledDate && ['PENDING', 'IN_PROGRESS'].includes(v.status)
                     && new Date(v.scheduledDate) < new Date(new Date().toDateString())
                   return (
@@ -233,6 +235,14 @@ export default function VisitsPage() {
                         <p className="font-semibold text-gray-900">{v.clientName}</p>
                         {v.purpose && <p className="text-xs text-gray-400">{v.purpose}</p>}
                         {v.lead?.leadNumber && <span className="text-[10px] text-brand-600">{v.lead.leadNumber}</span>}
+                      </td>
+                      <td>
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-lg bg-brand-600 text-white text-[10px] font-bold flex items-center justify-center">
+                            {getInitials(v.createdBy?.name || '?')}
+                          </div>
+                          <span className="text-gray-700">{v.createdBy?.name}</span>
+                        </div>
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">

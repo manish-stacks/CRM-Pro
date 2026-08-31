@@ -29,6 +29,16 @@ const emptyForm = {
   bankName: '', accountNumber: '', ifscCode: '', accountHolderName: '',
 }
 
+// Decimal hours (7.59 = 7h 35m) read as clock time by everyone, which is why
+// the totals looked wrong. Render h/m; decimal stays in the tooltip.
+const hm = (h?: number | null) => {
+  if (h == null) return '—'
+  const mins = Math.round(h * 60)
+  const hrs = Math.floor(mins / 60)
+  const m = mins % 60
+  return hrs > 0 ? `${hrs}h ${String(m).padStart(2, '0')}m` : `${m}m`
+}
+
 export default function EmployeeDetailPage() {
   const { id } = useParams()
   const router = useRouter()
@@ -44,6 +54,7 @@ export default function EmployeeDetailPage() {
   const [attPage, setAttPage] = useState(1)
   const [attLoading, setAttLoading] = useState(false)
   const [attFilters, setAttFilters] = useState({ month: '', status: '', workMode: '', late: '', dateFrom: '', dateTo: '' })
+  const [attTotals, setAttTotals] = useState<any>(null)
 
   const fetchAttendance = useCallback(async () => {
     if (!id) return
@@ -56,8 +67,9 @@ export default function EmployeeDetailPage() {
       const r = await api.get(`/attendance?${new URLSearchParams(p)}`)
       setAtt(r.data.data || [])
       setAttTotal(r.data.total || 0)
+      setAttTotals(r.data.totals || null)
     } catch {
-      setAtt([]); setAttTotal(0)
+      setAtt([]); setAttTotal(0); setAttTotals(null)
     } finally { setAttLoading(false) }
   }, [id, attPage, attFilters])
 
@@ -419,7 +431,16 @@ export default function EmployeeDetailPage() {
         <div className="card overflow-hidden">
           <div className="card-header flex items-center justify-between flex-wrap gap-2">
             <h3 className="font-semibold text-gray-900">Attendance</h3>
-            <span className="text-xs text-gray-500">{attTotal} record(s)</span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500">{attTotal} record(s)</span>
+              {attTotals && attTotals.recordsWithHours > 0 && (
+                <>
+                  <span className="badge bg-brand-50 text-brand-700"
+                    title={`${attTotals.hoursWorked} decimal hours`}>Total {hm(attTotals.hoursWorked)}</span>
+                  <span className="badge bg-gray-100 text-gray-600">Avg {hm(attTotals.avgHours)}</span>
+                </>
+              )}
+            </div>
           </div>
 
           <div className="px-5 py-3 bg-gray-50 border-b border-gray-100 grid grid-cols-2 md:grid-cols-6 gap-2">
@@ -470,7 +491,9 @@ export default function EmployeeDetailPage() {
                   <td className="text-sm">{formatDate(a.date)}</td>
                   <td className="text-sm text-gray-600">{a.punchIn ? new Date(a.punchIn).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '—'}</td>
                   <td className="text-sm text-gray-600">{a.punchOut ? new Date(a.punchOut).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '—'}</td>
-                  <td className="text-sm">{a.hoursWorked?.toFixed(1) || '—'}h</td>
+                  <td className="text-sm" title={a.hoursWorked != null ? `${a.hoursWorked} decimal hours` : ''}>
+                    {hm(a.hoursWorked)}
+                  </td>
                   <td className="text-xs text-gray-600">{a.workMode || '—'}</td>
                   <td className="text-xs">
                     {a.isLate

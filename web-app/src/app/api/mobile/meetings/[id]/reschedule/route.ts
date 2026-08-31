@@ -9,7 +9,7 @@ import { requireMobileEmployee, ok, fail } from '@/lib/mobileAuth'
 import { logFromRequest } from '@/lib/audit'
 import { notify } from '@/lib/notify'
 import { Settings } from '@/lib/settings'
-import { isAfterOfficeHours } from '@/lib/meetingSlots'
+import { isAfterOfficeHours, generateSlots } from '@/lib/meetingSlots'
 import { dateOnly } from '@/lib/attendanceDate'
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -18,9 +18,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (res instanceof Response) return res
   const { session } = res as any
 
-  const { meetingDate, meetingTime, notes } = await req.json()
+  // Two paths, same as the web route:
+  //   1. meetingSlot — a free office-hours slot from
+  //      GET /api/mobile/meetings/[id]/slots?date=... (the normal path now;
+  //      the marketing person rebooks exactly like the telecaller does)
+  //   2. meetingTime — free-form, still after office hours only
+  const { meetingDate, meetingTime, meetingSlot, notes } = await req.json()
   if (!meetingDate) return fail('meetingDate required')
-  if (!meetingTime) return fail('meetingTime required (HH:mm, after office hours)')
+  if (!meetingSlot && !meetingTime) return fail('Pick a free slot, or give a time after office hours')
 
   const lead = await prisma.lead.findUnique({ where: { id } })
   if (!lead) return fail('Meeting not found', 404)
@@ -32,21 +37,56 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return fail(`Lead must be in MEETING_SCHEDULED or CALLBACK to reschedule (currently ${lead.status})`)
   }
 
-  const officeEnd = await Settings.meetingOfficeEnd()
-  if (!isAfterOfficeHours(meetingTime, officeEnd)) {
-    return fail(`Self-reschedule is only allowed after office hours (${officeEnd} onwards). Ask your TL/Admin to rebook within office hours.`)
-  }
-
   const md = dateOnly(meetingDate)
+
+  let finalSlot = 'After Office Hours'
+  let finalTime = meetingTime
+
+  if (meetingSlot) {
+    const [officeStart, officeEnd, slotMinutes] = await Promise.all([
+      Settings.meetingOfficeStart(),
+      Settings.meetingOfficeEnd(),
+      Settings.meetingSlotMinutes(),
+    ])
+    const def = generateSlots(officeStart, officeEnd, slotMinutes).find(x => x.label === meetingSlot)
+    if (!def) return fail('That slot is not a valid office-hours slot')
+
+    // Re-check availability at submit time — someone else may have taken the
+    // slot between loading the picker and tapping Confirm.
+    const clash = await prisma.lead.findFirst({
+      where: {
+        meetingAssignedToId: session.userId,
+        meetingDate: md,
+        meetingSlot: def.label,
+        status: 'MEETING_SCHEDULED',
+        id: { not: id },
+      },
+      select: { clientName: true, companyName: true },
+    })
+    if (clash) {
+      return fail(`That slot just got booked (${clash.companyName || clash.clientName}). Pick another one.`)
+    }
+    finalSlot = def.label
+    finalTime = def.start
+  } else {
+    const officeEnd = await Settings.meetingOfficeEnd()
+    if (!isAfterOfficeHours(meetingTime, officeEnd)) {
+      return fail(`Without picking a slot, reschedule is only allowed after office hours (${officeEnd} onwards).`)
+    }
+  }
 
   const updated = await prisma.lead.update({
     where: { id },
     data: {
       status: 'MEETING_SCHEDULED',
       meetingDate: md,
-      meetingTime,
-      meetingSlot: 'After Office Hours',
-      meetingAssignedToId: lead.meetingAssignedToId || session.userId,
+      meetingTime: finalTime,
+      meetingSlot: finalSlot,
+      // A marketing person rescheduling ALWAYS keeps the meeting on their own
+      // calendar — they can never hand it to a colleague from here. Passing a
+      // lead to someone else is the telecaller's job, and only happens via
+      // Cancel Meeting (which un-assigns and asks the telecaller to rebook).
+      meetingAssignedToId: session.userId,
     },
   })
 
@@ -54,22 +94,26 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     data: {
       leadId: id,
       type: 'STATUS_CHANGE',
-      title: '🔁 Meeting rescheduled (after office hours, via app)',
+      title: `🔁 Meeting rescheduled to ${finalSlot === 'After Office Hours' ? finalTime : finalSlot} (via app)`,
       description: notes || null,
       fromStatus: lead.status,
       toStatus: 'MEETING_SCHEDULED',
       nextActionDate: md,
-      nextActionTime: meetingTime,
+      nextActionTime: finalTime,
       createdById: session.userId,
     },
   })
 
-  const notifyUserId = lead.assignedToId || lead.createdById
-  if (notifyUserId && notifyUserId !== session.userId) {
+  // Everyone who could rebook or needs to know the new time: the telecaller
+  // AND whoever created the lead. Previously only one of them was told, so a
+  // confirmed reschedule often reached nobody.
+  const notifyTargets = Array.from(new Set([lead.assignedToId, lead.createdById].filter(Boolean) as string[]))
+    .filter(uid => uid !== session.userId)
+  if (notifyTargets.length) {
     await notify({
-      userIds: notifyUserId,
+      userIds: notifyTargets,
       title: 'Meeting Rescheduled',
-      message: `${lead.companyName || lead.clientName} — new time ${meetingTime} on ${md.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })}`,
+      message: `${lead.companyName || lead.clientName} — now ${finalSlot === 'After Office Hours' ? finalTime : finalSlot} on ${md.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })}`,
       type: 'meeting',
       link: `/leads/${id}`,
       metadata: { screen: 'LeadDetail', leadId: id },
@@ -81,7 +125,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     action: 'MEETING_RESCHEDULE',
     entityType: 'Lead',
     entityId: id,
-    metadata: { meetingDate: md, meetingTime, via: 'mobile' },
+    metadata: { meetingDate: md, meetingTime: finalTime, meetingSlot: finalSlot, via: 'mobile' },
   })
 
   return ok({ status: updated.status })

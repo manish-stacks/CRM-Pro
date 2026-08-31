@@ -96,6 +96,8 @@ async function purgeDeadTokens(fcm: string[], expo: string[]) {
       await Promise.all([
         prisma.user.updateMany({ where: { fcmToken: { in: fcm } }, data: { fcmToken: null } }),
         prisma.client.updateMany({ where: { fcmToken: { in: fcm } }, data: { fcmToken: null } }),
+        // Browser subscriptions die too (cache cleared, permission revoked).
+        prisma.webPushToken.deleteMany({ where: { token: { in: fcm } } }),
       ])
     }
     if (expo.length) {
@@ -153,7 +155,7 @@ export async function sendPushToUsers(userIds: string[], msg: PushMessage): Prom
   const ids = Array.from(new Set((userIds || []).filter(Boolean)))
   if (!ids.length) return { sent: 0, failed: 0, viaFcm: 0, viaExpo: 0 }
 
-  const [users, clients] = await Promise.all([
+  const [users, clients, browsers] = await Promise.all([
     prisma.user.findMany({
       where: { id: { in: ids }, OR: [{ fcmToken: { not: null } }, { expoPushToken: { not: null } }] },
       select: { fcmToken: true, expoPushToken: true },
@@ -164,9 +166,20 @@ export async function sendPushToUsers(userIds: string[], msg: PushMessage): Prom
       where: { userId: { in: ids }, OR: [{ fcmToken: { not: null } }, { expoPushToken: { not: null } }] },
       select: { fcmToken: true, expoPushToken: true },
     }),
+    // Every browser this person has granted notification permission in.
+    // These are plain FCM tokens, so they ride the same sender — which means
+    // EVERY notify() call now reaches Chrome as well as the phone, with no
+    // per-event wiring.
+    prisma.webPushToken.findMany({
+      where: { userId: { in: ids } },
+      select: { token: true },
+    }),
   ])
 
-  return sendPush([...users, ...clients], msg)
+  return sendPush(
+    [...users, ...clients, ...browsers.map(b => ({ fcmToken: b.token }))],
+    msg,
+  )
 }
 
 /** Push to client-portal devices by Client id. */

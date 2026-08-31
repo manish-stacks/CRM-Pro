@@ -36,10 +36,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     where: { id },
     data: {
       status: 'CALLBACK',
+      // The SLOT is freed (date/time/slot cleared) so the calendar opens up,
+      // but the meeting STAYS ASSIGNED to the same marketing person.
+      //
+      // Clearing meetingAssignedToId here was the bug: the moment they marked
+      // "didn't pick up", they stopped being the owner — the meeting vanished
+      // from their list and re-opening it returned 403 Forbidden. Only
+      // Cancel Meeting un-assigns; everything else keeps it with them so they
+      // can rebook it themselves.
       meetingDate: null,
       meetingTime: null,
       meetingSlot: null,
-      meetingAssignedToId: null,
       meetingLat: null,
       meetingLng: null,
     },
@@ -57,10 +64,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     },
   })
 
-  const notifyUserId = lead.assignedToId || lead.createdById
-  if (notifyUserId && notifyUserId !== session.userId) {
+  const notifyTargets = Array.from(new Set([lead.assignedToId, lead.createdById].filter(Boolean) as string[]))
+    .filter(uid => uid !== session.userId)
+  if (notifyTargets.length) {
     await notify({
-      userIds: notifyUserId,
+      userIds: notifyTargets,
       title: 'No answer at meeting',
       message: `${lead.companyName || lead.clientName} didn't pick up — slot freed, needs a re-attempt`,
       type: 'meeting',

@@ -215,8 +215,8 @@ export interface PayslipDocData {
   payDate?: string
   employee: { name: string; employeeId: string; position: string; department: string }
   bank: { bankName?: string; accountNumber?: string }
-  earnings: { basic: number; hra: number; conveyance: number; medical: number; specialAllow: number }
-  deductions: { advance: number; esi: number; pf: number; professionTax: number; tds: number }
+  earnings: { basic: number; hra: number; conveyance: number; medical: number; specialAllow: number; bonus?: number }
+  deductions: { advance: number; lop?: number; lopDays?: number; esi: number; pf: number; professionTax: number; tds: number }
   grossEarnings: number
   totalDeduction: number
   netSalary: number
@@ -227,7 +227,7 @@ export function buildPayslipBody(d: PayslipDocData): string {
   const fmt = (n: number) => Math.round(n).toLocaleString('en-IN')
   const e = d.earnings
   const ded = d.deductions
-  const totalAddition = e.hra + e.conveyance + e.medical + e.specialAllow
+  const totalAddition = e.basic + e.hra + e.conveyance + e.medical + e.specialAllow + (e.bonus || 0)
 
   return `
   
@@ -270,6 +270,10 @@ export function buildPayslipBody(d: PayslipDocData): string {
     </tr>
     <tr>
       <td>HRA</td><td class="amt">${fmt(e.hra)}</td>
+      <td>LOP${ded.lopDays ? ` (${ded.lopDays}d)` : ''}</td><td class="amt">${fmt(ded.lop || 0)}</td>
+    </tr>
+    <tr>
+      <td>${(e.bonus || 0) > 0 ? 'Bonus' : ''}</td><td class="amt">${(e.bonus || 0) > 0 ? fmt(e.bonus || 0) : ''}</td>
       <td>E.S.I.</td><td class="amt">${fmt(ded.esi)}</td>
     </tr>
     <tr>

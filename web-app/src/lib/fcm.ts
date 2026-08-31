@@ -239,6 +239,22 @@ function buildPayload(token: string, msg: FcmMessage) {
         headers: { 'apns-priority': '10' },
         payload: { aps: { sound: 'default', 'content-available': 1 } },
       },
+      // Browser (Chrome/Edge/Firefox) delivery. Mobile clients ignore this
+      // block, so it's safe to send on every message.
+      webpush: {
+        headers: { Urgency: 'high', TTL: '86400' },
+        notification: {
+          title: msg.title,
+          body: msg.body,
+          icon: '/icons/icon-192.png',
+          badge: '/icons/badge-72.png',
+          requireInteraction: false,
+        },
+        // Where the browser navigates when the notification is clicked.
+        fcm_options: {
+          link: data?.link ? `${process.env.NEXT_PUBLIC_APP_URL || ''}${data.link}` : (process.env.NEXT_PUBLIC_APP_URL || '/'),
+        },
+      },
     },
   }
 }

@@ -59,6 +59,13 @@ export default function MeetingDetailScreen({ route, navigation }) {
   const [rescheduleDate, setRescheduleDate] = useState('');
   const [rescheduleTime, setRescheduleTime] = useState('');
   const [rescheduleNotes, setRescheduleNotes] = useState('');
+  // Slot picker — same office-hours slots the telecaller books through.
+  // 'slot' = pick a free office slot, 'after' = free-form time after hours.
+  const [rescheduleMode, setRescheduleMode] = useState('slot');
+  const [slots, setSlots] = useState([]);
+  const [slotsLoading, setSlotsLoading] = useState(false);
+  const [pickedSlot, setPickedSlot] = useState('');
+  const [nextAvailable, setNextAvailable] = useState(null);
   const [showNoAnswer, setShowNoAnswer] = useState(false);
   const [noAnswerReason, setNoAnswerReason] = useState('');
   const [showCancel, setShowCancel] = useState(false);
@@ -103,6 +110,24 @@ export default function MeetingDetailScreen({ route, navigation }) {
   }, [meetingId]);
 
   useEffect(() => { fetchDetail(); fetchProposals(); }, [fetchDetail, fetchProposals]);
+
+  // Whenever the date changes (or the sheet opens), pull that day's slots.
+  useEffect(() => {
+    if (!showReschedule || rescheduleMode !== 'slot' || !rescheduleDate) { setSlots([]); return; }
+    let alive = true;
+    setSlotsLoading(true);
+    setPickedSlot('');
+    EmployeeAPI.getMeetingSlots(meetingId, rescheduleDate)
+      .then(r => {
+        if (!alive) return;
+        setSlots(r.data?.data?.slots || []);
+        setNextAvailable(r.data?.data?.next_available || null);
+      })
+      .catch(() => { if (alive) { setSlots([]); setNextAvailable(null); } })
+      .finally(() => { if (alive) setSlotsLoading(false); });
+    return () => { alive = false; };
+  }, [showReschedule, rescheduleMode, rescheduleDate, meetingId]);
+
 
   const s = styles(colors);
 
@@ -296,16 +321,37 @@ export default function MeetingDetailScreen({ route, navigation }) {
     } finally { setSaving(false); }
   };
 
+  const openReschedule = () => {
+    setRescheduleMode('slot');
+    setRescheduleDate('');
+    setRescheduleTime('');
+    setPickedSlot('');
+    setSlots([]);
+    setNextAvailable(null);
+    setRescheduleNotes('');
+    setShowReschedule(true);
+  };
+
   const submitReschedule = async () => {
-    if (!rescheduleDate || !rescheduleTime) {
-      Alert.alert('Missing info', 'Pick a new date and time (after office hours).');
+    if (!rescheduleDate) {
+      Alert.alert('Missing info', 'Pick a new date first.');
+      return;
+    }
+    if (rescheduleMode === 'slot' && !pickedSlot) {
+      Alert.alert('Pick a slot', 'Tap one of the free slots for that day.');
+      return;
+    }
+    if (rescheduleMode === 'after' && !rescheduleTime) {
+      Alert.alert('Missing info', 'Enter a time after office hours (e.g. 19:00).');
       return;
     }
     setSaving(true);
     try {
       await EmployeeAPI.rescheduleMeeting(meetingId, {
         meetingDate: rescheduleDate,
-        meetingTime: rescheduleTime,
+        ...(rescheduleMode === 'slot'
+          ? { meetingSlot: pickedSlot }
+          : { meetingTime: rescheduleTime }),
         notes: rescheduleNotes,
       });
       setShowReschedule(false);
@@ -469,9 +515,9 @@ export default function MeetingDetailScreen({ route, navigation }) {
                 <Ionicons name="chevron-forward" size={16} color="#F59E0B" />
               </TouchableOpacity>
               {data.status === 'MEETING_SCHEDULED' && (
-                <TouchableOpacity style={[s.actionRow, { borderColor: colors.border }]} onPress={() => { setRescheduleDate(''); setRescheduleTime(''); setRescheduleNotes(''); setShowReschedule(true); }} disabled={saving}>
+                <TouchableOpacity style={[s.actionRow, { borderColor: colors.border }]} onPress={openReschedule} disabled={saving}>
                   <Ionicons name="time-outline" size={18} color="#6366F1" />
-                  <Text style={[s.actionRowTxt, { color: '#6366F1' }]}>Reschedule (after office hours)</Text>
+                  <Text style={[s.actionRowTxt, { color: '#6366F1' }]}>Reschedule (pick a free slot)</Text>
                   <Ionicons name="chevron-forward" size={16} color="#6366F1" />
                 </TouchableOpacity>
               )}
@@ -644,23 +690,132 @@ export default function MeetingDetailScreen({ route, navigation }) {
             </TouchableOpacity>
           </View>
           <ScrollView style={{ padding: 20 }} keyboardShouldPersistTaps="handled">
-            <View style={{ backgroundColor: 'rgba(99,102,241,0.1)', borderRadius: 12, padding: 12, marginBottom: 16 }}>
-              <Text style={{ color: '#6366F1', fontSize: 12, lineHeight: 18 }}>
-                Self-reschedule is only allowed AFTER office hours. For a daytime slot, ask your telecaller/TL to rebook through the office slot picker.
-              </Text>
+            {/* Mode switch: free office slot (default) vs after-hours time */}
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
+              {[
+                { key: 'slot', label: 'Free office slot', icon: 'grid-outline' },
+                { key: 'after', label: 'After office hours', icon: 'moon-outline' },
+              ].map(m => (
+                <TouchableOpacity
+                  key={m.key}
+                  onPress={() => setRescheduleMode(m.key)}
+                  style={{
+                    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+                    gap: 6, paddingVertical: 11, borderRadius: 12, borderWidth: 1.5,
+                    borderColor: rescheduleMode === m.key ? '#6366F1' : colors.border,
+                    backgroundColor: rescheduleMode === m.key ? 'rgba(99,102,241,0.1)' : 'transparent',
+                  }}>
+                  <Ionicons name={m.icon} size={15} color={rescheduleMode === m.key ? '#6366F1' : colors.text3} />
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: rescheduleMode === m.key ? '#6366F1' : colors.text2 }}>
+                    {m.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
             </View>
+
             <DatePickerField label="NEW DATE *" value={rescheduleDate} onChange={setRescheduleDate} minToday />
-            <Text style={s.fieldLabel}>NEW TIME (24h, e.g. 19:00) *</Text>
-            <View style={[s.fieldWrap, { backgroundColor: colors.bg2, borderColor: colors.border }]}>
-              <TextInput
-                style={{ flex: 1, fontSize: 14, paddingVertical: 12, color: colors.text }}
-                placeholder="19:00"
-                placeholderTextColor={colors.text3}
-                value={rescheduleTime}
-                onChangeText={setRescheduleTime}
-                keyboardType="numbers-and-punctuation"
-              />
-            </View>
+
+            {rescheduleMode === 'slot' ? (
+              <>
+                <Text style={s.fieldLabel}>PICK A FREE SLOT *</Text>
+                {!rescheduleDate ? (
+                  <Text style={{ color: colors.text3, fontSize: 12.5, paddingVertical: 10 }}>
+                    Pehle date select karo, phir us din ke free slots yahan aayenge.
+                  </Text>
+                ) : slotsLoading ? (
+                  <View style={{ paddingVertical: 18, alignItems: 'center' }}>
+                    <ActivityIndicator color="#6366F1" />
+                  </View>
+                ) : slots.length === 0 ? (
+                  <Text style={{ color: colors.text3, fontSize: 12.5, paddingVertical: 10 }}>
+                    Is din koi slot nahi mila. Doosri date try karo ya "After office hours" use karo.
+                  </Text>
+                ) : (
+                  <View style={{ gap: 8 }}>
+                    {/* One-tap: jump to your own earliest free slot that day.
+                        A reschedule always stays on YOUR calendar — to hand the
+                        lead to someone else, use Cancel Meeting instead. */}
+                    {nextAvailable && (
+                      <TouchableOpacity
+                        onPress={() => setPickedSlot(nextAvailable)}
+                        style={{
+                          flexDirection: 'row', alignItems: 'center', gap: 8,
+                          paddingVertical: 11, paddingHorizontal: 14, borderRadius: 12,
+                          backgroundColor: 'rgba(34,197,94,0.12)',
+                          borderWidth: 1.5, borderColor: '#22C55E', marginBottom: 2,
+                        }}>
+                        <Ionicons name="flash-outline" size={16} color="#16A34A" />
+                        <Text style={{ flex: 1, fontSize: 12.5, fontWeight: '700', color: '#16A34A' }}>
+                          Next free slot — {nextAvailable}
+                        </Text>
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: '#16A34A' }}>Use</Text>
+                      </TouchableOpacity>
+                    )}
+                    {slots.map(sl => {
+                      const selected = pickedSlot === sl.label;
+                      return (
+                        <TouchableOpacity
+                          key={sl.label}
+                          disabled={!sl.available}
+                          onPress={() => setPickedSlot(sl.label)}
+                          style={{
+                            flexDirection: 'row', alignItems: 'center', gap: 10,
+                            paddingVertical: 12, paddingHorizontal: 14, borderRadius: 12, borderWidth: 1.5,
+                            borderColor: selected ? '#6366F1' : sl.available ? colors.border : 'rgba(239,68,68,0.3)',
+                            backgroundColor: selected
+                              ? 'rgba(99,102,241,0.12)'
+                              : sl.available ? 'transparent' : 'rgba(239,68,68,0.06)',
+                            opacity: sl.available ? 1 : 0.7,
+                          }}>
+                          <Ionicons
+                            name={selected ? 'radio-button-on' : sl.available ? 'radio-button-off' : 'close-circle'}
+                            size={18}
+                            color={selected ? '#6366F1' : sl.available ? colors.text3 : '#EF4444'}
+                          />
+                          <View style={{ flex: 1 }}>
+                            <Text style={{
+                              fontSize: 13.5, fontWeight: '700',
+                              color: sl.available ? colors.text : colors.text2,
+                            }}>
+                              {sl.label}
+                            </Text>
+                            {!sl.available && (
+                              <Text style={{ fontSize: 11, color: '#EF4444', marginTop: 1 }}>
+                                Booked{sl.booked_with ? ` — ${sl.booked_with}` : ''}
+                              </Text>
+                            )}
+                          </View>
+                          {sl.available && !selected && (
+                            <Text style={{ fontSize: 11, fontWeight: '700', color: '#22C55E' }}>Free</Text>
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                )}
+              </>
+            ) : (
+              <>
+                <View style={{ backgroundColor: 'rgba(99,102,241,0.1)', borderRadius: 12, padding: 12, marginBottom: 12, marginTop: 4 }}>
+                  <Text style={{ color: '#6366F1', fontSize: 12, lineHeight: 18 }}>
+                    Office hours ke baad ka time hi chalega. Din ke time ke liye upar
+                    "Free office slot" use karo.
+                  </Text>
+                </View>
+                <Text style={s.fieldLabel}>NEW TIME (24h, e.g. 19:00) *</Text>
+                <View style={[s.fieldWrap, { backgroundColor: colors.bg2, borderColor: colors.border }]}>
+                  <TextInput
+                    style={{ flex: 1, fontSize: 14, paddingVertical: 12, color: colors.text }}
+                    placeholder="19:00"
+                    placeholderTextColor={colors.text3}
+                    value={rescheduleTime}
+                    onChangeText={setRescheduleTime}
+                    keyboardType="numbers-and-punctuation"
+                  />
+                </View>
+              </>
+            )}
+
             <Text style={s.fieldLabel}>NOTES (OPTIONAL)</Text>
             <View style={[s.fieldWrap, { backgroundColor: colors.bg2, borderColor: colors.border }]}>
               <TextInput

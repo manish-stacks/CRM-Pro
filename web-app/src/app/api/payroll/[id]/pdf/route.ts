@@ -71,22 +71,29 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         bankName: payslip.employee.bankName || undefined,
         accountNumber: payslip.employee.accountNumber || undefined,
       },
+      // basicSalary/hra/conveyance/medical/specialAllow are the FULL monthly
+      // values (not prorated). We show the full breakup + a single LOP
+      // deduction line for the days not paid — that's the standard payslip
+      // format and it keeps the numbers from double-counting the LOP.
       earnings: {
         basic: payslip.basicSalary,
         hra: payslip.hra,
         conveyance: payslip.conveyance,
         medical: payslip.medical,
-        specialAllow: payslip.specialAllow + payslip.otherEarnings,
+        specialAllow: payslip.specialAllow,
+        bonus: payslip.otherEarnings,
       },
       deductions: {
         advance: payslip.otherDeduct,
+        lop: Math.max(0, (payslip.basicSalary + payslip.hra + payslip.conveyance + payslip.medical + payslip.specialAllow) - payslip.grossSalary),
+        lopDays: payslip.lopDays || 0,
         esi: payslip.esi,
         pf: payslip.pf,
         professionTax: payslip.professionTax,
         tds: payslip.tds,
       },
-      grossEarnings: payslip.grossSalary + payslip.otherEarnings,
-      totalDeduction: payslip.totalDeduct + payslip.otherDeduct,
+      grossEarnings: payslip.basicSalary + payslip.hra + payslip.conveyance + payslip.medical + payslip.specialAllow + payslip.otherEarnings,
+      totalDeduction: payslip.totalDeduct + payslip.otherDeduct + Math.max(0, (payslip.basicSalary + payslip.hra + payslip.conveyance + payslip.medical + payslip.specialAllow) - payslip.grossSalary),
       netSalary: payslip.netSalary,
       company,
     })

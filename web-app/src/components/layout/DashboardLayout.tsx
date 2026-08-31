@@ -5,6 +5,7 @@ import Header from './Header'
 import { useAuth } from '@/hooks/useAuth'
 import { useRouter } from 'next/navigation'
 import { Toaster } from 'react-hot-toast'
+import WebPushRegistrar from '@/components/WebPushRegistrar'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -29,6 +30,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
       <Toaster position="top-right" toastOptions={{ className: 'text-sm', style: { borderRadius: '12px' } }} />
+
+      {/* Chrome/Edge/Firefox push — asks once, then keeps the token fresh so
+          every in-app notification also lands as a desktop notification. */}
+      <WebPushRegistrar />
 
       {/* Desktop sidebar */}
       <div className="hidden md:flex w-64 flex-shrink-0">

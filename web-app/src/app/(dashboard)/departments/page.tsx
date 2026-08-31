@@ -161,7 +161,14 @@ export default function DepartmentsPage() {
               <div className="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-gray-100">
                 <div>
                   <p className="text-xs text-gray-500">Employees</p>
-                  <p className="font-bold text-gray-900 flex items-center gap-1"><Users size={13} /> {d._count?.employees || 0}</p>
+                  <p className="font-bold text-gray-900 flex items-center gap-1">
+                    <Users size={13} /> {d._count?.employeesActive || 0}
+                    {(d._count?.employeesInactive || 0) > 0 && (
+                      <span className="font-normal text-gray-400 text-xs">
+                        &nbsp;+{d._count.employeesInactive} inactive
+                      </span>
+                    )}
+                  </p>
                 </div>
                 <div>
                   <p className="text-xs text-gray-500">Manager</p>

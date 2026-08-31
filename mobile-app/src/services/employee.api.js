@@ -70,6 +70,12 @@ export const EmployeeAPI = {
   markMeetingDone: (id, data) => AxiosInstance.post(`/mobile/meetings/${id}/done`, data),
   noAnswerMeeting: (id, data) => AxiosInstance.post(`/mobile/meetings/${id}/no-answer`, data),
   rescheduleMeeting: (id, data) => AxiosInstance.post(`/mobile/meetings/${id}/reschedule`, data),
+  // Free/booked office-hours slots for MY calendar on a given date, so the
+  // reschedule sheet can offer real slots instead of a raw time field.
+  getMeetingSlots: (id, date) => AxiosInstance.get(`/mobile/meetings/${id}/slots`, { params: { date } }),
+  // Slot-by-slot view of my own day(s) — every office slot with whatever
+  // meeting sits in it, so the whole day is visible at a glance.
+  getMySchedule: (params) => AxiosInstance.get('/mobile/meetings/schedule', { params }),
   // Cancel an assigned meeting. `notes` is MANDATORY — it is what the
   // telecaller / lead creator sees in the "re-assign needed" notification.
   cancelMeeting: (id, data) => AxiosInstance.post(`/mobile/meetings/${id}/cancel`, data),

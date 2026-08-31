@@ -74,9 +74,12 @@ export interface PayslipData {
     conveyance: number
     medical: number
     specialAllow: number
+    bonus?: number
   }
   deductions: {
     advance: number
+    lop?: number
+    lopDays?: number
     esi: number
     pf: number
     professionTax: number
@@ -235,7 +238,7 @@ export function generatePayslipHTML(data: PayslipData): string {
   const fmt = (n: number) => Math.round(n).toLocaleString('en-IN')
   const e = data.earnings
   const d = data.deductions
-  const totalAddition = e.hra + e.conveyance + e.medical + e.specialAllow
+  const totalAddition = e.basic + e.hra + e.conveyance + e.medical + e.specialAllow + (e.bonus || 0)
 
   return `
 <!DOCTYPE html>
@@ -291,6 +294,10 @@ export function generatePayslipHTML(data: PayslipData): string {
     </tr>
     <tr>
       <td>HRA</td><td class="amt">${fmt(e.hra)}</td>
+      <td>LOP${d.lopDays ? ` (${d.lopDays}d)` : ''}</td><td class="amt">${fmt(d.lop || 0)}</td>
+    </tr>
+    <tr>
+      <td>${(e.bonus || 0) > 0 ? 'Bonus' : ''}</td><td class="amt">${(e.bonus || 0) > 0 ? fmt(e.bonus || 0) : ''}</td>
       <td>E.S.I.</td><td class="amt">${fmt(d.esi)}</td>
     </tr>
     <tr>
