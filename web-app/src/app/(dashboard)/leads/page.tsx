@@ -45,7 +45,7 @@ const EMPTY_FILTERS = {
   minPrice: '', maxPrice: '',
   // Default sort: soonest pending action first, so a follow-up/ringing lead you
   // scheduled for tomorrow shows at the TOP of tomorrow's list.
-  sortBy: 'nextaction',
+  sortBy: 'created',
 }
 
 const DUE_CHIPS = [
@@ -431,8 +431,8 @@ function LeadsPageInner({ forceMine = false }: { forceMine?: boolean }) {
               <option value="no">No email</option>
             </select>
             <select value={filters.sortBy} onChange={e => setF({ sortBy: e.target.value })} className="input">
-              <option value="nextaction">Sort: Next action (soonest)</option>
               <option value="created">Sort: Newest first</option>
+              <option value="nextaction">Sort: Next action (soonest)</option>
               <option value="oldest">Sort: Oldest first</option>
               <option value="updated">Sort: Recently updated</option>
               <option value="followup">Sort: Follow-up / Meeting (latest)</option>
