@@ -31,6 +31,7 @@ model User {
   disabledAt       DateTime?
   disabledReason   String?
   lastLoginAt      DateTime?
+  lastActiveAt     DateTime? // heartbeat from the app — powers online/last-seen in Chat
   // ---- Mobile push ----
   // fcmToken is the native Firebase registration token sent by the app (primary).
   // expoPushToken is kept for older installs / iOS builds without a Firebase iOS
@@ -78,6 +79,7 @@ model User {
   chatMemberships        ChatMember[]
   messageDeletions       MessageDeletion[]
   messageMentions        MessageMention[]
+  messageReactions       MessageReaction[]
   createdTickets         SupportTicket[]      @relation("TicketCreator")
   assignedTickets        SupportTicket[]      @relation("TicketAssignee")
   supportTicketReplies   SupportTicketReply[] @relation("SupportTicketReplyAuthor")
@@ -1029,6 +1031,7 @@ model ChatMember {
   leftAt       DateTime?
   lastReadAt   DateTime?
   isActive     Boolean   @default(true)
+  typingAt     DateTime? // last time this member pinged "typing" (client treats >6s old as stopped)
 
   chatGroup    ChatGroup @relation(fields: [chatGroupId], references: [id], onDelete: Cascade)
   user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -1051,18 +1054,41 @@ model Message {
   editedAt       DateTime?
   isDeleted      Boolean  @default(false)
   replyToId      String?
+  isPinned       Boolean  @default(false)
+  pinnedAt       DateTime?
+  pinnedById     String?
+  isForwarded    Boolean  @default(false)
   createdAt      DateTime @default(now())
 
   chatGroup      ChatGroup? @relation(fields: [chatGroupId], references: [id], onDelete: Cascade)
   sender         User       @relation("SentMessages", fields: [senderId], references: [id])
   receiver       User?      @relation("ReceivedMessages", fields: [receiverId], references: [id])
+  replyTo        Message?   @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies        Message[]  @relation("MessageReplies")
   deletions      MessageDeletion[]
   mentions       MessageMention[]
+  reactions      MessageReaction[]
 
   @@index([chatGroupId, createdAt])
   @@index([senderId])
   @@index([receiverId])
   @@map("messages")
+}
+
+// One emoji reaction per user per message (picking a new emoji replaces
+// the old one — same as WhatsApp).
+model MessageReaction {
+  id        String   @id @default(cuid())
+  messageId String
+  userId    String
+  emoji     String
+  createdAt DateTime @default(now())
+
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+  @@map("message_reactions")
 }
 
 // "Delete for me" — one row per user who has hidden this message on their

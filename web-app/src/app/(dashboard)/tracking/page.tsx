@@ -8,6 +8,17 @@ import { MapPin, Navigation, Users2, Loader2, Clock, Battery, RefreshCw, Route }
 import toast from 'react-hot-toast'
 import { loadGoogleMaps, GOOGLE_MAPS_KEY } from '@/lib/googleMaps'
 
+// Evenly samples a path down to `max` points, instead of truncating to the
+// first `max` — a single billed Roads API request still covers the whole
+// day's route instead of just its start.
+function downsamplePath(path: { lat: number; lng: number }[], max: number) {
+  if (path.length <= max) return path
+  const step = (path.length - 1) / (max - 1)
+  const out: { lat: number; lng: number }[] = []
+  for (let i = 0; i < max; i++) out.push(path[Math.round(i * step)])
+  return out
+}
+
 // Ping coordinates are raw GPS points recorded every so often — connecting
 // them with a straight polyline cuts across blocks/parks instead of
 // following the street. Google's Roads API snaps + interpolates the path
@@ -17,7 +28,7 @@ async function snapPathToRoads(path: { lat: number; lng: number }[]): Promise<{ 
   if (path.length < 2) return null
   try {
     // Roads API accepts up to 100 points per request.
-    const pointsParam = path.slice(0, 100).map(p => `${p.lat},${p.lng}`).join('|')
+    const pointsParam = downsamplePath(path, 100).map(p => `${p.lat},${p.lng}`).join('|')
     const url = `https://roads.googleapis.com/v1/snapToRoads?path=${encodeURIComponent(pointsParam)}&interpolate=true&key=${GOOGLE_MAPS_KEY}`
     const res = await fetch(url)
     const json = await res.json()
@@ -46,6 +57,18 @@ function haversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: num
   return 2 * R * Math.asin(Math.sqrt(h))
 }
 
+// Relative "X ago" for a timestamp — makes stale pings obvious at a glance
+// instead of making the user compare a raw clock time to now themselves.
+function timeAgo(dateStr: string) {
+  const diffMs = Date.now() - new Date(dateStr).getTime()
+  const mins = Math.floor(diffMs / 60000)
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins}m ago`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs}h ago`
+  return new Date(dateStr).toLocaleDateString('en-IN')
+}
+
 // Load Google Maps JS API at runtime
 function useGoogleMaps() {
   const [ready, setReady] = useState(false)
@@ -69,12 +92,38 @@ export default function TrackingPage() {
   const [routeStats, setRouteStats] = useState<any>(null)
   const [routeLoading, setRouteLoading] = useState(false)
   const [people, setPeople] = useState<any[]>([])
+  const [search, setSearch] = useState('')
+  const [livePaused, setLivePaused] = useState(false)
+  const pollRef = useRef<any>(null)
+  // Caches route-history responses + their (billed) Roads API snap result,
+  // keyed by user+date — revisiting the same day redraws instantly with
+  // zero extra backend or Google API calls.
+  const routeCacheRef = useRef<Map<string, any>>(new Map())
 
   const mapRef = useRef<any>(null)
   const mapInstance = useRef<any>(null)
   const overlaysRef = useRef<any[]>([])
+  const markersRef = useRef<Record<string, any>>({})
   const infoRef = useRef<any>(null)
   const boundsRef = useRef<any>(null)
+
+  // Quick-glance counts — moving / idle / no-signal — so status is visible
+  // without scanning the whole list.
+  const movingCount = live.filter(u => u.lastPing?.isMoving).length
+  const idleCount = live.filter(u => u.lastPing && !u.lastPing.isMoving).length
+  const offlineCount = live.filter(u => !u.lastPing).length
+
+  const filteredLive = live.filter(u => u.name?.toLowerCase().includes(search.toLowerCase()))
+
+  // Pan/zoom the map to a specific person and pop their info window —
+  // clicking a card in the list should take you straight to them on the map.
+  const focusUser = (userId: string) => {
+    const marker = markersRef.current[userId]
+    if (!marker || !mapInstance.current) return
+    mapInstance.current.panTo(marker.getPosition())
+    mapInstance.current.setZoom(16)
+    ;(window as any).google.maps.event.trigger(marker, 'click')
+  }
 
   const recenter = () => {
     if (mapInstance.current && boundsRef.current) mapInstance.current.fitBounds(boundsRef.current, 60)
@@ -83,6 +132,7 @@ export default function TrackingPage() {
   const clearOverlays = () => {
     overlaysRef.current.forEach((o: any) => o.setMap && o.setMap(null))
     overlaysRef.current = []
+    markersRef.current = {}
   }
 
   const loadLive = useCallback(async () => {
@@ -94,10 +144,18 @@ export default function TrackingPage() {
   }, [])
 
   useEffect(() => {
+    if (tab !== 'live') return // no need to poll /tracking/live while looking at Route History
+    const startPolling = () => { pollRef.current = setInterval(loadLive, 30000); setLivePaused(false) }
+    const stopPolling = () => { if (pollRef.current) clearInterval(pollRef.current); pollRef.current = null; setLivePaused(true) }
+    const handleVisibility = () => {
+      if (document.hidden) stopPolling()
+      else { loadLive(); startPolling() }
+    }
     loadLive()
-    const t = setInterval(loadLive, 30000) // refresh every 30s
-    return () => clearInterval(t)
-  }, [loadLive])
+    startPolling()
+    document.addEventListener('visibilitychange', handleVisibility)
+    return () => { stopPolling(); document.removeEventListener('visibilitychange', handleVisibility) }
+  }, [loadLive, tab])
 
   // Marketing executives — the only tracked role (for Route-History dropdown)
   useEffect(() => {
@@ -155,6 +213,7 @@ export default function TrackingPage() {
         infoRef.current.open(mapInstance.current, marker)
       })
       overlaysRef.current.push(marker)
+      markersRef.current[u.userId] = marker
       bounds.extend(pos)
     })
     boundsRef.current = withLoc.length > 0 ? bounds : null
@@ -168,19 +227,32 @@ export default function TrackingPage() {
     if (!selectedUser) { toast.error('Select a person'); return }
     setRouteLoading(true)
     try {
-      const r = await api.get(`/tracking/route-history?userId=${selectedUser}&date=${selectedDate}`)
-      setRouteData(r.data.data)
+      const cacheKey = `${selectedUser}|${selectedDate}`
+      const cached = routeCacheRef.current.get(cacheKey)
+      const data = cached ? cached.data : (await api.get(`/tracking/route-history?userId=${selectedUser}&date=${selectedDate}`)).data.data
+      setRouteData(data)
       if (mapInstance.current) {
         const g = (window as any).google
         clearOverlays()
-        const pings = r.data.data.pings || []
+        const pings = data.pings || []
         if (pings.length > 0) {
           const path = pings.map((p: any) => ({ lat: p.latitude, lng: p.longitude }))
+          const distanceKm = path.slice(1).reduce((sum: number, pt: any, i: number) => sum + haversineKm(path[i], pt), 0)
+
           // Snap the breadcrumb trail onto actual roads for the drawn line;
-          // markers below still use the real recorded points.
-          const snapped = await snapPathToRoads(path)
+          // markers below still use the real recorded points. Skipped for a
+          // handful of clustered points (near-stationary day) since snapping
+          // wouldn't change the line but still costs a billed API call —
+          // and skipped entirely on a cache hit, reusing the prior result.
+          let snapped: { lat: number; lng: number }[] | null
+          if (cached) {
+            snapped = cached.snapped
+          } else {
+            snapped = (path.length >= 3 && distanceKm > 0.1) ? await snapPathToRoads(path) : null
+            routeCacheRef.current.set(cacheKey, { data, snapped })
+          }
           const linePath = snapped && snapped.length >= 2 ? snapped : path
-          if (!snapped) {
+          if (!snapped && path.length >= 3 && distanceKm > 0.1) {
             toast('Route line is not road-snapped — check console (Roads API may not be enabled on this key)', { icon: '⚠️', duration: 6000 })
           }
           const line = new g.maps.Polyline({
@@ -217,7 +289,7 @@ export default function TrackingPage() {
             },
           }))
           // Visit markers
-          ;(r.data.data.visits || []).forEach((v: any) => {
+          ;(data.visits || []).forEach((v: any) => {
             if (v.checkInLat && v.checkInLng) {
               const vm = new g.maps.Marker({
                 position: { lat: v.checkInLat, lng: v.checkInLng },
@@ -237,15 +309,15 @@ export default function TrackingPage() {
           boundsRef.current = bounds
 
           // Route summary — distance walked/driven, elapsed time, stops made.
-          const distanceKm = path.slice(1).reduce((sum: number, pt: any, i: number) => sum + haversineKm(path[i], pt), 0)
           const firstT = new Date(pings[0].recordedAt)
           const lastT = new Date(pings[pings.length - 1].recordedAt)
           const durationMins = Math.max(0, Math.round((lastT.getTime() - firstT.getTime()) / 60000))
           setRouteStats({
             distanceKm, durationMins,
-            stops: (r.data.data.visits || []).length,
+            stops: (data.visits || []).length,
             lastUpdate: lastT,
           })
+          if (cached) toast('Loaded from cache — no extra API calls made', { icon: '⚡', duration: 2500 })
         } else {
           setRouteStats(null)
           toast('No location data for this day', { icon: 'ℹ️' })
@@ -280,8 +352,8 @@ export default function TrackingPage() {
           { key: 'route', label: 'Route History', icon: Route },
         ].map((t: any) => (
           <button key={t.key} onClick={() => setTab(t.key)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 flex items-center gap-2 ${
-              tab === t.key ? 'border-blue-600 text-brand-600' : 'border-transparent text-gray-500 hover:text-gray-700'
+            className={`px-4 py-2 text-sm font-medium border-b-2 flex items-center gap-2 transition-colors ${
+              tab === t.key ? 'border-brand-600 text-brand-600' : 'border-transparent text-gray-500 hover:text-gray-700'
             }`}>
             <t.icon size={14} /> {t.label}
           </button>
@@ -372,14 +444,56 @@ export default function TrackingPage() {
                 <h3 className="font-semibold text-sm text-gray-900 mb-1 flex items-center gap-2">
                   <Users2 size={15} /> Checked-in Staff ({live.length})
                 </h3>
-                <p className="text-xs text-gray-500">Auto-refreshes every 30s</p>
+                <p className="text-xs text-gray-500 mb-3 flex items-center gap-1.5">
+                  <span className={`inline-block w-1.5 h-1.5 rounded-full ${livePaused ? 'bg-gray-300' : 'bg-emerald-500 animate-pulse'}`} />
+                  {livePaused ? 'Paused — resumes when tab is active' : 'Live · refreshes every 30s'}
+                </p>
+                <div className="flex items-center gap-4 mb-3 pb-3 border-b border-gray-100">
+                  <div>
+                    <p className="text-[11px] text-gray-400 font-medium">Moving</p>
+                    <p className="text-base font-bold text-brand-600">{movingCount}</p>
+                  </div>
+                  <div className="h-7 w-px bg-gray-100" />
+                  <div>
+                    <p className="text-[11px] text-gray-400 font-medium">Idle</p>
+                    <p className="text-base font-bold text-slate-600">{idleCount}</p>
+                  </div>
+                  <div className="h-7 w-px bg-gray-100" />
+                  <div>
+                    <p className="text-[11px] text-gray-400 font-medium">No signal</p>
+                    <p className="text-base font-bold text-gray-400">{offlineCount}</p>
+                  </div>
+                </div>
+                <input
+                  type="text"
+                  placeholder="Search staff by name..."
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  className="input w-full text-sm"
+                />
               </div>
               {loading ? (
-                <div className="card p-8 text-center"><Loader2 className="animate-spin mx-auto text-gray-400" /></div>
+                <div className="space-y-3">
+                  {[1, 2, 3].map(i => (
+                    <div key={i} className="card p-3 animate-pulse">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-full bg-gray-100 flex-shrink-0" />
+                        <div className="flex-1 space-y-2">
+                          <div className="h-3 bg-gray-100 rounded w-2/3" />
+                          <div className="h-2.5 bg-gray-100 rounded w-1/3" />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               ) : live.length === 0 ? (
                 <div className="card"><EmptyState icon={<MapPin size={50} />} title="No one checked in" description="Field staff appear here after they check in" /></div>
-              ) : live.map(u => (
-                <div key={u.userId} className="card p-3">
+              ) : filteredLive.length === 0 ? (
+                <div className="card p-6 text-center text-sm text-gray-400">No staff match "{search}"</div>
+              ) : (
+              <div className="space-y-3 lg:max-h-[520px] lg:overflow-y-auto lg:pr-1">
+              {filteredLive.map(u => (
+                <div key={u.userId} onClick={() => u.lastPing && focusUser(u.userId)} className={`card p-3 ${u.lastPing ? 'cursor-pointer hover:border-brand-200 hover:shadow-sm transition-all' : ''}`}>
                   <div className="flex items-center gap-3">
                     <div className="w-9 h-9 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-xs font-bold flex-shrink-0">
                       {u.avatar ? <img src={u.avatar} className="w-full h-full rounded-full object-cover" /> : getInitials(u.name)}
@@ -407,12 +521,14 @@ export default function TrackingPage() {
                   </div>
                   {u.lastPing && (
                     <p className="text-[10px] text-gray-400 mt-2">
-                      Last update: {new Date(u.lastPing.recordedAt).toLocaleTimeString('en-IN')}
+                      Last update: {timeAgo(u.lastPing.recordedAt)} ({new Date(u.lastPing.recordedAt).toLocaleTimeString('en-IN')})
                       {u.lastPing.address ? ` · ${u.lastPing.address}` : ''}
                     </p>
                   )}
                 </div>
               ))}
+              </div>
+              )}
             </>
           ) : (
             routeData && (

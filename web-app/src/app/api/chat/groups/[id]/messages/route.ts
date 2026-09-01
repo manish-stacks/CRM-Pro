@@ -32,8 +32,31 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     include: {
       sender: { select: { id: true, name: true, avatar: true, role: true } },
       mentions: { include: { user: { select: { id: true, name: true } } } },
+      reactions: { include: { user: { select: { id: true, name: true } } } },
+      replyTo: {
+        select: {
+          id: true, content: true, isDeleted: true, attachmentName: true,
+          sender: { select: { id: true, name: true } },
+        },
+      },
     },
     orderBy: { createdAt: 'desc' },
+  })
+
+  // Who's currently typing in this chat (pinged within the last 6s), for
+  // the "X is typing…" indicator. Excludes yourself.
+  const typingCutoff = new Date(Date.now() - 6000)
+  const typingMembers = await prisma.chatMember.findMany({
+    where: { chatGroupId: id, isActive: true, userId: { not: session.userId }, typingAt: { gte: typingCutoff } },
+    include: { user: { select: { id: true, name: true } } },
+  })
+
+  // Pinned messages for this chat (small list shown at the top).
+  const pinned = await prisma.message.findMany({
+    where: { chatGroupId: id, isPinned: true, isDeleted: false },
+    include: { sender: { select: { id: true, name: true } } },
+    orderBy: { pinnedAt: 'desc' },
+    take: 20,
   })
 
   // Mark last-read
@@ -42,7 +65,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     data: { lastReadAt: new Date() },
   })
 
-  return successResponse(messages.reverse(), messages.length)
+  return successResponse({
+    messages: messages.reverse(),
+    typingUsers: typingMembers.map(m => ({ id: m.user.id, name: m.user.name })),
+    pinned,
+  }, messages.length)
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -74,6 +101,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
   mentionedIds = Array.from(new Set(mentionedIds)).filter(uid => uid !== session.userId)
 
+  // Sending a message means you've stopped typing.
+  await prisma.chatMember.update({ where: { id: membership.id }, data: { typingAt: null } })
+
   const message = await prisma.message.create({
     data: {
       chatGroupId: id,
@@ -85,7 +115,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       replyToId: replyToId || null,
       mentions: mentionedIds.length ? { create: mentionedIds.map(uid => ({ userId: uid })) } : undefined,
     },
-    include: { sender: { select: { name: true, avatar: true } }, mentions: { include: { user: { select: { id: true, name: true } } } } },
+    include: {
+      sender: { select: { id: true, name: true, avatar: true }, },
+      mentions: { include: { user: { select: { id: true, name: true } } } },
+      replyTo: {
+        select: {
+          id: true, content: true, isDeleted: true, attachmentName: true,
+          sender: { select: { id: true, name: true } },
+        },
+      },
+    },
   })
 
   // Bump group updatedAt

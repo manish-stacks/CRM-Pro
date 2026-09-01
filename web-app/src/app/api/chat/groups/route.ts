@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
         include: {
           members: {
             where: { isActive: true },
-            include: { user: { select: { id: true, name: true, avatar: true, role: true } } },
+            include: { user: { select: { id: true, name: true, avatar: true, role: true, lastActiveAt: true } } },
           },
           messages: {
             take: 1,
@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
   })
 
   // Format for UI
-  const groups = memberships.map(m => {
+  const groups = await Promise.all(memberships.map(async (m) => {
     const g = m.chatGroup
     const otherMembers = g.members.filter(mem => mem.userId !== session.userId)
     // For DIRECT: name comes from the other party
@@ -41,7 +41,17 @@ export async function GET(req: NextRequest) {
       displayName = otherMembers[0].user.name
       displayAvatar = otherMembers[0].user.avatar
     }
-    // Unread count using lastReadAt
+    // Unread count = messages from others, after my lastReadAt, that I
+    // haven't hidden with "delete for me".
+    const unreadCount = await prisma.message.count({
+      where: {
+        chatGroupId: g.id,
+        senderId: { not: session.userId },
+        isDeleted: false,
+        deletions: { none: { userId: session.userId } },
+        createdAt: { gt: m.lastReadAt || new Date(0) },
+      },
+    })
     return {
       id: g.id,
       name: displayName,
@@ -50,13 +60,14 @@ export async function GET(req: NextRequest) {
       memberCount: g.members.length,
       lastMessage: g.messages[0] || null,
       lastReadAt: m.lastReadAt,
+      unreadCount,
       updatedAt: g.updatedAt,
       members: g.members.map(mem => ({
         id: mem.user.id, name: mem.user.name, avatar: mem.user.avatar, role: mem.user.role,
-        chatRole: mem.role,
+        chatRole: mem.role, lastReadAt: mem.lastReadAt, lastActiveAt: mem.user.lastActiveAt,
       })),
     }
-  })
+  }))
 
   return successResponse(groups, groups.length)
 }

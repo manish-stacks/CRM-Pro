@@ -48,7 +48,7 @@ export default function MeetingSlotsPage() {
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [detail, setDetail] = useState<any>(null) // clicked booked cell
-
+  const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN'
   const fetchBoard = useCallback(async () => {
     setLoading(true)
     try {
@@ -262,15 +262,23 @@ export default function MeetingSlotsPage() {
                           if (sl.lead) {
                             return (
                               <td key={sl.label} className="border-b border-l border-gray-100 p-1">
-                                <button onClick={() => setDetail({ ...sl.lead, exec: e, slot: sl.label })}
-                                  className="w-full text-left bg-red-50 hover:bg-red-100 border border-red-200 rounded-md px-2 py-1.5 min-h-[46px] transition-colors">
-                                  <div className="text-[11px] font-semibold text-red-800 truncate">
-                                    {sl.lead.companyName || sl.lead.clientName}
-                                  </div>
-                                  <div className="text-[10px] text-red-600/80 truncate">
-                                    {sl.lead.city || sl.lead.leadNumber}
-                                  </div>
-                                </button>
+                                {
+                                  isAdmin ? (
+                                    <button onClick={() => setDetail({ ...sl.lead, exec: e, slot: sl.label })}
+                                      className="w-full text-left bg-red-50 hover:bg-red-100 border border-red-200 rounded-md px-2 py-1.5 min-h-[46px] transition-colors">
+                                      <div className="text-[11px] font-semibold text-red-800 truncate">
+                                        {sl.lead.companyName || sl.lead.clientName}
+                                      </div>
+                                      <div className="text-[10px] text-red-600/80 truncate">
+                                        {sl.lead.city || sl.lead.leadNumber}
+                                      </div>
+                                    </button>
+                                  ) :
+                                    (
+                                      <div className="bg-red-50 border border-red-200 rounded-md min-h-[46px] flex items-center justify-center text-[10px] font-medium text-red-700">
+                                        Booked
+                                      </div>
+                                    )}
                               </td>
                             )
                           }
@@ -296,11 +304,14 @@ export default function MeetingSlotsPage() {
       <Modal open={!!detail} onClose={() => setDetail(null)} title="Booked Meeting" className="!max-w-md">
         {detail && (
           <div className="space-y-3">
-            <div>
-              <p className="text-lg font-semibold text-gray-900">
-                {detail.companyName || detail.clientName}
-              </p>
-              <p className="text-xs text-gray-500 font-mono">{detail.leadNumber}</p>
+            <div>{
+              isAdmin && <>
+                <p className="text-lg font-semibold text-gray-900">
+                  {detail.companyName || detail.clientName}
+                </p>
+
+                <p className="text-xs text-gray-500 font-mono">{detail.leadNumber}</p>
+              </>}
             </div>
 
             <div className="bg-gray-50 rounded-xl p-3 space-y-2 text-sm">
@@ -322,13 +333,13 @@ export default function MeetingSlotsPage() {
                 {detail.meetingLocation}
               </div>
             )}
-
-            <div className="flex justify-end gap-2 pt-1">
-              {detail.clientPhone && (
-                <a href={`tel:${detail.clientPhone}`} className="btn-secondary"><Phone size={14} /> Call</a>
-              )}
-              <Link href={`/leads/${detail.id}`} className="btn-primary">Open Lead</Link>
-            </div>
+            {isAdmin &&
+              <div className="flex justify-end gap-2 pt-1">
+                {detail.clientPhone && (
+                  <a href={`tel:${detail.clientPhone}`} className="btn-secondary"><Phone size={14} /> Call</a>
+                )}
+                <Link href={`/leads/${detail.id}`} className="btn-primary">Open Lead</Link>
+              </div>}
           </div>
         )}
       </Modal>
