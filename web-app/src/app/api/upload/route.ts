@@ -6,7 +6,7 @@ import { successResponse, errorResponse, unauthorizedResponse } from '@/lib/api'
 import { uploadFile, UploadFolder } from '@/lib/cloudinary'
 
 const ALLOWED_FOLDERS: UploadFolder[] = [
-  'avatars', 'aadhar', 'id-proof', 'client-reports', 'client-images', 'chat-attachments', 'proposals', 'invoices', 'signatures', 'holiday-calendar', 'general',
+  'avatars', 'aadhar', 'id-proof', 'client-reports', 'client-images', 'chat-attachments', 'proposals', 'invoices', 'signatures', 'holiday-calendar', 'general', 'announcements',
 ]
 const MAX_BYTES = 8 * 1024 * 1024 // 8 MB safety cap
 

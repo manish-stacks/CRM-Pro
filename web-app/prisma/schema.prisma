@@ -90,6 +90,8 @@ model User {
   loginActivities        LoginActivity[]
   activityLogs           ActivityLog[]
   notifications          Notification[]
+  createdAnnouncements   ScheduledAnnouncement[] @relation("AnnouncementCreatedBy")
+  announcementViews      AnnouncementView[]      @relation("AnnouncementSeenBy")
   leadActivities         LeadActivity[]
   leadAssignmentsFrom    LeadAssignmentHistory[] @relation("AssignFrom")
   leadAssignmentsTo      LeadAssignmentHistory[] @relation("AssignTo")
@@ -1232,6 +1234,42 @@ model Notification {
   @@index([userId, isRead])
   @@index([createdAt])
   @@map("notifications")
+}
+
+// ============================================================
+// SCHEDULED ANNOUNCEMENTS — celebratory login popups (e.g. "Townhall
+// party today!") that an admin schedules ahead of time. Shown once per
+// person, the first time they're on the app during the active window.
+// ============================================================
+model ScheduledAnnouncement {
+  id          String    @id @default(cuid())
+  title       String
+  message     String    @db.Text
+  soundUrl    String?   @db.Text // optional celebration song/sound, uploaded via /api/upload
+  scheduledAt DateTime  // popup starts showing from this moment
+  expiresAt   DateTime  // and stops showing after this moment
+  isActive    Boolean   @default(true) // admin can cancel it early without deleting history
+  createdById String
+  createdBy   User      @relation("AnnouncementCreatedBy", fields: [createdById], references: [id])
+  createdAt   DateTime  @default(now())
+  views       AnnouncementView[]
+
+  @@index([scheduledAt, expiresAt, isActive])
+  @@map("scheduled_announcements")
+}
+
+// One row per user who has seen a given announcement — this is what makes
+// it "show once", not on every page load while the window is still active.
+model AnnouncementView {
+  id             String   @id @default(cuid())
+  announcementId String
+  announcement   ScheduledAnnouncement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User     @relation("AnnouncementSeenBy", fields: [userId], references: [id], onDelete: Cascade)
+  seenAt         DateTime @default(now())
+
+  @@unique([announcementId, userId])
+  @@map("announcement_views")
 }
 
 model WhatsappLog {

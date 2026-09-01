@@ -32,6 +32,7 @@ export type UploadFolder =
   | 'holiday-calendar'
   | 'screenshots'
   | 'general'
+  | 'announcements'
 
 /**
  * Upload a base64 data URL or remote URL to Cloudinary

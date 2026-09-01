@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Users, Clock, Calendar, DollarSign, Building2,
   Target, FileText, Users2, CreditCard, BarChart3, Settings,
   Briefcase, Package, Bell, ChevronDown, ChevronRight, LogOut,
-  User, Menu, X, Video, UserCheck, Shield, MessageSquare, AlertCircle, MapPin, MapPinned, Wallet, AlarmClock, StickyNote, Mail,
+  User, Menu, X, Video, UserCheck, Shield, MessageSquare, AlertCircle, MapPin, MapPinned, Wallet, AlarmClock, StickyNote, Mail, PartyPopper,
   MessageSquareCode, CalendarClock
 } from 'lucide-react'
 
@@ -63,6 +63,7 @@ const NAV: NavItem[] = [
   },
   { label: 'Visit Sheet', href: '/visits', icon: MapPinned, roles: ['SUPER_ADMIN', 'ADMIN', 'MARKETING_EXECUTIVE'] },
   { label: 'Field Tracking', href: '/tracking', icon: MapPin, roles: ['SUPER_ADMIN', 'ADMIN'] },
+  { label: 'Announcements', href: '/announcements', icon: PartyPopper, roles: ['SUPER_ADMIN', 'ADMIN'] },
   { label: 'Notifications', href: '/notifications', icon: Bell },
   { label: 'Reminders', href: '/reminders', icon: AlarmClock },
   { label: 'Sticky Notes', href: '/notes', icon: StickyNote },
