@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { StatCard } from '@/components/ui'
 import { PunchOutConfirmModal } from '@/components/PunchOutConfirmModal'
 import { CelebrationWidget } from '@/components/dashboard/CelebrationWidget'
+import { AnnouncementBanner } from '@/components/dashboard/AnnouncementBanner'
 import { Users, Target, FileText, DollarSign, Clock, UserCheck, LogIn, LogOut, Wifi, CalendarCheck, AlertTriangle, CheckCircle2, MapPin, Briefcase, Home, Loader2 } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
@@ -134,6 +135,8 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
+
+      <AnnouncementBanner />
 
       {/* Header */}
       <div

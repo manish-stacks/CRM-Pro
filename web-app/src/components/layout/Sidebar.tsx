@@ -39,7 +39,7 @@ const NAV: NavItem[] = [
       // Whole-team availability grid. Telecallers had to open a lead and start
       // the booking flow just to see who was free — this shows the full board.
       { label: 'Slot Board', href: '/meeting-slots', icon: CalendarClock, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'TELECALLER', 'MARKETING_EXECUTIVE'] },
-      { label: 'Proposals', href: '/proposals', icon: FileText, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'MARKETING_EXECUTIVE', ] },
+      { label: 'Proposals', href: '/proposals', icon: FileText, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'MARKETING_EXECUTIVE',] },
       { label: 'Invoices', href: '/invoices', icon: CreditCard, roles: ['SUPER_ADMIN', 'ADMIN', 'MARKETING_EXECUTIVE'] },
       { label: 'Clients', href: '/clients', icon: Users2, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'MARKETING_EXECUTIVE'] },
       { label: 'Projects', href: '/projects', icon: Briefcase },
@@ -49,7 +49,7 @@ const NAV: NavItem[] = [
   { label: 'Team Chat', href: '/chat', icon: MessageSquareCode },
   {
     label: 'Support', icon: MessageSquare, children: [
-      
+
       { label: 'Client Tickets', href: '/tickets', icon: MessageSquare, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'EMPLOYEE', 'MARKETING_EXECUTIVE'] },
       { label: 'My Tickets', href: '/my-tickets', icon: AlertCircle },
     ]
@@ -57,16 +57,21 @@ const NAV: NavItem[] = [
   {
     label: 'Finance', icon: CreditCard, children: [
       { label: 'Payments', href: '/payments', icon: CreditCard, roles: ['SUPER_ADMIN', 'ADMIN'] },
-      { label: 'Daily Collection', href: '/collection', icon: Wallet, roles: ['SUPER_ADMIN', 'ADMIN'] },
       { label: 'Reports', href: '/reports', icon: BarChart3, roles: ['SUPER_ADMIN', 'ADMIN'] },
+      { label: 'Daily Collection', href: '/collection', icon: Wallet, roles: ['SUPER_ADMIN', 'ADMIN'] },
     ]
   },
-  { label: 'Visit Sheet', href: '/visits', icon: MapPinned, roles: ['SUPER_ADMIN', 'ADMIN', 'MARKETING_EXECUTIVE'] },
-  { label: 'Field Tracking', href: '/tracking', icon: MapPin, roles: ['SUPER_ADMIN', 'ADMIN'] },
+  {
+    label: 'Tracking', icon: MapPinned, children: [
+      { label: 'Visit Sheet', href: '/visits', icon: MapPinned, roles: ['SUPER_ADMIN', 'ADMIN', 'MARKETING_EXECUTIVE'] },
+      { label: 'Field Tracking', href: '/tracking', icon: MapPin, roles: ['SUPER_ADMIN', 'ADMIN'] },
+    ]
+  },
+
   { label: 'Announcements', href: '/announcements', icon: PartyPopper, roles: ['SUPER_ADMIN', 'ADMIN'] },
   { label: 'Notifications', href: '/notifications', icon: Bell },
-  { label: 'Reminders', href: '/reminders', icon: AlarmClock },
-  { label: 'Sticky Notes', href: '/notes', icon: StickyNote },
+  // { label: 'Reminders', href: '/reminders', icon: AlarmClock },
+  // { label: 'Sticky Notes', href: '/notes', icon: StickyNote },
   { label: 'Custom Mail', href: '/compose-mail', icon: Mail, roles: ['SUPER_ADMIN', 'ADMIN'] },
   { label: 'Audit Log', href: '/audit-logs', icon: Shield, roles: ['SUPER_ADMIN', 'ADMIN'] },
   { label: 'Settings', href: '/settings', icon: Settings, roles: ['SUPER_ADMIN', 'ADMIN'] },

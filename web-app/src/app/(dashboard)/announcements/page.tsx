@@ -6,15 +6,16 @@ import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '@/hooks/useAuth'
 import api from '@/lib/axios'
 import { EmptyState } from '@/components/ui'
-import { PartyPopper, Loader2, Trash2, Music, X, Ban, Volume2 } from 'lucide-react'
+import { PartyPopper, Loader2, Trash2, Music, X, Ban, Volume2, Pencil, RotateCcw } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { DEFAULT_SOUND_VALUE, playCelebrationChime } from '@/lib/celebrationSound'
 
 const DURATION_PRESETS = [
-  { label: '1 hour', ms: 60 * 60 * 1000 },
-  { label: '4 hours', ms: 4 * 60 * 60 * 1000 },
-  { label: 'Rest of today', ms: null }, // computed specially — until 23:59:59 of scheduled date
-  { label: '24 hours', ms: 24 * 60 * 60 * 1000 },
+  { label: '1 hour', ms: 60 * 60 * 1000 as number | null | 'custom' },
+  { label: '4 hours', ms: 4 * 60 * 60 * 1000 as number | null | 'custom' },
+  { label: 'Rest of today', ms: null as number | null | 'custom' }, // computed specially — until 23:59:59 of scheduled date
+  { label: '24 hours', ms: 24 * 60 * 60 * 1000 as number | null | 'custom' },
+  { label: 'Custom end time', ms: 'custom' as number | null | 'custom' },
 ]
 
 function toLocalInputValue(d: Date) {
@@ -47,6 +48,15 @@ export default function AnnouncementsPage() {
   const [soundMode, setSoundMode] = useState<'none' | 'default' | 'upload'>('none')
   const [scheduledAt, setScheduledAt] = useState(() => toLocalInputValue(new Date()))
   const [durationIdx, setDurationIdx] = useState(1)
+  const [customExpiresAt, setCustomExpiresAt] = useState(() => toLocalInputValue(new Date(Date.now() + 60 * 60 * 1000)))
+  const [editingId, setEditingId] = useState<string | null>(null)
+
+  const resetForm = () => {
+    setEditingId(null)
+    setTitle(''); setMessage(''); setSoundUrl(''); setSoundName(''); setSoundMode('none')
+    setScheduledAt(toLocalInputValue(new Date()))
+    setDurationIdx(1)
+  }
 
   const load = () => {
     api.get('/announcements').then(r => setItems(r.data?.data || [])).finally(() => setLoading(false))
@@ -81,6 +91,7 @@ export default function AnnouncementsPage() {
   const computeExpiry = () => {
     const start = new Date(scheduledAt)
     const preset = DURATION_PRESETS[durationIdx]
+    if (preset.ms === 'custom') return new Date(customExpiresAt)
     if (preset.ms === null) {
       const end = new Date(start)
       end.setHours(23, 59, 59, 999)
@@ -93,27 +104,54 @@ export default function AnnouncementsPage() {
     if (!title.trim() || !message.trim()) { toast.error('Title and message are required'); return }
     setSaving(true)
     try {
-      await api.post('/announcements', {
+      const payload = {
         title: title.trim(),
         message: message.trim(),
         soundUrl: soundUrl || null,
         scheduledAt: new Date(scheduledAt).toISOString(),
         expiresAt: computeExpiry().toISOString(),
-      })
-      toast.success('Announcement scheduled')
-      setTitle(''); setMessage(''); setSoundUrl(''); setSoundName(''); setSoundMode('none')
-      setScheduledAt(toLocalInputValue(new Date()))
+      }
+      if (editingId) {
+        await api.patch(`/announcements/${editingId}`, payload)
+        toast.success('Announcement updated')
+      } else {
+        await api.post('/announcements', payload)
+        toast.success('Announcement scheduled')
+      }
+      resetForm()
       load()
     } catch (e: any) {
-      toast.error(e?.response?.data?.error || 'Failed to schedule')
+      toast.error(e?.response?.data?.error || 'Failed to save')
     } finally {
       setSaving(false)
     }
   }
 
+  const startEdit = (a: any) => {
+    setEditingId(a.id)
+    setTitle(a.title)
+    setMessage(a.message)
+    setScheduledAt(toLocalInputValue(new Date(a.scheduledAt)))
+    // Always land on "Custom end time" for edits — it's the only option
+    // that reproduces the announcement's exact original end time instead
+    // of re-deriving a new one from a preset.
+    setDurationIdx(DURATION_PRESETS.length - 1)
+    setCustomExpiresAt(toLocalInputValue(new Date(a.expiresAt)))
+    if (a.soundUrl === DEFAULT_SOUND_VALUE) { setSoundMode('default'); setSoundUrl(DEFAULT_SOUND_VALUE); setSoundName('') }
+    else if (a.soundUrl) { setSoundMode('upload'); setSoundUrl(a.soundUrl); setSoundName('Current song') }
+    else { setSoundMode('none'); setSoundUrl(''); setSoundName('') }
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
   const cancelOne = async (id: string) => {
     await api.patch(`/announcements/${id}`, { isActive: false })
     toast.success('Cancelled')
+    load()
+  }
+
+  const reactivateOne = async (id: string) => {
+    await api.patch(`/announcements/${id}`, { isActive: true })
+    toast.success('Reactivated')
     load()
   }
 
@@ -125,116 +163,141 @@ export default function AnnouncementsPage() {
   }
 
   return (
-    <div className="p-4 md:p-6 max-w-3xl mx-auto space-y-6">
+    <div className="p-4 md:p-6 space-y-6">
       <div>
         <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2"><PartyPopper size={22} className="text-brand-600" /> Announcements</h1>
         <p className="text-sm text-gray-500 mt-1">Schedule a celebration popup — everyone sees it once, with confetti and an optional song, the first time they're on the app during the window you pick.</p>
       </div>
 
-      <div className="card p-5 space-y-4">
-        <div>
-          <label className="text-xs font-medium text-gray-600 mb-1 block">Title</label>
-          <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Townhall Party Today! 🎉" className="input w-full" />
-        </div>
-        <div>
-          <label className="text-xs font-medium text-gray-600 mb-1 block">Message</label>
-          <textarea value={message} onChange={e => setMessage(e.target.value)} rows={3} placeholder="Join us at 5pm in the main hall for food, music and awards!" className="input w-full" />
-        </div>
-        <div>
-          <label className="text-xs font-medium text-gray-600 mb-1 block">Celebration song</label>
-          <div className="flex gap-2 mb-2">
-            {(['none', 'default', 'upload'] as const).map(mode => (
-              <button
-                key={mode}
-                onClick={() => {
-                  setSoundMode(mode)
-                  if (mode === 'default') { setSoundUrl(DEFAULT_SOUND_VALUE); setSoundName('') }
-                  else if (mode === 'none') { setSoundUrl(''); setSoundName('') }
-                  else { setSoundUrl(''); setSoundName('') } // 'upload' — wait for file pick
-                }}
-                className={`text-xs font-medium px-3 py-1.5 rounded-full border transition-colors ${
-                  soundMode === mode ? 'bg-brand-600 text-white border-brand-600' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
-                }`}
-              >
-                {mode === 'none' ? 'No sound' : mode === 'default' ? 'Default chime' : 'Upload song'}
-              </button>
-            ))}
-          </div>
-
-          {soundMode === 'default' && (
-            <button onClick={() => playCelebrationChime()} className="btn-secondary text-sm flex items-center gap-1.5">
-              <Volume2 size={14} /> Preview chime
-            </button>
-          )}
-
-          {soundMode === 'upload' && (
-            soundUrl ? (
-              <div className="flex items-center gap-2 text-sm bg-brand-50 border border-brand-100 rounded-lg px-3 py-2">
-                <Music size={14} className="text-brand-600" />
-                <span className="flex-1 truncate">{soundName || 'Song uploaded'}</span>
-                <button onClick={() => { setSoundUrl(''); setSoundName('') }} className="text-gray-400 hover:text-gray-600"><X size={14} /></button>
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
+        {/* Left: form */}
+        <div className="lg:col-span-2 lg:sticky lg:top-4">
+          <div className="card p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-gray-700">{editingId ? 'Edit announcement' : 'Schedule new'}</h2>
+              {editingId && (
+                <button onClick={resetForm} className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1">
+                  <X size={12} /> Cancel edit
+                </button>
+              )}
+            </div>
+            <div>
+              <label className="text-xs font-medium text-gray-600 mb-1 block">Title</label>
+              <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Townhall Party Today! 🎉" className="input w-full" />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-gray-600 mb-1 block">Message</label>
+              <textarea value={message} onChange={e => setMessage(e.target.value)} rows={3} placeholder="Join us at 5pm in the main hall for food, music and awards!" className="input w-full" />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-gray-600 mb-1 block">Celebration song</label>
+              <div className="flex gap-2 mb-2 flex-wrap">
+                {(['none', 'default', 'upload'] as const).map(mode => (
+                  <button
+                    key={mode}
+                    onClick={() => {
+                      setSoundMode(mode)
+                      if (mode === 'default') { setSoundUrl(DEFAULT_SOUND_VALUE); setSoundName('') }
+                      else if (mode === 'none') { setSoundUrl(''); setSoundName('') }
+                      else { setSoundUrl(''); setSoundName('') } // 'upload' — wait for file pick
+                    }}
+                    className={`text-xs font-medium px-3 py-1.5 rounded-full border transition-colors ${
+                      soundMode === mode ? 'bg-brand-600 text-white border-brand-600' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    {mode === 'none' ? 'No sound' : mode === 'default' ? 'Default chime' : 'Upload song'}
+                  </button>
+                ))}
               </div>
-            ) : (
-              <button onClick={() => fileRef.current?.click()} disabled={uploading} className="btn-secondary text-sm flex items-center gap-1.5">
-                {uploading ? <Loader2 size={14} className="animate-spin" /> : <Music size={14} />}
-                {uploading ? 'Uploading...' : 'Upload a song (MP3, up to 8MB)'}
-              </button>
-            )
-          )}
-          <input ref={fileRef} type="file" accept="audio/*" className="hidden" onChange={e => e.target.files?.[0] && handleSoundPick(e.target.files[0])} />
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="text-xs font-medium text-gray-600 mb-1 block">Starts showing at</label>
-            <input type="datetime-local" value={scheduledAt} onChange={e => setScheduledAt(e.target.value)} className="input w-full" />
-          </div>
-          <div>
-            <label className="text-xs font-medium text-gray-600 mb-1 block">Keep showing for</label>
-            <select value={durationIdx} onChange={e => setDurationIdx(Number(e.target.value))} className="input w-full">
-              {DURATION_PRESETS.map((p, i) => <option key={p.label} value={i}>{p.label}</option>)}
-            </select>
-          </div>
-        </div>
-        <button onClick={schedule} disabled={saving} className="btn-primary w-full flex items-center justify-center gap-1.5">
-          {saving ? <Loader2 size={14} className="animate-spin" /> : <PartyPopper size={14} />}
-          Schedule
-        </button>
-      </div>
 
-      <div>
-        <h2 className="text-sm font-semibold text-gray-700 mb-2">Scheduled</h2>
-        {loading ? (
-          <div className="card p-8 text-center"><Loader2 className="animate-spin mx-auto text-gray-400" /></div>
-        ) : items.length === 0 ? (
-          <div className="card"><EmptyState icon={<PartyPopper size={40} />} title="Nothing scheduled yet" description="Announcements you schedule will show up here" /></div>
-        ) : (
-          <div className="space-y-2">
-            {items.map(a => {
-              const s = status(a)
-              return (
-                <div key={a.id} className="card p-3 flex items-center gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-medium text-sm text-gray-900 truncate">{a.title}</p>
-                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${s.color}`}>{s.label}</span>
-                    </div>
-                    <p className="text-xs text-gray-500 mt-0.5">
-                      {new Date(a.scheduledAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
-                      {' → '}
-                      {new Date(a.expiresAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
-                      {' · '}{a._count?.views ?? 0} seen
-                      {a.soundUrl ? ' · 🎵' : ''}
-                    </p>
+              {soundMode === 'default' && (
+                <button onClick={() => playCelebrationChime()} className="btn-secondary text-sm flex items-center gap-1.5">
+                  <Volume2 size={14} /> Preview chime
+                </button>
+              )}
+
+              {soundMode === 'upload' && (
+                soundUrl ? (
+                  <div className="flex items-center gap-2 text-sm bg-brand-50 border border-brand-100 rounded-lg px-3 py-2">
+                    <Music size={14} className="text-brand-600" />
+                    <span className="flex-1 truncate">{soundName || 'Song uploaded'}</span>
+                    <button onClick={() => { setSoundUrl(''); setSoundName('') }} className="text-gray-400 hover:text-gray-600"><X size={14} /></button>
                   </div>
-                  {s.label !== 'Cancelled' && s.label !== 'Ended' && (
-                    <button onClick={() => cancelOne(a.id)} title="Cancel" className="text-gray-400 hover:text-amber-600 p-1"><Ban size={15} /></button>
-                  )}
-                  <button onClick={() => deleteOne(a.id)} title="Delete" className="text-gray-400 hover:text-red-600 p-1"><Trash2 size={15} /></button>
-                </div>
-              )
-            })}
+                ) : (
+                  <button onClick={() => fileRef.current?.click()} disabled={uploading} className="btn-secondary text-sm flex items-center gap-1.5">
+                    {uploading ? <Loader2 size={14} className="animate-spin" /> : <Music size={14} />}
+                    {uploading ? 'Uploading...' : 'Upload a song (MP3, up to 8MB)'}
+                  </button>
+                )
+              )}
+              <input ref={fileRef} type="file" accept="audio/*" className="hidden" onChange={e => e.target.files?.[0] && handleSoundPick(e.target.files[0])} />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs font-medium text-gray-600 mb-1 block">Starts showing at</label>
+                <input type="datetime-local" value={scheduledAt} onChange={e => setScheduledAt(e.target.value)} className="input w-full" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-600 mb-1 block">Keep showing for</label>
+                <select value={durationIdx} onChange={e => setDurationIdx(Number(e.target.value))} className="input w-full">
+                  {DURATION_PRESETS.map((p, i) => <option key={p.label} value={i}>{p.label}</option>)}
+                </select>
+              </div>
+            </div>
+            {DURATION_PRESETS[durationIdx].ms === 'custom' && (
+              <div>
+                <label className="text-xs font-medium text-gray-600 mb-1 block">Ends at</label>
+                <input type="datetime-local" value={customExpiresAt} onChange={e => setCustomExpiresAt(e.target.value)} className="input w-full" />
+              </div>
+            )}
+            <button onClick={schedule} disabled={saving} className="btn-primary w-full flex items-center justify-center gap-1.5">
+              {saving ? <Loader2 size={14} className="animate-spin" /> : <PartyPopper size={14} />}
+              {editingId ? 'Save changes' : 'Schedule'}
+            </button>
           </div>
-        )}
+        </div>
+
+        {/* Right: list */}
+        <div className="lg:col-span-3">
+          <h2 className="text-sm font-semibold text-gray-700 mb-2">Scheduled</h2>
+          {loading ? (
+            <div className="card p-8 text-center"><Loader2 className="animate-spin mx-auto text-gray-400" /></div>
+          ) : items.length === 0 ? (
+            <div className="card"><EmptyState icon={<PartyPopper size={40} />} title="Nothing scheduled yet" description="Announcements you schedule will show up here" /></div>
+          ) : (
+            <div className="space-y-2">
+              {items.map(a => {
+                const s = status(a)
+                return (
+                  <div key={a.id} className={`card p-3 flex items-center gap-3 ${editingId === a.id ? 'ring-2 ring-brand-200' : ''}`}>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-medium text-sm text-gray-900 truncate">{a.title}</p>
+                        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${s.color}`}>{s.label}</span>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        {new Date(a.scheduledAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
+                        {' → '}
+                        {new Date(a.expiresAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
+                        {' · '}{a._count?.views ?? 0} seen
+                        {a.soundUrl ? ' · 🎵' : ''}
+                      </p>
+                    </div>
+                    {s.label !== 'Ended' && (
+                      <button onClick={() => startEdit(a)} title="Edit" className="text-gray-400 hover:text-brand-600 p-1"><Pencil size={15} /></button>
+                    )}
+                    {s.label === 'Cancelled' ? (
+                      <button onClick={() => reactivateOne(a.id)} title="Reactivate" className="text-gray-400 hover:text-emerald-600 p-1"><RotateCcw size={15} /></button>
+                    ) : s.label !== 'Ended' && (
+                      <button onClick={() => cancelOne(a.id)} title="Cancel" className="text-gray-400 hover:text-amber-600 p-1"><Ban size={15} /></button>
+                    )}
+                    <button onClick={() => deleteOne(a.id)} title="Delete" className="text-gray-400 hover:text-red-600 p-1"><Trash2 size={15} /></button>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

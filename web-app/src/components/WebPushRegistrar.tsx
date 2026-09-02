@@ -1,17 +1,4 @@
 'use client'
-// src/components/WebPushRegistrar.tsx
-//
-// Registers this browser for Chrome/Edge/Firefox push, so every notify() on
-// the server reaches the desktop as well as the phone.
-//
-// Design notes:
-//  - It does NOT pop the permission prompt on page load. Browsers penalise
-//    that (and Chrome can permanently block the origin). Instead it shows a
-//    small dismissible bar, and only calls requestPermission() on a click.
-//  - Once granted, it re-registers silently on every load, because FCM tokens
-//    rotate and a stale token is a silently-dead subscription.
-//  - Foreground pushes don't raise an OS notification (the browser suppresses
-//    them while the tab is focused), so those are shown as an in-app toast.
 import { useEffect, useState, useCallback } from 'react'
 import toast from 'react-hot-toast'
 import { Bell, X } from 'lucide-react'
@@ -134,10 +121,9 @@ export default function WebPushRegistrar() {
         <Bell size={16} className="text-brand-600" />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="font-semibold text-gray-900 text-sm">Desktop notifications on karein?</p>
+        <p className="font-semibold text-gray-900 text-sm">Would you like to turn on desktop notifications?</p>
         <p className="text-xs text-gray-500 mt-0.5">
-          Nayi lead, meeting assign, reschedule aur cancel — sab yahin Chrome me dikh jaayega,
-          CRM tab band ho tab bhi.
+         New leads, meeting assignments, rescheduling, and cancellations — everything will be visible right here in Chrome, even when the CRM tab is closed.
         </p>
         <div className="flex gap-2 mt-2.5">
           <button onClick={enable} disabled={busy} className="btn-primary btn-sm">
