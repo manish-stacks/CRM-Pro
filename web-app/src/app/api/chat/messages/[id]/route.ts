@@ -8,6 +8,7 @@ import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getRequestSession } from '@/lib/auth'
 import { successResponse, errorResponse, unauthorizedResponse } from '@/lib/api'
+import { emitToGroup } from '@/lib/socketServer'
 
 const FOR_EVERYONE_WINDOW_MS = 24 * 60 * 60 * 1000 // 24h, adjust as needed
 
@@ -39,6 +40,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       where: { id },
       data: { isDeleted: true, content: '' },
     })
+    emitToGroup(message.chatGroupId, 'chat:messageDeleted', { id, chatGroupId: message.chatGroupId })
     return successResponse({ deleted: true, forEveryone: true })
   }
 

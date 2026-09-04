@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { getRequestSession } from '@/lib/auth'
 import { successResponse, successStatusResponse, errorResponse, unauthorizedResponse } from '@/lib/api'
 import { notify } from '@/lib/notify'
+import { emitToGroup } from '@/lib/socketServer'
 
 async function assertMember(groupId: string, userId: string) {
   return prisma.chatMember.findFirst({
@@ -129,6 +130,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   // Bump group updatedAt
   const group = await prisma.chatGroup.update({ where: { id }, data: { updatedAt: new Date() } })
+
+  // Real-time push — everyone with this chat open sees it land instantly.
+  // Anyone whose socket isn't connected (or the socket layer isn't even
+  // running) still gets it via the existing polling, unaffected.
+  emitToGroup(id, 'chat:message', message)
 
   // Notify every other active member — this is what powers the bell + the
   // floating popup, so people get told about a reply even if they're not on

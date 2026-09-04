@@ -3,6 +3,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
+import { getImpersonationToken, clearImpersonationToken, impersonationHeaders } from '@/lib/impersonation'
 
 export interface AuthUser {
   id: string
@@ -18,6 +19,8 @@ export interface AuthUser {
     position?: string
     salary?: number
   }
+  impersonatedBy?: string | null
+  impersonatedByName?: string | null
 }
 
 interface AuthContextType {
@@ -29,6 +32,8 @@ interface AuthContextType {
   refreshUser: () => Promise<void>
   hasRole: (...roles: string[]) => boolean
   isAtLeast: (role: string) => boolean
+  isImpersonating: boolean
+  exitImpersonation: () => void
 }
 
 const ROLE_HIERARCHY: Record<string, number> = {
@@ -45,7 +50,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const fetchUser = useCallback(async () => {
     try {
-      const res = await fetch('/api/auth/me', { credentials: 'include', cache: 'no-store' })
+      const res = await fetch('/api/auth/me', { credentials: 'include', cache: 'no-store', headers: impersonationHeaders() })
       if (res.ok) {
         const data = await res.json()
         setUser(data)
@@ -113,9 +118,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const logout = async () => {
+    // Impersonating: the shared cookie is the admin's own real session —
+    // clearing it here would log the admin out of every other tab too.
+    // "Logout" from an impersonation tab should only mean "stop viewing as
+    // this employee".
+    if (getImpersonationToken()) { exitImpersonation(); return }
     await fetch('/api/auth/logout', { method: 'POST' })
     setUser(null)
     router.push('/login')
+  }
+
+  const exitImpersonation = () => {
+    clearImpersonationToken()
+    setUser(null)
+    // Falls back to the admin's own cookie session on the next load —
+    // no separate admin fetch needed, /api/auth/me just resolves normally.
+    window.location.href = '/dashboard'
   }
 
   const refreshUser = fetchUser
@@ -128,7 +146,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, verifyLoginOtp, logout, refreshUser, hasRole, isAtLeast }}>
+    <AuthContext.Provider value={{ user, loading, login, verifyLoginOtp, logout, refreshUser, hasRole, isAtLeast, isImpersonating: !!user?.impersonatedBy, exitImpersonation }}>
       {children}
     </AuthContext.Provider>
   )

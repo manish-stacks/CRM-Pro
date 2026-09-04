@@ -8,6 +8,7 @@ import { getRequestSession, hasMinRole } from '@/lib/auth'
 import { successResponse, errorResponse, unauthorizedResponse } from '@/lib/api'
 import { logFromRequest } from '@/lib/audit'
 import { notify } from '@/lib/notify'
+import { emitToGroup } from '@/lib/socketServer'
 
 async function loadGroupAndCheckAdmin(id: string, userId: string, role: string) {
   const group = await prisma.chatGroup.findUnique({
@@ -78,6 +79,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     where: { chatGroupId: id, isActive: true },
     include: { user: { select: { id: true, name: true, avatar: true, role: true } } },
   })
+  emitToGroup(id, 'chat:groupUpdated', { chatGroupId: id })
   return successResponse(updated)
 }
 
@@ -130,6 +132,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     metadata: { removedMember: userId, self: isSelf },
   })
 
+  emitToGroup(id, 'chat:groupUpdated', { chatGroupId: id })
   return successResponse({ removed: true })
 }
 
@@ -172,5 +175,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     metadata: { roleChange: { userId, role } },
   })
 
+  emitToGroup(id, 'chat:groupUpdated', { chatGroupId: id })
   return successResponse({ updated: true })
 }

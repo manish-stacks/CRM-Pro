@@ -12,6 +12,25 @@ import {
   Check, CheckCheck, SmilePlus
 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { useChatSocket } from '@/hooks/useChatSocket'
+
+// WhatsApp-style: a message can only be edited for a short window after
+// sending — enforced here (UI) and again server-side in the edit route.
+const EDIT_WINDOW_MS = 15 * 60 * 1000
+
+// Highlights "@Name" spans inside a message so a mention reads distinctly
+// from the rest of the text — same idea as WhatsApp's tinted @mentions.
+function renderMessageContent(content: string, mentions: any[]) {
+  const names = [...new Set((mentions || []).map((mn: any) => mn.user?.name).filter(Boolean))]
+  if (!content || names.length === 0) return content
+  const escaped = names.sort((a, b) => b.length - a.length).map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+  const re = new RegExp(`(@(?:${escaped.join('|')}))(?=\\s|$)`, 'g')
+  return content.split(re).map((part, i) =>
+    part.startsWith('@') && names.includes(part.slice(1))
+      ? <span key={i} className="text-brand-700 font-semibold bg-brand-100 rounded px-0.5">{part}</span>
+      : part
+  )
+}
 
 export default function ChatPage() {
   const { user } = useAuth()
@@ -38,6 +57,11 @@ export default function ChatPage() {
   const [showAddMembers, setShowAddMembers] = useState(false)
   const [addMemberIds, setAddMemberIds] = useState<string[]>([])
   const [memberActionId, setMemberActionId] = useState<string | null>(null) // userId currently being acted on
+  const [editingGroupName, setEditingGroupName] = useState(false)
+  const [groupNameDraft, setGroupNameDraft] = useState('')
+  const [savingGroupName, setSavingGroupName] = useState(false)
+  const [uploadingGroupPhoto, setUploadingGroupPhoto] = useState(false)
+  const groupPhotoRef = useRef<HTMLInputElement>(null)
 
   // @mention picker
   const [showMentionPicker, setShowMentionPicker] = useState(false)
@@ -204,6 +228,29 @@ export default function ChatPage() {
 
   useEffect(() => { loadGroups() }, [loadGroups])
 
+  // Real-time layer — every handler here just triggers the same silent
+  // refresh the 5s poll below already does, so a socket event and a poll
+  // tick are handled identically; there's nothing socket-specific for the
+  // rest of the component to know about.
+  const { connected: socketConnected, joinGroups } = useChatSocket({
+    onMessage: (m) => {
+      if (m.chatGroupId === activeIdRef.current) loadMessages(m.chatGroupId, true)
+      loadGroups() // sidebar preview + unread counts, whichever group it's in
+    },
+    onMessageEdited: (m) => { if (m.chatGroupId === activeIdRef.current) loadMessages(m.chatGroupId, true) },
+    onMessageDeleted: (d) => { if (d.chatGroupId === activeIdRef.current) loadMessages(d.chatGroupId, true) },
+    onReaction: (d) => { if (d.chatGroupId === activeIdRef.current) loadMessages(d.chatGroupId, true) },
+    onPinToggled: (d) => { if (d.chatGroupId === activeIdRef.current) loadMessages(d.chatGroupId, true) },
+    onGroupUpdated: (d) => { if (d.chatGroupId === activeIdRef.current) loadMessages(d.chatGroupId, true); loadGroups() },
+  })
+
+  // Keep the socket's room membership in sync with whichever chats this
+  // user is actually in — otherwise a newly-created group would never
+  // receive real-time events until a full page reload.
+  useEffect(() => {
+    if (groups.length) joinGroups(groups.map((g: any) => g.id))
+  }, [groups, joinGroups])
+
   // Wishing flow: /chat?wish=<userId>&name=..&type=birthday|anniversary
   // → open/create DIRECT chat with that person and auto-send a wish message.
   useEffect(() => {
@@ -247,12 +294,19 @@ export default function ChatPage() {
     activeIdRef.current = activeId
     if (!activeId) return
     loadMessages(activeId)
-    // Poll for new messages every 5s — silent, so the thread never flickers
+    // The socket delivers changes instantly when it's connected — this
+    // interval is then just an occasional safety net in case an event was
+    // ever missed (e.g. a brief disconnect/reconnect gap). If the socket
+    // isn't connected at all (still booting, connection failed, or the
+    // deployment is still on plain `next start` without server.js), this
+    // falls back to the original fast 5s polling so chat keeps working
+    // exactly as before — just without the instant feel.
+    const intervalMs = socketConnected ? 25000 : 5000
     pollRef.current = setInterval(() => {
       if (document.visibilityState === 'visible') loadMessages(activeId, true)
-    }, 5000)
+    }, intervalMs)
     return () => clearInterval(pollRef.current)
-  }, [activeId, loadMessages])
+  }, [activeId, loadMessages, socketConnected])
 
   const send = async () => {
     if (!msgText.trim() || !activeId) return
@@ -390,6 +444,36 @@ export default function ChatPage() {
       await loadGroups()
     } catch (e: any) { toast.error(e.response?.data?.error || 'Failed') }
     finally { setMemberActionId(null) }
+  }
+
+  const saveGroupName = async () => {
+    if (!activeId || !groupNameDraft.trim()) return
+    setSavingGroupName(true)
+    try {
+      await api.patch(`/chat/groups/${activeId}`, { name: groupNameDraft.trim() })
+      toast.success('Group renamed')
+      setEditingGroupName(false)
+      await loadGroups()
+    } catch (e: any) { toast.error(e.response?.data?.error || 'Failed to rename') }
+    finally { setSavingGroupName(false) }
+  }
+
+  const changeGroupPhoto = async (file: File) => {
+    if (!activeId) return
+    setUploadingGroupPhoto(true)
+    try {
+      const dataUrl: string = await new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result as string)
+        reader.onerror = reject
+        reader.readAsDataURL(file)
+      })
+      const up = await api.post('/upload', { dataUrl, folder: 'chat-attachments', resourceType: 'image' })
+      await api.patch(`/chat/groups/${activeId}`, { avatar: up.data?.data?.url })
+      toast.success('Group photo updated')
+      await loadGroups()
+    } catch { toast.error('Failed to update photo') }
+    finally { setUploadingGroupPhoto(false) }
   }
 
   const changeRole = async (userId: string, role: 'ADMIN' | 'MEMBER') => {
@@ -602,7 +686,7 @@ export default function ChatPage() {
               <div className="flex items-center gap-3">
                 <div className="relative flex-shrink-0">
                   <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold ${g.type === 'DIRECT' ? 'bg-gradient-to-br from-brand-500 to-brand-600' : 'bg-gradient-to-br from-brand-600 to-brand-800'}`}>
-                    {g.type === 'DIRECT' ? (g.avatar ? <img src={g.avatar} className="w-full h-full rounded-full object-cover" /> : getInitials(g.name || 'X')) : <Users2 size={18} />}
+                    {g.type === 'DIRECT' ? (g.avatar ? <img src={g.avatar} className="w-full h-full rounded-full object-cover" /> : getInitials(g.name || 'X')) : (g.avatar ? <img src={g.avatar} className="w-full h-full rounded-full object-cover" /> : <Users2 size={18} />)}
                   </div>
                   {online && <span className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-white rounded-full" />}
                 </div>
@@ -643,8 +727,8 @@ export default function ChatPage() {
                 <ChevronLeft size={18} />
               </button>
               <button onClick={() => isGroupChat && setShowMembers(true)} className="relative flex-shrink-0">
-                <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white font-bold ${activeGroup.type === 'DIRECT' ? 'bg-gradient-to-br from-brand-500 to-brand-600' : 'bg-gradient-to-br from-brand-600 to-brand-800'}`}>
-                  {activeGroup.type === 'DIRECT' ? getInitials(activeGroup.name || 'X') : <Users2 size={16} />}
+                <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white font-bold overflow-hidden ${activeGroup.type === 'DIRECT' ? 'bg-gradient-to-br from-brand-500 to-brand-600' : 'bg-gradient-to-br from-brand-600 to-brand-800'}`}>
+                  {activeGroup.type !== 'DIRECT' ? getInitials(activeGroup.name || 'X') : (activeGroup.avatar ? <img src={activeGroup.avatar} className="w-full h-full object-cover" /> : <Users2 size={16} />)}
                 </div>
                 {isOtherOnline && <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-white rounded-full" />}
               </button>
@@ -716,12 +800,12 @@ export default function ChatPage() {
                     return (
                       <div key={m.id} className={`flex gap-2 ${isMe ? 'justify-end' : 'justify-start'} group`}>
                         {!isMe && (
-                          <div className="w-7 h-7 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[10px] font-bold flex-shrink-0">
-                            {getInitials(m.sender?.name || 'X')}
+                          <div className="w-7 h-7 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[10px] font-bold flex-shrink-0 overflow-hidden">
+                            {m.sender?.avatar ? <img src={m.sender.avatar} className="w-full h-full object-cover" /> : getInitials(m.sender?.name || 'X')}
                           </div>
                         )}
                         {!m._optimistic && !m.isDeleted && (
-                          <div className={`relative self-center flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity ${isMe ? 'order-1' : ''}`}>
+                          <div className={`relative self-center flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity ${!isMe ? 'order-1' : ''}`}>
                             <button onClick={(e) => {
                               setReactionPickerPos(computeFloatingPos(e.currentTarget, 220, 40, isMe))
                               setReactionPickerFor(o => o === m.id ? null : m.id)
@@ -746,7 +830,7 @@ export default function ChatPage() {
                               <div ref={msgMenuRef} className="fixed bg-white border border-gray-200 rounded-lg shadow-lg py-1 w-48 z-50 text-sm"
                                 style={{ top: msgMenuPos.top, left: msgMenuPos.left }}>
                                 <button onClick={() => { setOpenMsgMenu(null); openForward(m) }} className="w-full text-left px-3 py-1.5 hover:bg-gray-50">Forward</button>
-                                {isMe && !m.attachmentUrl && (
+                                {isMe && !m.attachmentUrl && Date.now() - new Date(m.createdAt).getTime() < EDIT_WINDOW_MS && (
                                   <button onClick={() => startEdit(m)} className="w-full text-left px-3 py-1.5 hover:bg-gray-50">Edit</button>
                                 )}
                                 <button onClick={() => togglePin(m.id)} className="w-full text-left px-3 py-1.5 hover:bg-gray-50 flex items-center gap-1.5">
@@ -792,7 +876,7 @@ export default function ChatPage() {
                                     </a>
                                   )
                                 )}
-                                {m.content && <p className="text-sm whitespace-pre-wrap break-words">{m.content}</p>}
+                                {m.content && <p className="text-sm whitespace-pre-wrap break-words">{renderMessageContent(m.content, m.mentions)}</p>}
                               </>
                             )}
                             <p className="text-[10px] text-gray-500 text-right mt-0.5 flex items-center justify-end gap-1">
@@ -949,6 +1033,40 @@ export default function ChatPage() {
       {/* Group info & members modal */}
       <Modal open={showMembers} onClose={() => setShowMembers(false)} title={activeGroup?.name || 'Group info'}>
         <div className="space-y-3">
+          {isGroupChat && (
+            <div className="flex items-center gap-3 pb-3 border-b border-gray-100">
+              <button
+                onClick={() => canManageMembers && groupPhotoRef.current?.click()}
+                disabled={!canManageMembers || uploadingGroupPhoto}
+                className={`relative w-14 h-14 rounded-full flex-shrink-0 flex items-center justify-center text-white font-bold text-lg bg-gradient-to-br from-brand-600 to-brand-800 overflow-hidden ${canManageMembers ? 'cursor-pointer' : ''}`}
+                title={canManageMembers ? 'Change group photo' : undefined}
+              >
+                {uploadingGroupPhoto ? <Loader2 size={18} className="animate-spin" /> :
+                  activeGroup?.avatar ? <img src={activeGroup.avatar} className="w-full h-full object-cover" /> : <Users2 size={22} />}
+              </button>
+              <input ref={groupPhotoRef} type="file" accept="image/*" className="hidden" onChange={e => e.target.files?.[0] && changeGroupPhoto(e.target.files[0])} />
+              <div className="flex-1 min-w-0">
+                {editingGroupName ? (
+                  <div className="flex items-center gap-1">
+                    <Input value={groupNameDraft} onChange={(e: any) => setGroupNameDraft(e.target.value)} className="text-sm" autoFocus />
+                    <button onClick={saveGroupName} disabled={savingGroupName} className="text-brand-600 text-xs font-medium px-2 py-1 hover:bg-brand-50 rounded">
+                      {savingGroupName ? <Loader2 size={12} className="animate-spin" /> : 'Save'}
+                    </button>
+                    <button onClick={() => setEditingGroupName(false)} className="text-gray-400 text-xs px-1"><X size={14} /></button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => canManageMembers && (setGroupNameDraft(activeGroup?.name || ''), setEditingGroupName(true))}
+                    className="text-left group/rename"
+                    disabled={!canManageMembers}
+                  >
+                    <span className="font-semibold text-sm">{activeGroup?.name}</span>
+                    {canManageMembers && <span className="text-[10px] text-gray-400 ml-1.5 group-hover/rename:text-brand-600">edit</span>}
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
           <div className="flex items-center justify-between">
             <p className="text-sm text-gray-500">{activeGroup?.memberCount} members</p>
             {canManageMembers && (

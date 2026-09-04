@@ -1,10 +1,20 @@
 // src/lib/axios.ts
 import axios from 'axios'
+import { impersonationHeaders } from './impersonation'
 
 const api = axios.create({
   baseURL: '/api',
   headers: { 'Content-Type': 'application/json' },
   withCredentials: true,
+})
+
+// If this specific tab is impersonating someone (see /lib/impersonation),
+// send that as a Bearer header — it takes priority over the shared cookie
+// on the server, so this tab acts as the impersonated user while every
+// other tab keeps using the admin's own cookie session untouched.
+api.interceptors.request.use((config) => {
+  Object.assign(config.headers, impersonationHeaders())
+  return config
 })
 
 // Only bounce to /login on a REAL auth failure.

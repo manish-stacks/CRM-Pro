@@ -5,6 +5,7 @@ import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getRequestSession } from '@/lib/auth'
 import { successResponse, errorResponse, unauthorizedResponse } from '@/lib/api'
+import { emitToGroup } from '@/lib/socketServer'
 
 async function assertCanSeeMessage(messageId: string, userId: string) {
   const message = await prisma.message.findUnique({ where: { id: messageId } })
@@ -32,6 +33,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     create: { messageId: id, userId: session.userId, emoji },
   })
 
+  emitToGroup(message.chatGroupId!, 'chat:reaction', { messageId: id, chatGroupId: message.chatGroupId })
+
   return successResponse(reaction)
 }
 
@@ -44,5 +47,6 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   if (!message) return errorResponse('Message not found', 404)
 
   await prisma.messageReaction.deleteMany({ where: { messageId: id, userId: session.userId } })
+  emitToGroup(message.chatGroupId!, 'chat:reaction', { messageId: id, chatGroupId: message.chatGroupId })
   return successResponse({ removed: true })
 }

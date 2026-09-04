@@ -11,6 +11,45 @@ import { prisma } from '@/lib/prisma'
 import { getRequestSession, hasMinRole } from '@/lib/auth'
 import { successResponse, errorResponse, unauthorizedResponse } from '@/lib/api'
 import { logFromRequest } from '@/lib/audit'
+import { emitToGroup } from '@/lib/socketServer'
+
+// Rename a GROUP chat and/or change its photo. DIRECT chats have no name/photo
+// of their own (they show the other person's), so this only applies to GROUP.
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  const session = await getRequestSession(req)
+  if (!session) return unauthorizedResponse()
+
+  const group = await prisma.chatGroup.findUnique({
+    where: { id },
+    include: { members: { where: { isActive: true } } },
+  })
+  if (!group) return errorResponse('Chat not found', 404)
+  if (group.type !== 'GROUP') return errorResponse('Only group chats can be renamed', 400)
+
+  const myMembership = group.members.find(m => m.userId === session.userId)
+  if (!myMembership) return errorResponse('Not a member of this chat', 403)
+
+  const isAppAdmin = hasMinRole(session.role, 'ADMIN')
+  const isChatAdmin = myMembership.role === 'ADMIN'
+  if (!isAppAdmin && !isChatAdmin) return errorResponse('Only the group admin can edit group details', 403)
+
+  const body = await req.json().catch(() => ({}))
+  const data: Record<string, any> = {}
+  if (typeof body.name === 'string' && body.name.trim()) data.name = body.name.trim()
+  if (typeof body.avatar === 'string' || body.avatar === null) data.avatar = body.avatar
+  if (Object.keys(data).length === 0) return errorResponse('Nothing to update')
+
+  const updated = await prisma.chatGroup.update({ where: { id }, data })
+
+  await logFromRequest(req, {
+    userId: session.userId, action: 'UPDATE', entityType: 'ChatGroup', entityId: id,
+    metadata: data,
+  })
+
+  emitToGroup(id, 'chat:groupUpdated', { chatGroupId: id })
+  return successResponse(updated)
+}
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params

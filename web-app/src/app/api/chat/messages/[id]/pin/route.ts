@@ -6,6 +6,7 @@ import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getRequestSession, hasMinRole } from '@/lib/auth'
 import { successResponse, errorResponse, unauthorizedResponse } from '@/lib/api'
+import { emitToGroup } from '@/lib/socketServer'
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -39,6 +40,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       ? { isPinned: true, pinnedAt: new Date(), pinnedById: session.userId }
       : { isPinned: false, pinnedAt: null, pinnedById: null },
   })
+
+  emitToGroup(message.chatGroupId, 'chat:pinToggled', { messageId: id, chatGroupId: message.chatGroupId, isPinned: nowPinned })
 
   return successResponse(updated)
 }

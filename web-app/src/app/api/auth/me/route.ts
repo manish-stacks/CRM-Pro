@@ -19,5 +19,9 @@ export async function GET(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
 
   const { password: _, ...safeUser } = user
-  return NextResponse.json(safeUser)
+  return NextResponse.json({
+    ...safeUser,
+    impersonatedBy: session.impersonatedBy || null,
+    impersonatedByName: session.impersonatedByName || null,
+  })
 }

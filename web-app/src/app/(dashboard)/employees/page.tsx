@@ -7,7 +7,7 @@ import { Button, Input, Modal, EmptyState, Pagination, Badge, Select } from '@/c
 import { formatDate, getInitials } from '@/lib/utils'
 import { generateIdCard } from '@/lib/idCard'
 import {
-  Users, Plus, Search, Filter, X, Eye, UserCheck, UserX, MoreVertical, Loader2, Download, IdCard
+  Users, Plus, Search, Filter, X, Eye, UserCheck, UserX, MoreVertical, Loader2, Download, IdCard, LogIn
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -15,8 +15,9 @@ const ROLES = ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'EMPLOYEE', 'TELECALLER', 'MAR
 const WORK_MODES = ['WFO', 'WFH', 'HYBRID']
 
 export default function EmployeesPage() {
-  const { isAtLeast } = useAuth()
+  const { isAtLeast, hasRole } = useAuth()
   const canManage = isAtLeast('ADMIN')
+  const canImpersonate = hasRole('SUPER_ADMIN')
 
   const [employees, setEmployees] = useState<any[]>([])
   const [departments, setDepartments] = useState<any[]>([])
@@ -114,6 +115,17 @@ export default function EmployeesPage() {
   }
 
   const activeFilterCount = Object.values(filters).filter(v => v).length
+
+  const loginAs = async (e: any) => {
+    try {
+      const r = await api.post('/auth/impersonate', { userId: e.user.id })
+      const { token } = r.data?.data || {}
+      if (!token) throw new Error('no token')
+      window.open(`/impersonate-entry?t=${encodeURIComponent(token)}`, '_blank')
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Could not log in as this employee')
+    }
+  }
 
   const exportEmployees = () => {
     const statusParam = filters.status === 'true' ? 'active' : filters.status === 'false' ? 'inactive' : 'all'
@@ -269,6 +281,11 @@ export default function EmployeesPage() {
                           {canManage && (
                             <button onClick={() => openToggle(e)} className="btn-ghost btn-sm !p-1.5" title={e.user.isActive ? 'Disable' : 'Enable'}>
                               {e.user.isActive ? <UserX size={13} className="text-red-600" /> : <UserCheck size={13} className="text-green-600" />}
+                            </button>
+                          )}
+                          {canImpersonate && e.user.role !== 'SUPER_ADMIN' && e.user.isActive && (
+                            <button onClick={() => loginAs(e)} className="btn-ghost btn-sm !p-1.5" title="Login as this employee (opens a new tab)">
+                              <LogIn size={13} className="text-amber-600" />
                             </button>
                           )}
                         </div>

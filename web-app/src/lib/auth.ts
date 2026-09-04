@@ -13,6 +13,9 @@ export interface JWTPayload {
   email: string
   role: string
   name: string
+  /** Set only on a short-lived impersonation token — the admin who started it. */
+  impersonatedBy?: string
+  impersonatedByName?: string
   /** epoch seconds — set by jose, present on verified tokens */
   exp?: number
   iat?: number
@@ -34,6 +37,18 @@ export async function signToken(payload: JWTPayload): Promise<string> {
     .sign(JWT_SECRET)
 }
 
+// Impersonation tokens are deliberately short-lived (4h) and never touch
+// the `auth-token` cookie — they're handed to the browser once, kept in
+// that tab's sessionStorage, and sent as a Bearer header. See
+// getRequestSession below for why the header must win over the cookie.
+export async function signImpersonationToken(payload: JWTPayload): Promise<string> {
+  return await new SignJWT(payload as unknown as Record<string, unknown>)
+    .setProtectedHeader({ alg: 'HS256' })
+    .setIssuedAt()
+    .setExpirationTime('4h')
+    .sign(JWT_SECRET)
+}
+
 export async function verifyToken(token: string): Promise<JWTPayload | null> {
   try {
     const { payload } = await jwtVerify(token, JWT_SECRET)
@@ -51,16 +66,22 @@ export async function getServerSession(): Promise<JWTPayload | null> {
   return verifyToken(token)
 }
 
-/** Route handler session — reads from cookie OR Authorization: Bearer header (mobile) */
+/** Route handler session — reads from Authorization: Bearer header OR cookie */
 export async function getRequestSession(req: NextRequest): Promise<JWTPayload | null> {
-  // Cookie (web) first
-  let token = req.cookies.get('auth-token')?.value
-  // Fallback to Bearer header (mobile app)
+  // Bearer header first. Cookies are shared across every tab of the same
+  // browser — they can't tell "admin's own tab" apart from "admin's
+  // impersonation tab" opened alongside it. The per-tab impersonation
+  // token (sent only as a header, from that one tab's sessionStorage) has
+  // to win whenever it's present, or impersonation would just silently
+  // show the admin their own account again.
+  let token: string | undefined
+  const authHeader = req.headers.get('authorization') || req.headers.get('Authorization')
+  if (authHeader?.startsWith('Bearer ')) {
+    token = authHeader.slice(7).trim()
+  }
+  // Cookie (web) fallback — normal tabs never send the header above.
   if (!token) {
-    const authHeader = req.headers.get('authorization') || req.headers.get('Authorization')
-    if (authHeader?.startsWith('Bearer ')) {
-      token = authHeader.slice(7).trim()
-    }
+    token = req.cookies.get('auth-token')?.value
   }
   if (!token) return null
   const payload = await verifyToken(token)
