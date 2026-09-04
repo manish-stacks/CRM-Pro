@@ -38,7 +38,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     },
   })
 
-  emitToGroup(updated.chatGroupId, 'chat:messageEdited', updated)
+  if (updated.chatGroupId) {
+    emitToGroup(updated.chatGroupId, 'chat:messageEdited', updated)
+  }
+
 
   return successResponse(updated)
 }
