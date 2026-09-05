@@ -32,6 +32,7 @@ const REQUIRED_FIELDS = [
 ] as const
 
 export const FIELD_LABELS: Record<string, string> = {
+  avatar: 'Profile Photo',
   position: 'Position',
   joiningDate: 'Joining Date',
   dateOfBirth: 'Date of Birth',
@@ -56,19 +57,25 @@ export const FIELD_LABELS: Record<string, string> = {
   accountHolderName: 'Account Holder Name',
 }
 
-export function getProfileCompletion(employee: Record<string, any>): {
+export function getProfileCompletion(employee: Record<string, any>, avatarUrl?: string | null): {
   percent: number
   missingFields: string[]
 } {
-  const missingFields = REQUIRED_FIELDS.filter(f => {
+  const missingFields: string[] = REQUIRED_FIELDS.filter(f => {
     const v = employee?.[f]
     return v === null || v === undefined || v === ''
   })
-  const filled = REQUIRED_FIELDS.length - missingFields.length
-  const percent = Math.round((filled / REQUIRED_FIELDS.length) * 100)
+  // Profile photo lives on the User model, not Employee — passed in
+  // separately by the caller (e.g. employee.user?.avatar). Mandatory for
+  // every employee, same as the other required fields.
+  if (!avatarUrl) missingFields.push('avatar')
+
+  const totalFields = REQUIRED_FIELDS.length + 1
+  const filled = totalFields - missingFields.length
+  const percent = Math.round((filled / totalFields) * 100)
   return { percent, missingFields }
 }
 
-export function isProfileCompleteEnough(employee: Record<string, any>): boolean {
-  return getProfileCompletion(employee).percent >= PROFILE_COMPLETION_THRESHOLD
+export function isProfileCompleteEnough(employee: Record<string, any>, avatarUrl?: string | null): boolean {
+  return getProfileCompletion(employee, avatarUrl).percent >= PROFILE_COMPLETION_THRESHOLD
 }

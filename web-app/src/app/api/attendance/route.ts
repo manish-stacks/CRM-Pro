@@ -198,7 +198,10 @@ export async function POST(req: NextRequest) {
       return successResponse(rec)
     }
 
-    const employee = await prisma.employee.findFirst({ where: { userId: session.userId } })
+    const employee = await prisma.employee.findFirst({
+      where: { userId: session.userId },
+      include: { user: { select: { avatar: true } } },
+    })
     if (!employee) return errorResponse('Employee profile not found')
 
     // Field staff punch in/out from the mobile app only (exact GPS fix, free
@@ -219,7 +222,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === 'punch_in') {
-      const { percent } = getProfileCompletion(employee)
+      const { percent } = getProfileCompletion(employee, employee.user?.avatar)
       if (percent < PROFILE_COMPLETION_THRESHOLD) {
         return errorResponse(`Please complete your profile first (${percent}% done, ${PROFILE_COMPLETION_THRESHOLD}% required to check in)`, 403)
       }

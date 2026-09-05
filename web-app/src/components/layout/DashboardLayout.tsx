@@ -6,6 +6,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { useRouter } from 'next/navigation'
 import { Toaster } from 'react-hot-toast'
 import WebPushRegistrar from '@/components/WebPushRegistrar'
+import { TechSupportWidget } from '@/components/TechSupportWidget'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -34,6 +35,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Chrome/Edge/Firefox push — asks once, then keeps the token fresh so
           every in-app notification also lands as a desktop notification. */}
       <WebPushRegistrar />
+      <TechSupportWidget />
 
       {/* Desktop sidebar */}
       <div className="hidden md:flex w-64 flex-shrink-0">

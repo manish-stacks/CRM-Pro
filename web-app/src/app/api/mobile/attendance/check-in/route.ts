@@ -15,7 +15,8 @@ export async function POST(req: NextRequest) {
   const { session, employee } = res as any
   if (!employee) return fail('Employee profile not found', 404)
 
-  const { percent } = getProfileCompletion(employee)
+  const selfUser = await prisma.user.findUnique({ where: { id: session.userId }, select: { avatar: true } })
+  const { percent } = getProfileCompletion(employee, selfUser?.avatar)
   if (percent < PROFILE_COMPLETION_THRESHOLD) {
     return fail(`Please complete your profile first (${percent}% done, ${PROFILE_COMPLETION_THRESHOLD}% required to check in)`, 403)
   }

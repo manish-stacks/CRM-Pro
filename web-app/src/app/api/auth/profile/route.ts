@@ -58,7 +58,7 @@ export async function GET(req: NextRequest) {
     user.employee.dateOfBirth = user.dateOfBirth
   }
 
-  const profileCompletion = user.employee ? getProfileCompletion(user.employee) : null
+  const profileCompletion = user.employee ? getProfileCompletion(user.employee, user.avatar) : null
   return successResponse({ ...user, readOnlyFields: READ_ONLY_FOR_USER, profileCompletion })
 }
 

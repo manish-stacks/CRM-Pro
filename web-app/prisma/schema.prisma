@@ -106,6 +106,8 @@ model User {
   reminders              Reminder[]
   notes                  Note[]
   leavesApproved         Leave[]              @relation("LeaveApprovedBy")
+  seoReportsCreated      SeoReport[]          @relation("SeoReportCreator")
+  seoReportsSubmitted    SeoReport[]          @relation("SeoReportSubmitter")
 
   @@index([email])
   @@index([role])
@@ -793,7 +795,8 @@ model Client {
   expoPushToken        String?         // legacy Expo push token
   pushPlatform         String?         // "android" | "ios"
   pushTokenAt          DateTime?
-  image                String?         // Cloudinary URL
+  image                String?         // Cloudinary URL — also used as the client logo on SEO reports
+  gmbScreenshot        String?  @db.Text // One-time GMB profile screenshot reused across every SEO report
 
   // Portal login (separate from User model for legacy support)
   portalPassword       String?         // Hashed - allows client portal login
@@ -825,6 +828,7 @@ model Client {
   proposals            Proposal[]
   invoices             Invoice[]
   reports              ClientReport[]
+  seoReports           SeoReport[]
   supportTickets       SupportTicket[]
   visits               ClientVisit[]   @relation("ClientVisits")
 
@@ -874,6 +878,7 @@ model ClientService {
   department        Department?         @relation(fields: [departmentId], references: [id])
   projectAssignment ProjectAssignment[]
   reports           ClientReport[]
+  seoReports        SeoReport[]
   supportTickets    SupportTicket[]
 
   @@index([status])
@@ -1319,4 +1324,39 @@ model Setting {
   updatedAt DateTime @updatedAt
 
   @@map("settings")
+}
+
+
+// Dynamic SEO + GMB monthly report. Built section-by-section in the CRM
+// (/seo-reports), rendered to PDF, then mirrored into ClientReport on submit
+// so it shows up on the client portal dashboard.
+// `data` holds the whole form payload as JSON (screenshots, link tables,
+// keyword tables, analytics numbers) so new sections need no migration.
+model SeoReport {
+  id                  String    @id @default(cuid())
+  reportNumber        String    @unique          // SEO-000001
+  clientId            String
+  clientServiceId     String?
+  projectAssignmentId String?
+  title               String
+  reportMonth         String                     // "August 2026"
+  reportDate          DateTime  @db.Date
+  status              String    @default("DRAFT") // DRAFT | SUBMITTED
+  data                String?   @db.LongText
+  pdfUrl              String?
+  clientReportId      String?
+  submittedAt         DateTime?
+  createdById         String
+  submittedById       String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  client        Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientService ClientService? @relation(fields: [clientServiceId], references: [id])
+  createdBy     User           @relation("SeoReportCreator", fields: [createdById], references: [id])
+  submittedBy   User?          @relation("SeoReportSubmitter", fields: [submittedById], references: [id])
+
+  @@index([clientId, reportDate])
+  @@index([status])
+  @@map("seo_reports")
 }

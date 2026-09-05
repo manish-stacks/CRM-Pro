@@ -78,7 +78,7 @@ export function CelebrationWidget({ leaveBalance }: { leaveBalance?: any }) {
   useEffect(() => { setMounted(true) }, [])
 
   // Wish → open /chat, auto-create DIRECT chat with the person and send a wish message
-  const wishNow = (person: any, type: 'birthday' | 'anniversary') => {
+  const wishNow = (person: any, type: 'birthday' | 'anniversary' | 'welcome') => {
     if (!person?.userId) return
     const q = new URLSearchParams({ wish: person.userId, name: person.name || '', type })
     router.push(`/chat?${q.toString()}`)
@@ -131,19 +131,23 @@ export function CelebrationWidget({ leaveBalance }: { leaveBalance?: any }) {
               </div>
               <div>
                 <h2 className="text-lg font-bold text-gray-900">
-                  {selfBirthday ? "It's your birthday, " : "It's your work anniversary, "}{user?.name?.split(' ')[0]}! 🎉
+                  {selfBirthday
+                    ? "It's your birthday, "
+                    : selfAnniversary?.years === 0
+                      ? 'Welcome to the team, '
+                      : "It's your work anniversary, "}{user?.name?.split(' ')[0]}! 🎉
                 </h2>
                 <p className="text-sm text-gray-500 mt-0.5">
                   {selfBirthday
                     ? 'Wishing you a fantastic year ahead. Enjoy your day!'
                     : selfAnniversary?.years === 0
-                      ? 'Welcome to the team!'
+                      ? "We're thrilled to have you on board — welcome aboard!"
                       : `${selfAnniversary?.years} year${selfAnniversary && selfAnniversary.years > 1 ? 's' : ''} with us — thank you for everything!`}
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-3 flex-shrink-0">
-              {!selfBirthday && (
+              {!selfBirthday && selfAnniversary?.years !== 0 && (
                 <button
                   onClick={() => setShowCertificate(true)}
                   className="px-4 py-2 rounded-full text-sm font-semibold text-rose-500 border border-rose-300 bg-white hover:bg-rose-50 transition-colors whitespace-nowrap"
@@ -167,13 +171,17 @@ export function CelebrationWidget({ leaveBalance }: { leaveBalance?: any }) {
             </div>
             <div>
               <h2 className="text-xl font-bold">
-                {selfBirthday ? "It's your birthday, " : "It's your work anniversary, "}{user?.name?.split(' ')[0]}! 🎉
+                {selfBirthday
+                  ? "It's your birthday, "
+                  : selfAnniversary?.years === 0
+                    ? 'Welcome to the team, '
+                    : "It's your work anniversary, "}{user?.name?.split(' ')[0]}! 🎉
               </h2>
               <p className="text-sm text-white/85 mt-0.5">
                 {selfBirthday
                   ? 'Wishing you a fantastic year ahead. Enjoy your day!'
                   : selfAnniversary?.years === 0
-                    ? 'Welcome to the team!'
+                    ? "We're thrilled to have you on board — welcome aboard!"
                     : `${selfAnniversary?.years} year${selfAnniversary && selfAnniversary.years > 1 ? 's' : ''} with us — thank you for everything!`}
               </p>
             </div>
@@ -221,7 +229,7 @@ export function CelebrationWidget({ leaveBalance }: { leaveBalance?: any }) {
                     <p className="font-semibold text-gray-900 text-sm truncate">{a.name}</p>
                     <p className="text-xs text-gray-500">{a.years === 0 ? '👋 Welcome to the team!' : `🎊 ${a.years} year${a.years > 1 ? 's' : ''} at company`} • {a.department}</p>
                   </div>
-                  <button onClick={() => wishNow(a, 'anniversary')}
+                  <button onClick={() => wishNow(a, a.years === 0 ? 'welcome' : 'anniversary')}
                     className="text-xs font-semibold text-rose-600 hover:bg-rose-50 rounded-lg px-2.5 py-1.5 flex items-center gap-1 flex-shrink-0">
                     <MessageSquare size={12} /> Wish
                   </button>
@@ -335,7 +343,7 @@ export function CelebrationWidget({ leaveBalance }: { leaveBalance?: any }) {
                       <p className="font-semibold text-gray-900">{a.name}</p>
                       <p className="text-xs text-rose-700">{a.years === 0 ? '👋 Welcome to the team!' : `✨ ${a.years} year${a.years > 1 ? 's' : ''} anniversary`}</p>
                     </div>
-                    <button onClick={() => { setShowPopup(false); setDismissed(true); wishNow(a, 'anniversary') }}
+                    <button onClick={() => { setShowPopup(false); setDismissed(true); wishNow(a, a.years === 0 ? 'welcome' : 'anniversary') }}
                       className="text-xs font-semibold text-white bg-rose-500 hover:bg-rose-600 rounded-lg px-3 py-1.5">
                       Wish 💌
                     </button>

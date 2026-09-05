@@ -6,8 +6,9 @@ import api from '@/lib/axios'
 import { Button, Input, Modal, EmptyState, Pagination, Badge, Select } from '@/components/ui'
 import { formatDate, getInitials } from '@/lib/utils'
 import { generateIdCard } from '@/lib/idCard'
+import { generateEmployeeFormPdf } from '@/lib/employeeFormPdf'
 import {
-  Users, Plus, Search, Filter, X, Eye, UserCheck, UserX, MoreVertical, Loader2, Download, IdCard, LogIn
+  Users, Plus, Search, Filter, X, Eye, UserCheck, UserX, MoreVertical, Loader2, Download, IdCard, LogIn, Cake, FileText
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -18,6 +19,43 @@ export default function EmployeesPage() {
   const { isAtLeast, hasRole } = useAuth()
   const canManage = isAtLeast('ADMIN')
   const canImpersonate = hasRole('SUPER_ADMIN')
+  // Admin + Team Lead (MANAGER) can view/download the month-wise
+  // birthday & work-anniversary list.
+  const canViewCelebrations = isAtLeast('MANAGER')
+  const [showCelebrations, setShowCelebrations] = useState(false)
+  const [celMonth, setCelMonth] = useState(new Date().getMonth() + 1)
+  const [celRows, setCelRows] = useState<any[]>([])
+  const [celLoading, setCelLoading] = useState(false)
+  const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December']
+
+  const loadCelebrations = useCallback((month: number) => {
+    setCelLoading(true)
+    api.get(`/employees/celebrations?month=${month}`)
+      .then(r => setCelRows(r.data.data.rows || []))
+      .catch(() => toast.error('Failed to load list'))
+      .finally(() => setCelLoading(false))
+  }, [])
+
+  const openCelebrations = () => {
+    setShowCelebrations(true)
+    loadCelebrations(celMonth)
+  }
+
+  const downloadCelebrationsCsv = () => {
+    const header = ['Employee ID', 'Name', 'Department', 'Phone', 'Email', 'Type', 'Date']
+    const lines = [header.join(',')]
+    for (const r of celRows) {
+      lines.push([r.employeeId, r.name, r.department, r.phone, r.email, r.type, r.date]
+        .map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(','))
+    }
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `celebrations-${MONTH_NAMES[celMonth - 1]}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
 
   const [employees, setEmployees] = useState<any[]>([])
   const [departments, setDepartments] = useState<any[]>([])
@@ -153,6 +191,15 @@ export default function EmployeesPage() {
     }
   }
 
+  const downloadForm = async (e: any) => {
+    try {
+      const r = await api.get(`/employees/${e.id}`)
+      generateEmployeeFormPdf(r.data.data, company)
+    } catch {
+      toast.error('Failed to generate form')
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between">
@@ -162,14 +209,21 @@ export default function EmployeesPage() {
             {canManage ? 'Manage team members. New employees fill their own profile after login.' : 'Your team directory'}
           </p>
         </div>
-        {canManage && (
-          <div className="flex items-center gap-2">
-            <Button variant="secondary" onClick={exportEmployees}>
-              <Download size={14} /> Export{filters.status === 'true' ? ' (Active)' : filters.status === 'false' ? ' (Inactive)' : ''}
+        <div className="flex items-center gap-2">
+          {canViewCelebrations && (
+            <Button variant="secondary" onClick={openCelebrations}>
+              <Cake size={14} /> Birthdays & Anniversaries
             </Button>
-            <Button onClick={openAdd}><Plus size={14} /> Add Employee</Button>
-          </div>
-        )}
+          )}
+          {canManage && (
+            <>
+              <Button variant="secondary" onClick={exportEmployees}>
+                <Download size={14} /> Export{filters.status === 'true' ? ' (Active)' : filters.status === 'false' ? ' (Inactive)' : ''}
+              </Button>
+              <Button onClick={openAdd}><Plus size={14} /> Add Employee</Button>
+            </>
+          )}
+        </div>
       </div>
 
       <div className="card">
@@ -279,6 +333,9 @@ export default function EmployeesPage() {
                           <Link href={`/employees/${e.id}`} className="btn-ghost btn-sm !p-1.5" title="View"><Eye size={13} /></Link>
                           <button onClick={() => makeIdCard(e)} className="btn-ghost btn-sm !p-1.5" title="Generate ID Card"><IdCard size={13} className="text-brand-600" /></button>
                           {canManage && (
+                            <button onClick={() => downloadForm(e)} className="btn-ghost btn-sm !p-1.5" title="Download Employee Form"><FileText size={13} className="text-slate-600" /></button>
+                          )}
+                          {canManage && (
                             <button onClick={() => openToggle(e)} className="btn-ghost btn-sm !p-1.5" title={e.user.isActive ? 'Disable' : 'Enable'}>
                               {e.user.isActive ? <UserX size={13} className="text-red-600" /> : <UserCheck size={13} className="text-green-600" />}
                             </button>
@@ -373,6 +430,56 @@ export default function EmployeesPage() {
               {target?.user.isActive ? 'Disable' : 'Enable'}
             </Button>
           </div>
+        </div>
+      </Modal>
+
+      {/* Birthdays & Anniversaries — month-wise, Admin/TL only */}
+      <Modal open={showCelebrations} onClose={() => setShowCelebrations(false)} title="Birthdays & Anniversaries">
+        <div className="space-y-4">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <select
+              className="input w-auto"
+              value={celMonth}
+              onChange={e => { const m = Number(e.target.value); setCelMonth(m); loadCelebrations(m) }}
+            >
+              {MONTH_NAMES.map((name, i) => <option key={i} value={i + 1}>{name}</option>)}
+            </select>
+            <Button variant="secondary" onClick={downloadCelebrationsCsv} disabled={!celRows.length}>
+              <Download size={14} /> Download List
+            </Button>
+          </div>
+          {celLoading ? (
+            <div className="flex justify-center py-8"><Loader2 className="animate-spin text-gray-400" /></div>
+          ) : celRows.length === 0 ? (
+            <EmptyState icon={<Cake size={22} />} title="No celebrations this month" description="No birthdays or work anniversaries fall in the selected month." />
+          ) : (
+            <div className="overflow-x-auto max-h-96 overflow-y-auto border border-gray-100 rounded-lg">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 sticky top-0">
+                  <tr>
+                    <th className="text-left px-3 py-2 font-medium text-gray-600">Date</th>
+                    <th className="text-left px-3 py-2 font-medium text-gray-600">Name</th>
+                    <th className="text-left px-3 py-2 font-medium text-gray-600">Department</th>
+                    <th className="text-left px-3 py-2 font-medium text-gray-600">Type</th>
+                    <th className="text-left px-3 py-2 font-medium text-gray-600">Phone</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {celRows.map((r, i) => (
+                    <tr key={i} className="border-t border-gray-100">
+                      <td className="px-3 py-2 text-gray-500">{r.date}</td>
+                      <td className="px-3 py-2 font-medium text-gray-900">{r.name}</td>
+                      <td className="px-3 py-2 text-gray-600">{r.department}</td>
+                      <td className="px-3 py-2">
+                        <span className={`badge ${r.type.startsWith('Birthday') ? 'bg-pink-100 text-pink-700' : 'bg-rose-100 text-rose-700'}`}>{r.type}</span>
+                      </td>
+                      <td className="px-3 py-2 text-gray-500">{r.phone}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </Modal>
     </div>

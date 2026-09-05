@@ -261,9 +261,11 @@ export default function ChatPage() {
     wishHandled.current = true
     const name = params.get('name') || 'there'
     const type = params.get('type') || 'birthday'
-    const text = type === 'anniversary'
-      ? `🎊 Happy Work Anniversary, ${name}! Thank you for your wonderful contribution — here's to many more! 🙌`
-      : `🎉🎂 Happy Birthday, ${name}! Wishing you a fantastic year ahead full of joy and success. 🥳`
+    const text = type === 'welcome'
+      ? `👋 Welcome to the team, ${name}! We're excited to have you with us — wishing you a great journey ahead! 🎉`
+      : type === 'anniversary'
+        ? `🎊 Happy Work Anniversary, ${name}! Thank you for your wonderful contribution — here's to many more! 🙌`
+        : `🎉🎂 Happy Birthday, ${name}! Wishing you a fantastic year ahead full of joy and success. 🥳`
     ;(async () => {
       try {
         const r = await api.post('/chat/groups', { type: 'DIRECT', memberIds: [wishUserId] })
@@ -294,6 +296,13 @@ export default function ChatPage() {
     activeIdRef.current = activeId
     if (!activeId) return
     loadMessages(activeId)
+    // Opening a chat marks it read on the server (see loadMessages →
+    // GET messages), but the sidebar's unread badge comes from the
+    // separately-fetched `groups` list, which wasn't being refreshed — so
+    // the number used to linger until the next poll/full reload even
+    // though the chat had genuinely been seen. Clear it locally right away
+    // so the badge disappears the instant the chat opens.
+    setGroups(prev => prev.map(g => g.id === activeId ? { ...g, unreadCount: 0 } : g))
     // The socket delivers changes instantly when it's connected — this
     // interval is then just an occasional safety net in case an event was
     // ever missed (e.g. a brief disconnect/reconnect gap). If the socket
@@ -785,7 +794,20 @@ export default function ChatPage() {
                 <p className="text-center text-sm text-gray-400 py-12">No messages yet. Say hi 👋</p>
               ) : (
                 <div className="space-y-2 mx-auto">
-                  {messages.map(m => {
+                  {messages.map((m, mIdx) => {
+                    // WhatsApp-style date divider — shown once whenever the
+                    // calendar day changes between consecutive messages.
+                    const msgDay = new Date(m.createdAt).toDateString()
+                    const prevDay = mIdx > 0 ? new Date(messages[mIdx - 1].createdAt).toDateString() : null
+                    const showDateDivider = msgDay !== prevDay
+                    const dividerLabel = (() => {
+                      const d = new Date(m.createdAt)
+                      const today = new Date().toDateString()
+                      const yesterday = new Date(Date.now() - 86400000).toDateString()
+                      if (msgDay === today) return 'Today'
+                      if (msgDay === yesterday) return 'Yesterday'
+                      return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: d.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined })
+                    })()
                     const isMe = m.sender?.id === user?.id
                     const isMentioned = (m.mentions || []).some((mn: any) => mn.userId === user?.id || mn.user?.id === user?.id)
                     const tick = isMe && !m._optimistic ? readTickState(m) : null
@@ -798,7 +820,15 @@ export default function ChatPage() {
                       if (r.user?.id === user?.id) reactionGroups[r.emoji].mine = true
                     }
                     return (
-                      <div key={m.id} className={`flex gap-2 ${isMe ? 'justify-end' : 'justify-start'} group`}>
+                      <div key={m.id}>
+                      {showDateDivider && (
+                        <div className="flex justify-center my-3">
+                          <span className="bg-white/90 text-gray-500 text-[11px] font-semibold px-3 py-1 rounded-full shadow-sm border border-gray-100">
+                            {dividerLabel}
+                          </span>
+                        </div>
+                      )}
+                      <div className={`flex gap-2 ${isMe ? 'justify-end' : 'justify-start'} group`}>
                         {!isMe && (
                           <div className="w-7 h-7 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[10px] font-bold flex-shrink-0 overflow-hidden">
                             {m.sender?.avatar ? <img src={m.sender.avatar} className="w-full h-full object-cover" /> : getInitials(m.sender?.name || 'X')}
@@ -898,6 +928,7 @@ export default function ChatPage() {
                             </div>
                           )}
                         </div>
+                      </div>
                       </div>
                     )
                   })}

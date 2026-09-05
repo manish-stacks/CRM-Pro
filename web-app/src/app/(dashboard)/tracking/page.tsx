@@ -235,6 +235,10 @@ export default function TrackingPage() {
         const g = (window as any).google
         clearOverlays()
         const pings = data.pings || []
+        const visits = data.visits || []
+        const bounds = new g.maps.LatLngBounds()
+        let anyOverlay = false
+
         if (pings.length > 0) {
           const path = pings.map((p: any) => ({ lat: p.latitude, lng: p.longitude }))
           const distanceKm = path.slice(1).reduce((sum: number, pt: any, i: number) => sum + haversineKm(path[i], pt), 0)
@@ -267,8 +271,8 @@ export default function TrackingPage() {
           })
           overlaysRef.current.push(glow, line)
 
-          const bounds = new g.maps.LatLngBounds()
           path.forEach((pt: any) => bounds.extend(pt))
+          anyOverlay = true
 
           // Start marker — pin styled like a "check-in" flag
           overlaysRef.current.push(new g.maps.Marker({
@@ -288,25 +292,6 @@ export default function TrackingPage() {
               scale: 1.1, anchor: new g.maps.Point(12, 24),
             },
           }))
-          // Visit markers
-          ;(data.visits || []).forEach((v: any) => {
-            if (v.checkInLat && v.checkInLng) {
-              const vm = new g.maps.Marker({
-                position: { lat: v.checkInLat, lng: v.checkInLng },
-                map: mapInstance.current,
-                title: v.clientName,
-                icon: { path: g.maps.SymbolPath.CIRCLE, scale: 9, fillColor: '#22c55e', fillOpacity: 0.9, strokeColor: '#166534', strokeWeight: 2 },
-              })
-              vm.addListener('click', () => {
-                infoRef.current.setContent(`<div style="font-size:13px"><b>${v.clientName}</b><br/>${v.purpose || 'Visit'}<br/>${v.status}</div>`)
-                infoRef.current.open(mapInstance.current, vm)
-              })
-              overlaysRef.current.push(vm)
-              bounds.extend({ lat: v.checkInLat, lng: v.checkInLng })
-            }
-          })
-          mapInstance.current.fitBounds(bounds, 60)
-          boundsRef.current = bounds
 
           // Route summary — distance walked/driven, elapsed time, stops made.
           const firstT = new Date(pings[0].recordedAt)
@@ -314,12 +299,39 @@ export default function TrackingPage() {
           const durationMins = Math.max(0, Math.round((lastT.getTime() - firstT.getTime()) / 60000))
           setRouteStats({
             distanceKm, durationMins,
-            stops: (data.visits || []).length,
+            stops: visits.length,
             lastUpdate: lastT,
           })
           if (cached) toast('Loaded from cache — no extra API calls made', { icon: '⚡', duration: 2500 })
         } else {
-          setRouteStats(null)
+          setRouteStats(visits.length ? { distanceKm: 0, durationMins: 0, stops: visits.length, lastUpdate: null } : null)
+        }
+
+        // Visit markers — plotted independently of whether GPS pings exist,
+        // so a day with only manual check-ins (no continuous tracking) still
+        // shows its visits on the map instead of the map staying empty.
+        visits.forEach((v: any) => {
+          if (v.checkInLat && v.checkInLng) {
+            const vm = new g.maps.Marker({
+              position: { lat: v.checkInLat, lng: v.checkInLng },
+              map: mapInstance.current,
+              title: v.clientName,
+              icon: { path: g.maps.SymbolPath.CIRCLE, scale: 9, fillColor: '#22c55e', fillOpacity: 0.9, strokeColor: '#166534', strokeWeight: 2 },
+            })
+            vm.addListener('click', () => {
+              infoRef.current.setContent(`<div style="font-size:13px"><b>${v.clientName}</b><br/>${v.purpose || 'Visit'}<br/>${v.status}</div>`)
+              infoRef.current.open(mapInstance.current, vm)
+            })
+            overlaysRef.current.push(vm)
+            bounds.extend({ lat: v.checkInLat, lng: v.checkInLng })
+            anyOverlay = true
+          }
+        })
+
+        if (anyOverlay) {
+          mapInstance.current.fitBounds(bounds, 60)
+          boundsRef.current = bounds
+        } else {
           toast('No location data for this day', { icon: 'ℹ️' })
         }
       }

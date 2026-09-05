@@ -14,7 +14,7 @@ import {
   Loader2, Package, FileText, CreditCard, MessageSquare, RefreshCw,
   Send, Copy, Check, Plus, KeyRound, RotateCcw, Users2, TrendingUp,
   DollarSign, AlertCircle, Calendar, Video, X,
-  Trash2
+  Trash2, FileBarChart2, Eye
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -33,7 +33,7 @@ export default function ClientDetailPage() {
   const id = params.id as string
   const [client, setClient] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState<'services' | 'proposals' | 'invoices' | 'payments' | 'tickets' | 'reports' | 'team'>('services')
+  const [tab, setTab] = useState<'services' | 'proposals' | 'invoices' | 'payments' | 'tickets' | 'reports' | 'seo-reports' | 'team'>('services')
 
   const [modal, setModal] = useState<'none' | 'service' | 'renew' | 'portal' | 'edit'>('none')
   const [saving, setSaving] = useState(false)
@@ -41,10 +41,11 @@ export default function ClientDetailPage() {
   const [customPwd, setCustomPwd] = useState('')
 
   const [serviceCatalog, setServiceCatalog] = useState<any[]>([])
+  const [departments, setDepartments] = useState<any[]>([])
   const [target, setTarget] = useState<any>(null)
 
   const [svcForm, setSvcForm] = useState({
-    serviceCatalogId: '', serviceName: '', description: '', category: '',
+    serviceCatalogId: '', serviceName: '', description: '', category: '', departmentId: '',
     startDate: new Date().toISOString().split('T')[0],
     expiryDate: '', amount: '', billingCycle: 'ONE_TIME', autoRenew: false,
   })
@@ -66,6 +67,7 @@ export default function ClientDetailPage() {
   useEffect(() => { fetchClient() }, [fetchClient])
   useEffect(() => {
     api.get('/services').then(r => setServiceCatalog(r.data.data || [])).catch(() => { })
+    api.get('/departments').then(r => setDepartments(r.data.data || [])).catch(() => { })
   }, [])
 
   // If a restricted tab was somehow active (e.g. deep link) and the user
@@ -78,7 +80,7 @@ export default function ClientDetailPage() {
 
   const openService = () => {
     setSvcForm({
-      serviceCatalogId: '', serviceName: '', description: '', category: '',
+      serviceCatalogId: '', serviceName: '', description: '', category: '', departmentId: '',
       startDate: new Date().toISOString().split('T')[0],
       expiryDate: '', amount: '', billingCycle: 'ONE_TIME', autoRenew: false,
     })
@@ -93,6 +95,9 @@ export default function ClientDetailPage() {
         serviceCatalogId: catId,
         serviceName: c.name,
         category: c.category || '',
+        // Catalog carries the handling department — inherit it so the dept
+        // head (TL) gets auto-assigned as project head on save.
+        departmentId: c.departmentId || p.departmentId || '',
         amount: String(c.basePrice),
         billingCycle: c.billingCycle,
       }))
@@ -102,10 +107,12 @@ export default function ClientDetailPage() {
   const addService = async () => {
     if (!canEdit) return
     if (!svcForm.serviceName) { toast.error('Service name required'); return }
+    if (!svcForm.departmentId) { toast.error('Select the handling department'); return }
     setSaving(true)
     try {
-      await api.post(`/clients/${id}/services`, svcForm)
-      toast.success('Service added')
+      const r = await api.post(`/clients/${id}/services`, svcForm)
+      const head = r.data?.data?.autoAssigned?.manager?.name
+      toast.success(head ? `Service added — project head: ${head}` : 'Service added')
       setModal('none')
       fetchClient()
     } catch (e: any) {
@@ -181,6 +188,7 @@ export default function ClientDetailPage() {
     { key: 'invoices', label: 'Invoices', icon: FileText, count: client._count?.invoices, restricted: true },
     { key: 'payments', label: 'Payments', icon: CreditCard, count: null, restricted: true },
     { key: 'reports', label: 'Reports', icon: FileText, count: client._count?.reports, restricted: false },
+    { key: 'seo-reports', label: 'SEO / GMB Reports', icon: FileBarChart2, count: null, restricted: false },
     { key: 'team', label: 'Team', icon: User, count: null, restricted: false },
     { key: 'tickets', label: 'Tickets', icon: MessageSquare, count: client._count?.supportTickets, restricted: false },
   ]
@@ -423,6 +431,11 @@ export default function ClientDetailPage() {
             <ReportsSection clientId={client.id} services={client.services} />
           )}
 
+          {/* SEO / GMB REPORTS */}
+          {tab === 'seo-reports' && (
+            <SeoReportsSection clientId={client.id} services={client.services} canEdit={canEdit} />
+          )}
+
           {/* TEAM */}
           {tab === 'team' && (
             <TeamSection clientId={client.id} services={client.services} canEdit={canEdit} user={user} onChanged={fetchClient} />
@@ -470,6 +483,22 @@ export default function ClientDetailPage() {
               <Input label="Service Name *" value={svcForm.serviceName} onChange={e => setSvcForm(p => ({ ...p, serviceName: e.target.value }))} />
               <Input label="Category" value={svcForm.category} onChange={e => setSvcForm(p => ({ ...p, category: e.target.value }))} placeholder="SEO, MARKETING, DEVELOPMENT..." />
             </div>
+            <Select
+              label="Handling Department *"
+              value={svcForm.departmentId}
+              onChange={e => setSvcForm(p => ({ ...p, departmentId: e.target.value }))}
+              options={[{ value: '', label: 'Select department' }, ...departments.map((d: any) => ({ value: d.id, label: d.name }))]}
+            />
+            {svcForm.departmentId && (() => {
+              const head = departments.find((d: any) => d.id === svcForm.departmentId)?.manager?.user?.name
+              return head
+                ? <p className="-mt-2 text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-2 py-1">
+                    {head} (team lead) will be auto-assigned as project head. Admin can change this later from Projects.
+                  </p>
+                : <p className="-mt-2 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                    This department has no head set — assign one in Departments, or assign the project manually.
+                  </p>
+            })()}
             <Textarea label="Description" value={svcForm.description} onChange={e => setSvcForm(p => ({ ...p, description: e.target.value }))} rows={2} />
             <div className="grid grid-cols-3 gap-3">
               <Input label="Start Date" type="date" value={svcForm.startDate} onChange={e => setSvcForm(p => ({ ...p, startDate: e.target.value }))} />
@@ -1107,6 +1136,117 @@ function TeamSection({ clientId, services, canEdit, user, onChanged }: {
             </div>
           </div>
         )}
+      </Modal>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------- SEO / GMB reports
+// Dynamic monthly reports built in /seo-reports. Listed here so everything for a
+// client sits on one page; creating one jumps straight into the builder.
+function SeoReportsSection({ clientId, services, canEdit }: { clientId: string; services: any[]; canEdit: boolean }) {
+  const router = useRouter()
+  const [rows, setRows] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [modal, setModal] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+  const lastMonth = (() => { const dt = new Date(); dt.setMonth(dt.getMonth() - 1); return `${MONTHS[dt.getMonth()]} ${dt.getFullYear()}` })()
+
+  const [form, setForm] = useState({
+    clientServiceId: '', reportMonth: lastMonth,
+    reportDate: new Date().toISOString().split('T')[0],
+  })
+
+  const load = useCallback(() => {
+    api.get(`/seo-reports?clientId=${clientId}&limit=50`)
+      .then(r => setRows(r.data.data || []))
+      .catch(() => { })
+      .finally(() => setLoading(false))
+  }, [clientId])
+
+  useEffect(() => { load() }, [load])
+
+  const create = async () => {
+    if (!form.reportMonth.trim()) { toast.error('Enter the reporting period'); return }
+    setSaving(true)
+    try {
+      const r = await api.post('/seo-reports', { clientId, ...form })
+      router.push(`/seo-reports/${r.data.data.id}`)
+    } catch (e: any) {
+      toast.error(e.response?.data?.message || e.response?.data?.error || 'Failed')
+    } finally { setSaving(false) }
+  }
+
+  const remove = async (id: string) => {
+    if (!confirm('Delete this report? Its uploaded screenshots and PDF will also be removed.')) return
+    try { await api.delete(`/seo-reports/${id}`); toast.success('Deleted'); load() }
+    catch (e: any) { toast.error(e.response?.data?.message || 'Failed') }
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-semibold text-gray-900">SEO / GMB Monthly Reports</h3>
+        {canEdit && (
+          <Button size="sm" onClick={() => { setForm({ clientServiceId: '', reportMonth: lastMonth, reportDate: new Date().toISOString().split('T')[0] }); setModal(true) }}>
+            <Plus size={13} /> New Report
+          </Button>
+        )}
+      </div>
+
+      {loading ? (
+        <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <div key={i} className="skeleton h-14 rounded-lg" />)}</div>
+      ) : rows.length === 0 ? (
+        <EmptyState icon={<FileBarChart2 size={20} />} title="No SEO reports" description="Build the monthly SEO + GMB report and send it to the client" />
+      ) : (
+        <div className="space-y-2">
+          {rows.map(r => (
+            <div key={r.id} className="border border-gray-200 rounded-lg p-3 flex items-center gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-mono text-xs text-gray-500">{r.reportNumber}</span>
+                  {r.status === 'SUBMITTED'
+                    ? <span className="badge bg-green-100 text-green-700 text-[10px]">Submitted</span>
+                    : <span className="badge bg-amber-100 text-amber-700 text-[10px]">Draft</span>}
+                  <span className="badge bg-purple-100 text-purple-700 text-[10px]">{r.reportMonth}</span>
+                  {r.clientService?.serviceName && <span className="text-xs text-gray-500">{r.clientService.serviceName}</span>}
+                </div>
+                <p className="font-medium text-sm mt-0.5 truncate">{r.title}</p>
+                <p className="text-xs text-gray-500">{r.createdBy?.name} · {formatDate(r.createdAt)}</p>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Link href={`/seo-reports/${r.id}`} className="p-1.5 rounded hover:bg-gray-100 text-gray-600" title="Open"><Eye size={15} /></Link>
+                {r.pdfUrl && (
+                  <a href={r.pdfUrl} target="_blank" rel="noreferrer" className="p-1.5 rounded hover:bg-gray-100 text-blue-600" title="Open PDF"><FileText size={15} /></a>
+                )}
+                {canEdit && (
+                  <button onClick={() => remove(r.id)} className="p-1.5 rounded hover:bg-red-50 text-red-600" title="Delete"><Trash2 size={15} /></button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <Modal open={modal} onClose={() => setModal(false)} title="New SEO / GMB Report">
+        <div className="space-y-3">
+          <Select
+            label="Project / Service"
+            value={form.clientServiceId}
+            onChange={e => setForm(p => ({ ...p, clientServiceId: e.target.value }))}
+            options={[{ value: '', label: 'Select service' }, ...(services || []).map((sv: any) => ({ value: sv.id, label: sv.serviceName }))]}
+          />
+          <div className="grid grid-cols-2 gap-3">
+            <Input label="Reporting Period" value={form.reportMonth} onChange={e => setForm(p => ({ ...p, reportMonth: e.target.value }))} placeholder="August 2026" />
+            <Input label="Report Date" type="date" value={form.reportDate} onChange={e => setForm(p => ({ ...p, reportDate: e.target.value }))} />
+          </div>
+          <div className="flex justify-end gap-2 pt-1">
+            <Button variant="secondary" onClick={() => setModal(false)}>Cancel</Button>
+            <Button onClick={create} loading={saving}>Create &amp; Build</Button>
+          </div>
+        </div>
       </Modal>
     </div>
   )

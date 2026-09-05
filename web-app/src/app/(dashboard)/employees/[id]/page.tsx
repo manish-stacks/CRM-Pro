@@ -7,6 +7,7 @@ import { Button, Badge, Modal, Input, Select, Textarea, Pagination } from '@/com
 import { formatDate, formatCurrency, getInitials } from '@/lib/utils'
 import { ArrowLeft, User, Briefcase, CreditCard, FileText, Phone, Mail, Building2, Calendar, MapPin, Shield, Droplets, HeartPulse, KeyRound, Camera, Monitor, Loader2, X, Clock, Trash2 } from 'lucide-react'
 import Link from 'next/link'
+import { generateEmployeeFormPdf } from '@/lib/employeeFormPdf'
 import api from '@/lib/axios'
 import toast from 'react-hot-toast'
 
@@ -296,6 +297,7 @@ export default function EmployeeDetailPage() {
               )
             }
 
+            <Button variant="ghost" size="sm" onClick={() => generateEmployeeFormPdf(emp)}><FileText size={14} />Download Form</Button>
             <Button variant="ghost" size="sm" onClick={() => setPwdOpen(true)}><KeyRound size={14} />Change Password</Button>
             <Button variant="primary" size="sm" onClick={openEdit}>Edit</Button>
           </div>

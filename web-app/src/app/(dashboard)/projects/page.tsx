@@ -7,7 +7,7 @@ import { Button, Input, Select, SearchSelect, Modal, EmptyState, Pagination, Bad
 import { formatDate, getInitials } from '@/lib/utils'
 import {
   Users2, Plus, Search, Filter, X, Package, User, Building2,
-  UserPlus, Trash2, Loader2, Briefcase, Shield
+  UserPlus, Trash2, Loader2, Briefcase, Shield, Repeat2
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -24,6 +24,10 @@ export default function ProjectsPage() {
   const [filterClientLabel, setFilterClientLabel] = useState('')
 
   const [modal, setModal] = useState<'none' | 'assign'>('none')
+  // Admin can swap the person on an existing assignment at any time
+  const [swap, setSwap] = useState<any>(null)      // { id, isHead, currentName, serviceName }
+  const [swapUserId, setSwapUserId] = useState('')
+  const [swapping, setSwapping] = useState(false)
   const [saving, setSaving] = useState(false)
   const [departments, setDepartments] = useState<any[]>([])
   const [employees, setEmployees] = useState<any[]>([])
@@ -103,6 +107,30 @@ export default function ProjectsPage() {
     } catch (e: any) {
       toast.error(e.response?.data?.error || 'Failed')
     } finally { setSaving(false) }
+  }
+
+  const openSwap = (assignment: any, isHead: boolean, serviceName: string) => {
+    setSwap({
+      id: assignment.id,
+      isHead,
+      currentName: isHead ? assignment.manager?.name : assignment.member?.name,
+      serviceName,
+    })
+    setSwapUserId('')
+    setMemberSearch('')
+  }
+
+  const doSwap = async () => {
+    if (!swapUserId) { toast.error('Pick the new person'); return }
+    setSwapping(true)
+    try {
+      await api.put(`/projects/${swap.id}`, swap.isHead ? { managerId: swapUserId } : { memberId: swapUserId })
+      toast.success('Assignment updated')
+      setSwap(null)
+      fetch_()
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || e.response?.data?.message || 'Failed')
+    } finally { setSwapping(false) }
   }
 
   const remove = async (assignId: string) => {
@@ -227,6 +255,9 @@ export default function ProjectsPage() {
                           </div>
                           <span className="text-sm">{group.manager.manager.name}</span>
                           {canManage && group.manager.isActive && (
+                            <button onClick={() => openSwap(group.manager, true, group.service.serviceName)} className="text-blue-600 hover:bg-blue-50 rounded p-0.5" title="Change person"><Repeat2 size={12} /></button>
+                          )}
+                          {canManage && group.manager.isActive && (
                             <button onClick={() => remove(group.manager.id)} className="text-red-500 hover:bg-red-50 rounded p-0.5" title="Remove"><Trash2 size={11} /></button>
                           )}
                         </div>
@@ -241,6 +272,9 @@ export default function ProjectsPage() {
                                 {getInitials(m.member?.name || 'X')}
                               </div>
                               <span>{m.member?.name}</span>
+                              {canManage && m.isActive && (
+                                <button onClick={() => openSwap(m, false, group.service.serviceName)} className="text-blue-600 hover:bg-blue-100 rounded" title="Change person"><Repeat2 size={11} /></button>
+                              )}
                               {canManage && m.isActive && (
                                 <button onClick={() => remove(m.id)} className="text-red-500 hover:bg-red-100 rounded" title="Remove"><X size={10} /></button>
                               )}
@@ -352,6 +386,50 @@ export default function ProjectsPage() {
           <div className="flex justify-end gap-2 pt-1">
             <Button variant="secondary" onClick={() => setModal('none')}>Cancel</Button>
             <Button onClick={assign} loading={saving}><UserPlus size={13} /> Assign</Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Change assigned person */}
+      <Modal open={!!swap} onClose={() => setSwap(null)} title={swap?.isHead ? 'Change Project Head' : 'Change Assigned Person'}>
+        <div className="space-y-3">
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-600">
+            <div><b>Project:</b> {swap?.serviceName}</div>
+            <div><b>Currently:</b> {swap?.currentName || '—'}</div>
+          </div>
+          <input
+            className="input"
+            placeholder="Search by name or employee ID..."
+            value={memberSearch}
+            onChange={e => setMemberSearch(e.target.value)}
+          />
+          <div className="max-h-64 overflow-y-auto border rounded-lg divide-y divide-gray-100">
+            {filteredEmployees.length === 0 ? (
+              <p className="text-xs text-gray-400 p-3">No employees found</p>
+            ) : filteredEmployees.map((e: any) => {
+              const uid = e.user?.id
+              const dept = departments.find((d: any) => d.id === e.departmentId)
+              const isHead = dept?.manager?.user?.id === uid
+              return (
+                <label key={e.id} className={`flex items-center gap-2 p-2 cursor-pointer text-sm ${swapUserId === uid ? 'bg-brand-50' : 'hover:bg-gray-50'}`}>
+                  <input type="radio" name="swapUser" checked={swapUserId === uid} onChange={() => setSwapUserId(uid)} />
+                  <div className="w-6 h-6 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-xs font-bold">
+                    {getInitials(e.user?.name || 'X')}
+                  </div>
+                  <div className="flex-1">
+                    <p>{e.user?.name} {isHead && <span className="text-[10px] text-purple-600 font-semibold">· HEAD</span>}</p>
+                    <p className="text-xs text-gray-500">{dept?.name || 'No dept'} · {e.user?.role}</p>
+                  </div>
+                </label>
+              )
+            })}
+          </div>
+          {swap?.isHead && (
+            <p className="text-[11px] text-gray-500">Changing the head deactivates the previous head on this project and notifies the new one.</p>
+          )}
+          <div className="flex justify-end gap-2 pt-1">
+            <Button variant="secondary" onClick={() => setSwap(null)}>Cancel</Button>
+            <Button onClick={doSwap} loading={swapping}><Repeat2 size={13} /> Update</Button>
           </div>
         </div>
       </Modal>

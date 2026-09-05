@@ -4,7 +4,8 @@ import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/auth'
 import { successResponse, errorResponse } from '@/lib/api'
-import { dateOnly, todayDateOnly } from '@/lib/attendanceDate'
+
+import { istDayRange } from '@/lib/attendanceDate'
 
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req, 'MANAGER')
@@ -15,8 +16,13 @@ export async function GET(req: NextRequest) {
   const date = searchParams.get('date') // YYYY-MM-DD
   if (!userId) return errorResponse('userId required')
 
-  const day = date ? dateOnly(date) : todayDateOnly()
-  const next = new Date(day); next.setUTCDate(next.getUTCDate() + 1)
+  // NOTE: recordedAt/checkInAt are real timestamp (DateTime) columns, so the
+  // day boundary must be the true UTC instants bounding the IST calendar
+  // day — not UTC midnight (which was cutting the range ~5:30h early and
+  // silently dropping early-morning pings/visits, or bleeding in the next
+  // day's, depending on time of the ping).
+  const { start: day, end: dayEnd } = istDayRange(date)
+  const next = new Date(dayEnd.getTime() + 1)
 
   const [pings, visits, user] = await Promise.all([
     prisma.locationPing.findMany({
@@ -32,6 +38,7 @@ export async function GET(req: NextRequest) {
         userId,
         OR: [
           { checkInAt: { gte: day, lt: next } },
+          { checkOutAt: { gte: day, lt: next } },
           { scheduledDate: { gte: day, lt: next } },
         ],
       },

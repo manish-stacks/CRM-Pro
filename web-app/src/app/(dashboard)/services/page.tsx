@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { Button, Modal, Input, Textarea, EmptyState, Badge } from '@/components/ui'
-import { Plus, Edit, Trash2, Package, Tag, DollarSign } from 'lucide-react'
+import { Button, Modal, Input, Select, Textarea, EmptyState, Badge } from '@/components/ui'
+import { Plus, Edit, Trash2, Package, Tag, DollarSign, Building2, UserCheck } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 import api from '@/lib/axios'
 import toast from 'react-hot-toast'
@@ -11,7 +11,9 @@ interface Service {
   name: string
   description?: string
   category?: string
+  departmentId?: string | null
   basePrice: number
+  billingCycle?: string
   isActive: boolean
 }
 
@@ -21,7 +23,11 @@ export default function ServicesPage() {
   const [showModal, setShowModal] = useState(false)
   const [editing, setEditing] = useState<Service | null>(null)
   const [saving, setSaving] = useState(false)
-  const [form, setForm] = useState({ name: '', description: '', category: '', basePrice: '' })
+  const [departments, setDepartments] = useState<any[]>([])
+  const [form, setForm] = useState({ name: '', description: '', category: '', departmentId: '', basePrice: '', billingCycle: 'ONE_TIME' })
+
+  // Department map so each catalog card can show its handling dept + head (TL)
+  const deptById = Object.fromEntries(departments.map((d: any) => [d.id, d]))
 
   const fetch = useCallback(async () => {
     setLoading(true)
@@ -33,11 +39,30 @@ export default function ServicesPage() {
 
   useEffect(() => { fetch() }, [fetch])
 
-  const openAdd = () => { setEditing(null); setForm({ name: '', description: '', category: '', basePrice: '' }); setShowModal(true) }
-  const openEdit = (s: Service) => { setEditing(s); setForm({ name: s.name, description: s.description || '', category: s.category || '', basePrice: String(s.basePrice) }); setShowModal(true) }
+  useEffect(() => {
+    api.get('/departments').then(r => setDepartments(r.data.data || [])).catch(() => { })
+  }, [])
+
+  const openAdd = () => {
+    setEditing(null)
+    setForm({ name: '', description: '', category: '', departmentId: '', basePrice: '', billingCycle: 'ONE_TIME' })
+    setShowModal(true)
+  }
+  const openEdit = (s: Service) => {
+    setEditing(s)
+    setForm({
+      name: s.name, description: s.description || '', category: s.category || '',
+      departmentId: s.departmentId || '', basePrice: String(s.basePrice),
+      billingCycle: s.billingCycle || 'ONE_TIME',
+    })
+    setShowModal(true)
+  }
 
   const save = async () => {
     if (!form.name) { toast.error('Name required'); return }
+    // Department decides which team head (TL) gets auto-assigned when this
+    // service is added to a client, so it is required.
+    if (!form.departmentId) { toast.error('Select the handling department'); return }
     setSaving(true)
     try {
       const data = { ...form, basePrice: Number(form.basePrice) || 0 }
@@ -111,6 +136,22 @@ export default function ServicesPage() {
                 </div>
               </div>
               {svc.description && <p className="text-xs text-gray-500 mb-3 line-clamp-2">{svc.description}</p>}
+              <div className="flex flex-wrap items-center gap-1.5 mb-3">
+                {svc.departmentId && deptById[svc.departmentId] ? (
+                  <>
+                    <span className="inline-flex items-center gap-1 text-[10px] bg-slate-100 text-slate-700 rounded px-1.5 py-0.5">
+                      <Building2 size={10} />{deptById[svc.departmentId].name}
+                    </span>
+                    {deptById[svc.departmentId]?.manager?.user?.name && (
+                      <span className="inline-flex items-center gap-1 text-[10px] bg-purple-50 text-purple-700 rounded px-1.5 py-0.5">
+                        <UserCheck size={10} />TL: {deptById[svc.departmentId].manager.user.name}
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  <span className="text-[10px] text-amber-600 bg-amber-50 rounded px-1.5 py-0.5">No department set</span>
+                )}
+              </div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1 text-base font-bold text-green-600">
                   {formatCurrency(svc.basePrice)}
@@ -132,7 +173,22 @@ export default function ServicesPage() {
           <Input label="Service Name *" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="e.g. SEO Package, Web Hosting" />
           <Input label="Category" value={form.category} onChange={e => setForm(p => ({ ...p, category: e.target.value }))} placeholder="e.g. Digital Marketing, IT" list="cats" />
           <datalist id="cats">{categories.map(c => <option key={c!} value={c!} />)}</datalist>
-          <Input label="Base Price (₹)" type="number" value={form.basePrice} onChange={e => setForm(p => ({ ...p, basePrice: e.target.value }))} placeholder="0" />
+          <Select
+            label="Handling Department *"
+            value={form.departmentId}
+            onChange={e => setForm(p => ({ ...p, departmentId: e.target.value }))}
+            options={[{ value: '', label: 'Select department' }, ...departments.map((d: any) => ({ value: d.id, label: d.name }))]}
+          />
+          {form.departmentId && deptById[form.departmentId]?.manager?.user?.name && (
+            <p className="-mt-2 text-[11px] text-gray-500">
+              Team lead <b>{deptById[form.departmentId].manager.user.name}</b> will be auto-assigned as project head whenever this service is given to a client.
+            </p>
+          )}
+          <div className="grid grid-cols-2 gap-3">
+            <Input label="Base Price (₹)" type="number" value={form.basePrice} onChange={e => setForm(p => ({ ...p, basePrice: e.target.value }))} placeholder="0" />
+            <Select label="Billing Cycle" value={form.billingCycle} onChange={e => setForm(p => ({ ...p, billingCycle: e.target.value }))}
+              options={['ONE_TIME', 'MONTHLY', 'QUARTERLY', 'YEARLY'].map(c => ({ value: c, label: c }))} />
+          </div>
           <Textarea label="Description" value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} placeholder="Brief description..." rows={3} />
           <div className="flex justify-end gap-3">
             <Button variant="secondary" onClick={() => setShowModal(false)}>Cancel</Button>
