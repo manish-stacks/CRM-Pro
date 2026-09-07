@@ -53,6 +53,8 @@ export async function GET(req: NextRequest) {
             id: true, name: true, email: true, role: true, isActive: true,
             phone: true, altPhone: true, avatar: true, dateOfBirth: true,
             disabledAt: true, disabledReason: true, lastLoginAt: true,
+            // Custom permission role, so the roles screen can show who is on what
+            appRole: { select: { id: true, key: true, name: true } },
           },
         },
         department: { select: { id: true, name: true, color: true } },

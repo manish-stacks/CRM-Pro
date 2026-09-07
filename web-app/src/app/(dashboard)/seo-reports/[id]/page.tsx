@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
+import { BRAND } from '@/lib/branding'
 import { useParams, useRouter } from 'next/navigation'
 import api from '@/lib/axios'
 import { useAuth } from '@/hooks/useAuth'
@@ -9,16 +10,12 @@ import {
   CheckCircle2, FileEdit, Building2, Link2,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { openSeoReportPdf, buildSeoReportDataUrl, SeoReportData } from '@/lib/seoReportPdf'
+import { openSeoReportPdf, SeoReportData } from '@/lib/seoReportPdf'
 
 
 const DEFAULT_WORK = [
   'On-page optimisation of all pages (Meta tags, Heading Tags, Image optimisation)',
-  'Content written and optimised for the website pages',
-  'Technical SEO (errors fixed)',
-  'Search Console indexing of URLs',
-  'Off-page and backlink work',
-  'GMB Posting and optimization',
+  'Content written and optimised for the website pages'
 ]
 
 const EMPTY: SeoReportData = {
@@ -222,7 +219,7 @@ export default function SeoReportBuilderPage() {
 
   const meta = {
     businessName: report?.client?.companyName || '',
-    agencyName: report?.agencyName || 'Hover Business Services LLP',
+    agencyName: report?.agencyName || BRAND.name,
     reportMonth: report?.reportMonth || '',
     serviceName: report?.clientService?.serviceName || null,
   }
@@ -253,24 +250,20 @@ export default function SeoReportBuilderPage() {
     } catch { toast.error('Could not save to client profile') }
   }
 
+  // No PDF is generated/uploaded here anymore — submitting just saves the
+  // data and locks the report. The client gets a public link
+  // (/seo-report/view/[token]) that builds the PDF on the fly in their
+  // browser, same as the invoice "Share Link", so nothing eats storage.
   const submit = async () => {
     setSubmitting(true)
-    const t = toast.loading('Generating PDF…')
+    const t = toast.loading('Sending to client…')
     try {
       await api.put(`/seo-reports/${id}`, { data: d })
-
-      const dataUrl = await buildSeoReportDataUrl(meta, d)
-      toast.loading('Uploading…', { id: t })
-      const up = await api.post('/upload', { dataUrl, folder: 'client-reports', resourceType: 'raw' })
-      const pdfUrl = up.data.data.url || up.data.data.secure_url
-
-      toast.loading('Sending to client…', { id: t })
       await api.post(`/seo-reports/${id}/submit`, {
-        pdfUrl,
-        fileSize: up.data.data.bytes,
         notifyEmail: notify.email,
         notifyWhatsapp: notify.whatsapp,
         message: notify.message || undefined,
+        origin: window.location.origin,
       })
 
       toast.success('Submitted — client notified', { id: t })
@@ -281,6 +274,17 @@ export default function SeoReportBuilderPage() {
     } finally { setSubmitting(false) }
   }
 
+  // Always fetch the link fresh instead of trusting the stored report.pdfUrl —
+  // that field can have a stale host baked in from whichever origin it was
+  // last submitted from (e.g. an old dev port), so we re-resolve it against
+  // whatever origin the app is actually being served from right now.
+  const openReportLink = async () => {
+    try {
+      const url = (await api.get(`/seo-reports/${id}/share-link?origin=${encodeURIComponent(window.location.origin)}`)).data.data.url
+      window.open(url, '_blank')
+    } catch { toast.error('Could not get link') }
+  }
+
   if (loading) return <div className="flex justify-center py-20"><Spinner size={30} /></div>
 
   return (
@@ -288,7 +292,7 @@ export default function SeoReportBuilderPage() {
       {/* header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-start gap-3">
-          <button onClick={() => router.push('/seo-reports')} className="p-2 rounded-lg hover:bg-gray-100 mt-0.5">
+          <button onClick={() => router.back()} className="p-2 rounded-lg hover:bg-gray-100 mt-0.5">
             <ArrowLeft size={17} />
           </button>
           <div>
@@ -309,9 +313,7 @@ export default function SeoReportBuilderPage() {
           {!locked && <Button variant="secondary" onClick={() => save()} loading={saving}><Save size={14} /> Save Draft</Button>}
           {!locked && <Button onClick={() => setSubmitModal(true)}><Send size={14} /> Submit to Client</Button>}
           {report.pdfUrl && (
-            <a href={report.pdfUrl} target="_blank" rel="noreferrer">
-              <Button variant="secondary"><Link2 size={14} /> Submitted PDF</Button>
-            </a>
+            <Button variant="secondary" onClick={openReportLink}><Link2 size={14} /> Report Link</Button>
           )}
         </div>
       </div>
@@ -324,7 +326,7 @@ export default function SeoReportBuilderPage() {
 
       <div className="grid lg:grid-cols-2 gap-4">
         {/* ---------- cover ---------- */}
-        <Card title="Cover" desc="Client logo — uploaded once, reused in every month's report">
+        {/* <Card title="Cover" desc="Client logo — uploaded once, reused in every month's report">
           <ImageBox
             label="Client Logo"
             hint="Saved on the client profile. Uploading again replaces the old file."
@@ -335,7 +337,7 @@ export default function SeoReportBuilderPage() {
           <p className="text-[11px] text-gray-500">
             Agency logo and name come from Settings → Company, so there is nothing to upload here.
           </p>
-        </Card>
+        </Card> */}
 
         {/* ---------- GMB ---------- */}
         <Card title="Google My Business" desc="Profile screenshot + performance numbers">
@@ -346,20 +348,22 @@ export default function SeoReportBuilderPage() {
             onChange={v => saveClientAsset('gmbScreenshot', v)}
             disabled={locked}
           />
-          <div className="grid grid-cols-3 gap-2">
-            <Input label="GMB Overview" value={String(d.gmbOverview ?? '')} onChange={e => set('gmbOverview', e.target.value)} disabled={locked} />
-            <Input label="Calls" value={String(d.gmbCalls ?? '')} onChange={e => set('gmbCalls', e.target.value)} disabled={locked} />
-            <Input label="Chats" value={String(d.gmbChats ?? '')} onChange={e => set('gmbChats', e.target.value)} disabled={locked} />
-            <Input label="Directions" value={String(d.gmbDirections ?? '')} onChange={e => set('gmbDirections', e.target.value)} disabled={locked} />
-            <Input label="Website Clicks" value={String(d.gmbWebsiteClicks ?? '')} onChange={e => set('gmbWebsiteClicks', e.target.value)} disabled={locked} />
+          <div className="grid grid-cols-5 gap-2">
+            <Input label="GMB Overview" value={String(d.gmbOverview ?? '')} onChange={e => set('gmbOverview', e.target.value)} disabled={locked} type="number" />
+            <Input label="Calls" value={String(d.gmbCalls ?? '')} onChange={e => set('gmbCalls', e.target.value)} disabled={locked} type="number" />
+            <Input label="Chats" value={String(d.gmbChats ?? '')} onChange={e => set('gmbChats', e.target.value)} disabled={locked} type="number" />
+            <Input label="Directions" value={String(d.gmbDirections ?? '')} onChange={e => set('gmbDirections', e.target.value)} disabled={locked} type="number" />
+            <Input label="Website Clicks" value={String(d.gmbWebsiteClicks ?? '')} onChange={e => set('gmbWebsiteClicks', e.target.value)} disabled={locked} type="number" />
           </div>
-          <Textarea label="Note (optional)" rows={2} value={d.gmbNote || ''} onChange={e => set('gmbNote', e.target.value)}
+          <Textarea label="Note (optional)" rows={5} value={d.gmbNote || ''} onChange={e => set('gmbNote', e.target.value)}
             placeholder="The call performance data reflects 1-Aug to 28-Aug." disabled={locked} />
         </Card>
 
-        <Card title="GMB Posting Activity">
-          <LinkRows label="GMB Post links" rows={d.gmbPosts || []} onChange={v => set('gmbPosts', v)} disabled={locked} placeholder="https://share.google/..." />
+        <Card title="Analytics Screenshots" desc="Search Console + Google Analytics for the period">
+          <ImageBox label={`Google Search Console — ${report.reportMonth}`} value={d.gscScreenshot} onChange={v => set('gscScreenshot', v)} disabled={locked} />
+          <ImageBox label={`Google Analytics — ${report.reportMonth}`} value={d.gaScreenshot} onChange={v => set('gaScreenshot', v)} disabled={locked} />
         </Card>
+
 
         <Card title="Local Citation — Google Profile" desc="Directory / citation backlinks for the GMB profile">
           <LinkRows label="Local Citation Backlinks" rows={d.localCitations || []} onChange={v => set('localCitations', v)} disabled={locked} />
@@ -389,9 +393,9 @@ export default function SeoReportBuilderPage() {
           </div>
         </Card>
 
-        <Card title="Analytics Screenshots" desc="Search Console + Google Analytics for the period">
-          <ImageBox label={`Google Search Console — ${report.reportMonth}`} value={d.gscScreenshot} onChange={v => set('gscScreenshot', v)} disabled={locked} />
-          <ImageBox label={`Google Analytics — ${report.reportMonth}`} value={d.gaScreenshot} onChange={v => set('gaScreenshot', v)} disabled={locked} />
+
+        <Card title="GMB Posting Activity">
+          <LinkRows label="GMB Post links" rows={d.gmbPosts || []} onChange={v => set('gmbPosts', v)} disabled={locked} placeholder="https://share.google/..." />
         </Card>
 
         {/* ---------- on-page ---------- */}
@@ -474,7 +478,7 @@ export default function SeoReportBuilderPage() {
             Send WhatsApp with PDF link
           </label>
           <p className="text-[11px] text-gray-500">
-            On submit the PDF is generated, uploaded, pushed to the client dashboard, and this report is locked.
+            On submit a public report link is generated (no file is uploaded), pushed to the client dashboard, and this report is locked.
           </p>
           <div className="flex justify-end gap-2 pt-1">
             <Button variant="secondary" onClick={() => setSubmitModal(false)}>Cancel</Button>

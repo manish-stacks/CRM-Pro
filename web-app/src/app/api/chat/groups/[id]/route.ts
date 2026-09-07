@@ -12,6 +12,7 @@ import { getRequestSession, hasMinRole } from '@/lib/auth'
 import { successResponse, errorResponse, unauthorizedResponse } from '@/lib/api'
 import { logFromRequest } from '@/lib/audit'
 import { emitToGroup } from '@/lib/socketServer'
+import { deleteFile, publicIdFromUrl } from '@/lib/cloudinary'
 
 // Rename a GROUP chat and/or change its photo. DIRECT chats have no name/photo
 // of their own (they show the other person's), so this only applies to GROUP.
@@ -41,6 +42,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (Object.keys(data).length === 0) return errorResponse('Nothing to update')
 
   const updated = await prisma.chatGroup.update({ where: { id }, data })
+
+  // Old group photo being replaced/cleared? drop it from R2.
+  if ('avatar' in data && group.avatar && group.avatar !== data.avatar) {
+    const publicId = publicIdFromUrl(group.avatar)
+    if (publicId) deleteFile(publicId).catch(() => {})
+  }
 
   await logFromRequest(req, {
     userId: session.userId, action: 'UPDATE', entityType: 'ChatGroup', entityId: id,
@@ -75,11 +82,20 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     if (!isAppAdmin && !isChatAdmin) {
       return errorResponse('Only the group admin can delete this chat for everyone', 403)
     }
+    const messagesWithFiles = await prisma.message.findMany({
+      where: { chatGroupId: id, attachmentUrl: { not: null } },
+      select: { attachmentUrl: true },
+    })
     await prisma.$transaction([
       prisma.message.deleteMany({ where: { chatGroupId: id } }),
       prisma.chatMember.deleteMany({ where: { chatGroupId: id } }),
       prisma.chatGroup.delete({ where: { id } }),
     ])
+    const filesToDelete = [group.avatar, ...messagesWithFiles.map(m => m.attachmentUrl)].filter(Boolean) as string[]
+    for (const url of filesToDelete) {
+      const publicId = publicIdFromUrl(url)
+      if (publicId) deleteFile(publicId).catch(() => {})
+    }
     await logFromRequest(req, {
       userId: session.userId, action: 'DELETE', entityType: 'ChatGroup', entityId: id,
       metadata: { type: group.type, forEveryone: true },

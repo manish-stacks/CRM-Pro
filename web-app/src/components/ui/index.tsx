@@ -130,7 +130,10 @@ export function SearchSelect({
   }, [query, open])
 
   return (
-    <div className={`relative ${className}`} ref={wrapRef}>
+    // While open the whole wrapper is lifted with its own stacking context.
+    // Without this the dropdown (z-30) still painted UNDER later sibling
+    // cards — which is why the lead list disappeared behind "Line Items".
+    <div className={`relative ${open ? 'z-[60]' : ''} ${className}`} ref={wrapRef}>
       {label && <label className="label">{label}</label>}
       <div className="relative">
         <input
@@ -143,7 +146,7 @@ export function SearchSelect({
         <Search size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
       </div>
       {open && (
-        <div className="absolute z-30 mt-1 w-full max-h-64 overflow-auto bg-white border border-gray-200 rounded-lg shadow-lg">
+        <div className="absolute z-[60] mt-1 w-full max-h-64 overflow-auto bg-white border border-gray-200 rounded-lg shadow-xl">
           {loading ? (
             <div className="px-3 py-2.5 text-xs text-gray-400 flex items-center gap-2"><Loader2 size={12} className="animate-spin" /> Searching…</div>
           ) : options.length === 0 ? (

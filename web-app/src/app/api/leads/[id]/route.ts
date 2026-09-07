@@ -7,6 +7,7 @@ import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/auth'
 import { successResponse, errorResponse, notFoundResponse } from '@/lib/api'
 import { logFromRequest } from '@/lib/audit'
+import { canSeeBeyondOwn } from '@/lib/permissions'
 
 const VALID_STATUSES = ['NEW', 'NOT_INTERESTED', 'FOLLOW_UP', 'RINGING', 'MEETING_SCHEDULED', 'MEETING_DONE', 'CALLBACK', 'CONVERTED', 'CLOSED']
 
@@ -53,7 +54,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!lead) return notFoundResponse('Lead')
 
   // Role-based access check
-  const canSeeAny = ['SUPER_ADMIN', 'ADMIN', 'MANAGER'].includes(session.role)
+  const canSeeAny = canSeeBeyondOwn(session.role)
   const isOwner =
     lead.assignedToId === session.userId ||
     lead.meetingAssignedToId === session.userId ||
@@ -74,7 +75,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!lead) return notFoundResponse('Lead')
 
   // Access check
-  const canEditAny = ['SUPER_ADMIN', 'ADMIN', 'MANAGER'].includes(session.role)
+  const canEditAny = canSeeBeyondOwn(session.role)
   const isOwner =
     lead.assignedToId === session.userId ||
     lead.meetingAssignedToId === session.userId

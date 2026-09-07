@@ -4,6 +4,7 @@ import { createContext, useContext, useState, useEffect, useCallback, ReactNode 
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 import { getImpersonationToken, clearImpersonationToken, impersonationHeaders } from '@/lib/impersonation'
+import { checkPermission } from '@/lib/permissions'
 
 export interface AuthUser {
   id: string
@@ -21,6 +22,10 @@ export interface AuthUser {
   }
   impersonatedBy?: string | null
   impersonatedByName?: string | null
+  /** Custom permission role, when one is attached. */
+  appRole?: { id: string; key: string; name: string } | null
+  /** Effective permission list resolved server-side in /api/auth/me. */
+  permissions?: string[]
 }
 
 interface AuthContextType {
@@ -32,6 +37,10 @@ interface AuthContextType {
   refreshUser: () => Promise<void>
   hasRole: (...roles: string[]) => boolean
   isAtLeast: (role: string) => boolean
+  /** Permission check — "clients.create". `<module>.manage` implies everything. */
+  can: (permission: string) => boolean
+  canAny: (...permissions: string[]) => boolean
+  permissions: string[]
   isImpersonating: boolean
   exitImpersonation: () => void
 }
@@ -145,8 +154,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return (ROLE_HIERARCHY[user.role] || 0) >= (ROLE_HIERARCHY[role] || 0)
   }
 
+  const permissions = user?.permissions || []
+  const can = (permission: string) => {
+    if (!user) return false
+    return checkPermission(permissions, permission, user.role)
+  }
+  const canAny = (...list: string[]) => list.some(p => can(p))
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, verifyLoginOtp, logout, refreshUser, hasRole, isAtLeast, isImpersonating: !!user?.impersonatedBy, exitImpersonation }}>
+    <AuthContext.Provider value={{ user, loading, login, verifyLoginOtp, logout, refreshUser, hasRole, isAtLeast, can, canAny, permissions, isImpersonating: !!user?.impersonatedBy, exitImpersonation }}>
       {children}
     </AuthContext.Provider>
   )

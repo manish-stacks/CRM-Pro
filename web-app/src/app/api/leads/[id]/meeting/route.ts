@@ -10,6 +10,7 @@ import { Notifications } from '@/lib/notify'
 import { syncVisitForMeeting } from '@/lib/visitSync'
 import { geocodeAddress } from '@/lib/distance'
 import { dateOnly } from '@/lib/attendanceDate'
+import { canSeeBeyondOwn, isNotOwnScopeRole } from '@/lib/permissions'
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -25,7 +26,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const lead = await prisma.lead.findUnique({ where: { id } })
   if (!lead) return notFoundResponse('Lead')
 
-  const canScheduleAny = ['SUPER_ADMIN', 'ADMIN', 'MANAGER'].includes(session.role)
+  const canScheduleAny = canSeeBeyondOwn(session.role)
   const isOwner = lead.assignedToId === session.userId || lead.createdById === session.userId
   if (!canScheduleAny && !isOwner) return errorResponse('Forbidden', 403)
 
@@ -35,7 +36,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   })
   if (!marketingExec) return errorResponse('Marketing person not found', 404)
   if (!marketingExec.isActive) return errorResponse('Cannot assign to a disabled user')
-  if (!['MARKETING_EXECUTIVE', 'MANAGER', 'ADMIN', 'SUPER_ADMIN'].includes(marketingExec.role)) {
+  if (!isNotOwnScopeRole(marketingExec.role)) {
     return errorResponse('Assignee must be a MARKETING_EXECUTIVE (or higher)')
   }
 

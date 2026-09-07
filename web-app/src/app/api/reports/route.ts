@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getRequestSession } from '@/lib/auth'
 import { successResponse, errorResponse, unauthorizedResponse } from '@/lib/api'
+import { isCompanyWideRole } from '@/lib/permissions'
 
 export async function GET(req: NextRequest) {
   const session = await getRequestSession(req)
@@ -81,7 +82,7 @@ export async function GET(req: NextRequest) {
       })
 
       // Revenue is admin-only — everyone else gets an empty series / zero.
-      const canSeeRevenue = ['SUPER_ADMIN', 'ADMIN'].includes(session.role)
+      const canSeeRevenue = isCompanyWideRole(session.role)
       const revenueChart: { month: string; revenue: number }[] = []
       for (let i = 5; canSeeRevenue && i >= 0; i--) {
         const d = new Date(now.getFullYear(), now.getMonth() - i, 1)

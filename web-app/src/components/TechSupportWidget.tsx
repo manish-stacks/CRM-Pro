@@ -6,7 +6,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
 import api from '@/lib/axios'
-import { LifeBuoy, X, Send, Loader2, ListChecks } from 'lucide-react'
+import { X, Send, Loader2, MessageSquare, BotMessageSquare } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export function TechSupportWidget() {
@@ -41,7 +41,7 @@ export function TechSupportWidget() {
         className="fixed bottom-6 right-6 z-40 w-13 h-13 rounded-full bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-500/30 flex items-center justify-center transition-transform hover:scale-105"
         style={{ width: 52, height: 52 }}
       >
-        <LifeBuoy size={22} />
+        <BotMessageSquare size={22} />
       </button>
 
       {open && (
@@ -49,7 +49,7 @@ export function TechSupportWidget() {
           <div className="bg-white w-full sm:w-96 rounded-t-2xl sm:rounded-2xl shadow-2xl p-5">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
-                <div className="w-9 h-9 rounded-xl bg-red-50 text-red-500 flex items-center justify-center"><LifeBuoy size={18} /></div>
+                <div className="w-9 h-9 rounded-xl bg-red-50 text-red-500 flex items-center justify-center"><BotMessageSquare size={18} /></div>
                 <div>
                   <h3 className="font-semibold text-gray-900 text-sm">Tech Support</h3>
                   <p className="text-xs text-gray-400">Report a CRM issue — goes straight to Admin</p>
@@ -83,7 +83,7 @@ export function TechSupportWidget() {
                   onClick={() => { setOpen(false); router.push('/my-tickets') }}
                   className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1"
                 >
-                  <ListChecks size={13} /> View my tickets
+                  <MessageSquare size={13} /> View my tickets
                 </button>
                 <button
                   onClick={submit}

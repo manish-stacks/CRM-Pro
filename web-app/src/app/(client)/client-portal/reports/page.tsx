@@ -20,6 +20,7 @@ export default function ReportsPage() {
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState('ALL')
   const [serviceFilter, setServiceFilter] = useState('ALL')
+  const [periodFilter, setPeriodFilter] = useState('ALL')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest')
@@ -33,6 +34,16 @@ export default function ReportsPage() {
     () => Array.from(new Set(reports.map((r: any) => r.clientService?.serviceName).filter(Boolean))),
     [reports]
   )
+  // Monthly reports are labelled "August 2026" — let the client jump straight
+  // to a month instead of guessing a date range.
+  const periods = useMemo(() => {
+    const list = Array.from(new Set(reports.map((r: any) => r.reportPeriod).filter(Boolean)))
+    return list.sort((a: any, b: any) => {
+      const da = Date.parse(`1 ${a}`), db = Date.parse(`1 ${b}`)
+      if (!isNaN(da) && !isNaN(db)) return db - da
+      return String(b).localeCompare(String(a))
+    })
+  }, [reports])
 
   const filtered = useMemo(() => {
     let list = [...reports]
@@ -47,6 +58,7 @@ export default function ReportsPage() {
     }
     if (typeFilter !== 'ALL') list = list.filter((r: any) => r.reportType === typeFilter)
     if (serviceFilter !== 'ALL') list = list.filter((r: any) => r.clientService?.serviceName === serviceFilter)
+    if (periodFilter !== 'ALL') list = list.filter((r: any) => r.reportPeriod === periodFilter)
     if (dateFrom) {
       const from = new Date(dateFrom); from.setHours(0, 0, 0, 0)
       list = list.filter((r: any) => new Date(r.reportDate) >= from)
@@ -63,10 +75,10 @@ export default function ReportsPage() {
     })
 
     return list
-  }, [reports, search, typeFilter, serviceFilter, dateFrom, dateTo, sortOrder])
+  }, [reports, search, typeFilter, serviceFilter, periodFilter, dateFrom, dateTo, sortOrder])
 
   // Any filter change should reset back to page 1
-  useEffect(() => { setPage(1) }, [search, typeFilter, serviceFilter, dateFrom, dateTo, sortOrder])
+  useEffect(() => { setPage(1) }, [search, typeFilter, serviceFilter, periodFilter, dateFrom, dateTo, sortOrder])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   useEffect(() => { if (page > totalPages) setPage(totalPages) }, [totalPages])
@@ -74,9 +86,9 @@ export default function ReportsPage() {
   const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   const clearFilters = () => {
-    setSearch(''); setTypeFilter('ALL'); setServiceFilter('ALL'); setDateFrom(''); setDateTo('')
+    setSearch(''); setTypeFilter('ALL'); setServiceFilter('ALL'); setPeriodFilter('ALL'); setDateFrom(''); setDateTo('')
   }
-  const hasActiveFilters = search || typeFilter !== 'ALL' || serviceFilter !== 'ALL' || dateFrom || dateTo
+  const hasActiveFilters = search || typeFilter !== 'ALL' || serviceFilter !== 'ALL' || periodFilter !== 'ALL' || dateFrom || dateTo
 
   return (
     <div>
@@ -114,6 +126,17 @@ export default function ReportsPage() {
               >
                 <option value="ALL">All services</option>
                 {services.map((s: any) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            )}
+
+            {periods.length > 0 && (
+              <select
+                className="border border-gray-200 rounded-xl px-2.5 py-2 text-sm focus:outline-none focus:border-brand-500"
+                value={periodFilter}
+                onChange={e => setPeriodFilter(e.target.value)}
+              >
+                <option value="ALL">All months</option>
+                {periods.map((p: any) => <option key={p} value={p}>{p}</option>)}
               </select>
             )}
 

@@ -10,6 +10,7 @@ import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/auth'
 import { successResponse, unauthorizedResponse } from '@/lib/api'
 import { getTeamScope } from '@/lib/teamScope'
+import { canSeeBeyondOwn, isCompanyWideRole } from '@/lib/permissions'
 
 const PER_GROUP = 5
 
@@ -22,7 +23,7 @@ export async function GET(req: NextRequest) {
   if (q.length < 2) return successResponse({ clients: [], leads: [], employees: [], invoices: [] })
 
   const role = session.role
-  const canSeeAllCrm = ['SUPER_ADMIN', 'ADMIN', 'MANAGER'].includes(role)
+  const canSeeAllCrm = canSeeBeyondOwn(role)
   // Plain employees get NO CRM data from the header search — the only thing
   // they can look up is their own leave history.
   const isPlainEmployee = role === 'EMPLOYEE'
@@ -105,7 +106,7 @@ export async function GET(req: NextRequest) {
       { employeeId: { contains: q } },
     ],
   }
-  if (!['SUPER_ADMIN', 'ADMIN'].includes(role)) {
+  if (!isCompanyWideRole(role)) {
     const scope = await getTeamScope(session.userId)
     employeesWhere.id = { in: scope.visibleIds.length ? scope.visibleIds : ['__none__'] }
   }

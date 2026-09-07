@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/auth'
 import { successResponse, errorResponse, notFoundResponse } from '@/lib/api'
 import { logFromRequest } from '@/lib/audit'
+import { deleteFile, publicIdFromUrl } from '@/lib/cloudinary'
 
 // PATCH /api/announcements/[id]  { isActive?: boolean, ...editable fields }
 // Used both for editing an upcoming announcement and for cancelling one
@@ -28,6 +29,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const updated = await prisma.scheduledAnnouncement.update({ where: { id }, data })
 
+  // Old uploaded song being replaced/cleared? drop it from R2 ('default' isn't
+  // a real file, publicIdFromUrl won't match it so this is a no-op then.
+  if ('soundUrl' in data && existing.soundUrl && existing.soundUrl !== data.soundUrl) {
+    const publicId = publicIdFromUrl(existing.soundUrl)
+    if (publicId) deleteFile(publicId, 'raw').catch(() => {})
+  }
+
   await logFromRequest(req, {
     userId: session.userId,
     action: 'UPDATE',
@@ -46,10 +54,15 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const session = (auth as any).session
   const { id } = await params
 
-  const existing = await prisma.scheduledAnnouncement.findUnique({ where: { id }, select: { id: true, title: true } })
+  const existing = await prisma.scheduledAnnouncement.findUnique({ where: { id }, select: { id: true, title: true, soundUrl: true } })
   if (!existing) return notFoundResponse('Announcement')
 
   await prisma.scheduledAnnouncement.delete({ where: { id } })
+
+  if (existing.soundUrl) {
+    const publicId = publicIdFromUrl(existing.soundUrl)
+    if (publicId) deleteFile(publicId, 'raw').catch(() => {})
+  }
 
   await logFromRequest(req, {
     userId: session.userId,

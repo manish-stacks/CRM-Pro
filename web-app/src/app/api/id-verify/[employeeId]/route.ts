@@ -2,8 +2,9 @@
 // Public "verify employee ID card" endpoint — scanned from the ID card QR code.
 // No session required; only safe, non-sensitive fields are returned. This is
 // what a security guard / client scanning the card should see to confirm the
-// person is a genuine, currently-active HBS employee.
+// person is a genuine, currently-active employee.
 import { NextRequest } from 'next/server'
+import { BRAND } from '@/lib/branding'
 import { prisma } from '@/lib/prisma'
 import { successResponse, errorResponse } from '@/lib/api'
 
@@ -40,7 +41,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ empl
       email: employee.user.email,
       isActive: employee.user.isActive,
       company: {
-        name: settingsMap.company_name || 'Hover Business Services LLP.',
+        name: settingsMap.company_name || BRAND.name,
         phone: settingsMap.company_phone || '',
         email: settingsMap.company_email || '',
       },

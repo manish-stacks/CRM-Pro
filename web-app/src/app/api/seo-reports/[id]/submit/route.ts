@@ -15,6 +15,7 @@ import { sendWhatsapp } from '@/lib/whatsapp'
 import { sendPushToClients } from '@/lib/push'
 import { Notifications } from '@/lib/notify'
 import { scopedServiceIds } from '../../route'
+import { randomToken } from '@/lib/idgen'
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -22,7 +23,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!session) return unauthorizedResponse()
 
   const body = await req.json().catch(() => ({}))
-  const { pdfUrl, fileSize, notifyEmail = true, notifyWhatsapp = true, message } = body
+  const { pdfUrl, fileSize, notifyEmail = true, notifyWhatsapp = true, message, origin } = body
 
   const report = await prisma.seoReport.findUnique({
     where: { id },
@@ -40,8 +41,25 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return errorResponse('Forbidden', 403)
   }
 
-  const finalPdfUrl = pdfUrl || report.pdfUrl
-  if (!finalPdfUrl) return errorResponse('Generate the PDF before submitting')
+  // No file is uploaded/stored anymore — the report is served on a public
+  // link (shareToken) that builds the PDF on the fly in the viewer's
+  // browser, same as the invoice "Share Link". This keeps Cloudinary
+  // storage from filling up. `pdfUrl` in the body is still honoured for
+  // backwards compatibility if a caller explicitly passes one.
+  //
+  // Base URL: prefer the `origin` the frontend sent (window.location.origin
+  // — the browser's real address bar origin). Some dev-proxy setups make
+  // req.url resolve to a different internal host/port than what's actually
+  // in the browser, which was baking the wrong port into the saved link.
+  let base = new URL(req.url).origin
+  if (typeof origin === 'string') {
+    try {
+      const u = new URL(origin)
+      if (['http:', 'https:'].includes(u.protocol)) base = u.origin
+    } catch { /* ignore bad origin, keep req.url fallback */ }
+  }
+  const shareToken = report.shareToken || randomToken(32)
+  const finalPdfUrl = pdfUrl || report.pdfUrl || `${base}/seo-report/view/${shareToken}`
 
   const client = report.client
   const portalUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/client-portal/reports`
@@ -68,6 +86,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     data: {
       status: 'SUBMITTED',
       pdfUrl: finalPdfUrl,
+      shareToken,
       clientReportId: mirrored.id,
       submittedAt: new Date(),
       submittedById: session.userId,

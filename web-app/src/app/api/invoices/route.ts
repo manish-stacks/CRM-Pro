@@ -6,6 +6,7 @@ import { getRequestSession } from '@/lib/auth'
 import { successResponse, successStatusResponse, errorResponse, unauthorizedResponse, getPaginationParams } from '@/lib/api'
 import { generateInvoiceNumber } from '@/lib/idgen'
 import { logFromRequest } from '@/lib/audit'
+import { isNotOwnScopeRole } from '@/lib/permissions'
 
 function calculate(items: any[], discount: number, discountType: string, gstApplicable: boolean, gstRate: number) {
   const subtotal = items.reduce((s, i) => s + (Number(i.quantity) * Number(i.unitPrice)), 0)
@@ -74,7 +75,7 @@ export async function POST(req: NextRequest) {
   const session = await getRequestSession(req)
   if (!session) return unauthorizedResponse()
 
-  if (!['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'MARKETING_EXECUTIVE'].includes(session.role)) {
+  if (!isNotOwnScopeRole(session.role)) {
     return errorResponse('Forbidden', 403)
   }
 

@@ -2,6 +2,7 @@
 // Generate a professional invoice PDF client-side using jsPDF + autoTable.
 // Same generator used for both admin and client portal downloads.
 import jsPDF from 'jspdf'
+import { BRAND } from './branding'
 import autoTable from 'jspdf-autotable'
 
 interface InvoiceItem {
@@ -111,7 +112,7 @@ export function generateInvoicePdf(invoice: InvoiceData, company: CompanyInfo = 
   let y = 28
   doc.setFontSize(13).setFont('helvetica', 'bold')
   doc.setTextColor(200, 30, 30)
-  doc.text(company.name || 'Hover Business Services', M, y)
+  doc.text(company.name || BRAND.name, M, y)
   doc.setTextColor(0)
 
   const compAddrLines = company.addressLines || (company.address ? company.address.split('\n') : [])

@@ -163,7 +163,7 @@ export async function startTracking() {
           pausesUpdatesAutomatically: false,
           showsBackgroundLocationIndicator: true,
           foregroundService: {
-            notificationTitle: 'HBS — On Duty',
+            notificationTitle: 'On Duty',
             notificationBody: 'Location sharing is active during office hours.',
             notificationColor: '#E50914',
           },

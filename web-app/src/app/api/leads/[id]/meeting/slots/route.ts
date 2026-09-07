@@ -14,6 +14,7 @@ import { successResponse, errorResponse, notFoundResponse } from '@/lib/api'
 import { Settings } from '@/lib/settings'
 import { generateSlots } from '@/lib/meetingSlots'
 import { dateOnly } from '@/lib/attendanceDate'
+import { canSeeBeyondOwn } from '@/lib/permissions'
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -31,7 +32,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   })
   if (!lead) return notFoundResponse('Lead')
 
-  const canAny = ['SUPER_ADMIN', 'ADMIN', 'MANAGER'].includes(session.role)
+  const canAny = canSeeBeyondOwn(session.role)
   const isOwner = lead.meetingAssignedToId === session.userId
   if (!canAny && !isOwner) return errorResponse('Forbidden', 403)
 

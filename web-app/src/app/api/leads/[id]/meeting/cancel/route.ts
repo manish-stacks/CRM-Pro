@@ -15,6 +15,7 @@ import { requireAuth } from '@/lib/auth'
 import { successResponse, errorResponse, notFoundResponse } from '@/lib/api'
 import { logFromRequest } from '@/lib/audit'
 import { notify } from '@/lib/notify'
+import { canSeeBeyondOwn } from '@/lib/permissions'
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -33,7 +34,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   })
   if (!lead) return notFoundResponse('Lead')
 
-  const isAdmin = ['SUPER_ADMIN', 'ADMIN', 'MANAGER'].includes(session.role)
+  const isAdmin = canSeeBeyondOwn(session.role)
   const isMeetingOwner = lead.meetingAssignedToId === session.userId
   if (!isAdmin && !isMeetingOwner) return errorResponse('Forbidden', 403)
 

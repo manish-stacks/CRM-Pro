@@ -7,6 +7,12 @@ import { requireAuth, getRequestSession } from '@/lib/auth'
 import { successResponse, errorResponse, notFoundResponse, unauthorizedResponse } from '@/lib/api'
 import { logFromRequest } from '@/lib/audit'
 import { getTeamScope } from '@/lib/teamScope'
+import { isCompanyWideRole } from '@/lib/permissions'
+import { deleteFile, publicIdFromUrl } from '@/lib/cloudinary'
+
+// File-URL fields we clean up in R2 when replaced/cleared (userData key -> old value)
+const USER_FILE_FIELDS = ['avatar']
+const EMP_FILE_FIELDS = ['idProofUrl', 'aadharFrontUrl', 'aadharBackUrl']
 
 // Fields admin can update on User row
 const USER_ADMIN_FIELDS = new Set([
@@ -52,7 +58,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   // Admins see everyone. Managers (team leads) see themselves + their team
   // (dept they head + direct reports). Everyone else can only see their own record.
-  if (!['SUPER_ADMIN', 'ADMIN'].includes(session.role)) {
+  if (!isCompanyWideRole(session.role)) {
     if (session.role === 'MANAGER') {
       const scope = await getTeamScope(session.userId)
       if (!scope.visibleIds.includes(emp.id)) return errorResponse('Forbidden', 403)
@@ -98,12 +104,27 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     userData.email = normalizedEmail
   }
 
+  // Remember old file URLs for any file field being replaced/cleared, so we
+  // can delete them from R2 after the update succeeds (best-effort cleanup).
+  const oldFileUrls: string[] = []
+  for (const f of USER_FILE_FIELDS) {
+    if (f in userData && (emp.user as any)[f] && (emp.user as any)[f] !== userData[f]) oldFileUrls.push((emp.user as any)[f])
+  }
+  for (const f of EMP_FILE_FIELDS) {
+    if (f in empData && (emp as any)[f] && (emp as any)[f] !== empData[f]) oldFileUrls.push((emp as any)[f])
+  }
+
   try {
     if (Object.keys(userData).length) {
       await prisma.user.update({ where: { id: emp.userId }, data: userData })
     }
     if (Object.keys(empData).length) {
       await prisma.employee.update({ where: { id }, data: empData })
+    }
+
+    for (const url of oldFileUrls) {
+      const publicId = publicIdFromUrl(url)
+      if (publicId) deleteFile(publicId).catch(() => {})
     }
 
     await logFromRequest(req, {
@@ -128,13 +149,19 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   if (auth instanceof Response) return auth
   const session = (auth as any).session
 
-  const emp = await prisma.employee.findUnique({ where: { id } })
+  const emp = await prisma.employee.findUnique({ where: { id }, include: { user: { select: { avatar: true } } } })
   if (!emp) return notFoundResponse('Employee')
   if (emp.userId === session.userId) return errorResponse('Cannot delete yourself', 403)
+
+  const filesToDelete = [emp.user.avatar, emp.idProofUrl, emp.aadharFrontUrl, emp.aadharBackUrl].filter(Boolean) as string[]
 
   try {
     // Cascade will remove attendance/leaves/etc via schema. User row goes too.
     await prisma.user.delete({ where: { id: emp.userId } })
+    for (const url of filesToDelete) {
+      const publicId = publicIdFromUrl(url)
+      if (publicId) deleteFile(publicId).catch(() => {})
+    }
     await logFromRequest(req, {
       userId: session.userId,
       action: 'DELETE',

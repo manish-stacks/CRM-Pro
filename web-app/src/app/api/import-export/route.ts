@@ -6,8 +6,9 @@ import { errorResponse, successResponse } from '@/lib/api'
 import { dateOnly } from '@/lib/attendanceDate'
 import { getTeamScope } from '@/lib/teamScope'
 import { generateClientCode, generateLeadNumber } from '@/lib/idgen'
+import { canSeeBeyondOwn, isCompanyWideRole } from '@/lib/permissions'
 
-const isAdminRole = (role: string) => ['SUPER_ADMIN', 'ADMIN'].includes(role)
+const isAdminRole = (role: string) => isCompanyWideRole(role)
 const VALID_STATUSES = ['NEW', 'NOT_INTERESTED', 'FOLLOW_UP', 'RINGING', 'MEETING_SCHEDULED', 'CALLBACK', 'CONVERTED', 'CLOSED']
 
 function toCsv(data: any[], filename: string) {
@@ -45,7 +46,7 @@ export async function GET(req: NextRequest) {
     switch (type) {
       case 'clients': {
         // Admin + TL (MANAGER) only
-        if (!['SUPER_ADMIN', 'ADMIN', 'MANAGER'].includes(session.role)) {
+        if (!canSeeBeyondOwn(session.role)) {
           return errorResponse('Forbidden', 403)
         }
         const search = searchParams.get('search')
@@ -120,19 +121,36 @@ export async function GET(req: NextRequest) {
           include: { services: true, assignedTo: { select: { name: true } } },
           orderBy: { createdAt: 'desc' },
         })
+        // A client can hold many services, so each one is exported as
+        // "Name | start | end | amount | cycle | status", pipe-separated inside
+        // the cell and semicolon-separated between services. The same format is
+        // accepted back on import.
+        const d = (x: Date | null | undefined) => (x ? x.toISOString().split('T')[0] : '')
+        const encodeService = (sv: any) =>
+          [sv.serviceName, d(sv.startDate), d(sv.expiryDate), sv.amount ?? 0, sv.billingCycle || 'ONE_TIME', sv.status || 'ACTIVE'].join(' | ')
+
         data = clients.map(c => ({
           ClientCode: c.clientCode,
           CompanyName: c.companyName,
           ContactName: c.clientName,
           Phone: c.phone,
+          AltPhone: c.altPhone || '',
           Email: c.email || '',
           GSTIN: c.gstNo || '',
           Address: c.address || '',
           City: c.city || '',
           State: c.state || '',
+          Pincode: c.pincode || '',
           Status: c.status,
           AssignedTo: c.assignedTo?.name || '',
-          Services: c.services.map(s => s.serviceName).join('; '),
+          OnboardingDate: d(c.onboardingDate),
+          ServicesCount: c.services.length,
+          // Legacy plain list, kept so old sheets still open cleanly
+          Services: c.services.map(sv => sv.serviceName).join('; '),
+          // Full round-trippable version used by the importer
+          ServiceDetails: c.services.map(encodeService).join(' ;; '),
+          ServiceStartDates: c.services.map(sv => d(sv.startDate)).join('; '),
+          ServiceEndDates: c.services.map(sv => d(sv.expiryDate) || '-').join('; '),
           CreatedAt: c.createdAt.toISOString().split('T')[0],
         }))
         filename = 'clients-export'
@@ -248,7 +266,7 @@ export async function GET(req: NextRequest) {
 
       case 'employees': {
         // Admin-only rich export. status = active | inactive | all (default all)
-        if (!['SUPER_ADMIN', 'ADMIN', 'MANAGER'].includes(session.role)) {
+        if (!canSeeBeyondOwn(session.role)) {
           return errorResponse('Forbidden', 403)
         }
         const statusParam = (searchParams.get('status') || 'all').toLowerCase()
@@ -320,7 +338,7 @@ export async function GET(req: NextRequest) {
         } else if (session.role === 'EMPLOYEE') {
           return toCsv([], 'leads-export')
         }
-        if (assignedToId && ['SUPER_ADMIN', 'ADMIN', 'MANAGER'].includes(session.role)) {
+        if (assignedToId && canSeeBeyondOwn(session.role)) {
           where.assignedToId = assignedToId
         }
 
@@ -354,7 +372,7 @@ export async function GET(req: NextRequest) {
       case 'attendance-summary': {
         // Monthly per-employee summary for ACTIVE users.
         // ?month=YYYY-MM  (defaults to current month)
-        if (!['SUPER_ADMIN', 'ADMIN', 'MANAGER'].includes(session.role)) {
+        if (!canSeeBeyondOwn(session.role)) {
           return errorResponse('Forbidden', 403)
         }
         const monthParam = searchParams.get('month') || new Date().toISOString().slice(0, 7)
@@ -462,6 +480,86 @@ export async function POST(req: NextRequest) {
 
     const created: any[] = []
     const errors: any[] = []
+    let servicesCreated = 0
+
+    // Departments (for auto-assigning the dept head as project manager) and the
+    // service catalog (so an imported service name inherits its department).
+    const [catalog, depts] = await Promise.all([
+      prisma.serviceCatalog.findMany({ select: { id: true, name: true, departmentId: true, billingCycle: true, basePrice: true } }),
+      prisma.department.findMany({ select: { id: true, name: true, manager: { select: { userId: true } } } }),
+    ])
+    const deptHeadByDeptId: Record<string, string | null> = Object.fromEntries(
+      depts.map(d => [d.id, d.manager?.userId || null])
+    )
+    const catalogByName: Record<string, any> = Object.fromEntries(
+      catalog.map(c => [c.name.trim().toLowerCase(), c])
+    )
+    const deptByName: Record<string, string> = Object.fromEntries(
+      depts.map(d => [d.name.trim().toLowerCase(), d.id])
+    )
+
+    const parseDate = (v: any): Date | null => {
+      if (!v) return null
+      const t = String(v).trim()
+      if (!t || t === '-') return null
+      // dd-mm-yyyy / dd/mm/yyyy
+      const m = t.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})$/)
+      if (m) return new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]))
+      const d = new Date(t)
+      return isNaN(d.getTime()) ? null : d
+    }
+
+    /**
+     * Accepts either:
+     *   ServiceDetails : "SEO | 2026-01-01 | 2026-12-31 | 12000 | MONTHLY | ACTIVE ;; Website | ..."
+     *   or the simple trio: Services / ServiceStartDates / ServiceEndDates (";"-separated, index-matched)
+     *   or a single service via ServiceName / StartDate / EndDate columns.
+     */
+    const parseServices = (row: any) => {
+      const out: any[] = []
+
+      const details = row.ServiceDetails || row.serviceDetails
+      if (details && String(details).trim()) {
+        for (const chunk of String(details).split(';;')) {
+          const parts = chunk.split('|').map((x: string) => x.trim())
+          if (!parts[0]) continue
+          out.push({
+            serviceName: parts[0],
+            startDate: parseDate(parts[1]),
+            expiryDate: parseDate(parts[2]),
+            amount: Number(parts[3]) || 0,
+            billingCycle: (parts[4] || 'ONE_TIME').toUpperCase(),
+            status: (parts[5] || 'ACTIVE').toUpperCase(),
+            departmentName: parts[6] || '',
+          })
+        }
+        return out
+      }
+
+      const names = String(row.Services || row.services || row.ServiceName || row.serviceName || '')
+        .split(';').map((x: string) => x.trim()).filter(Boolean)
+      if (!names.length) return out
+
+      const starts = String(row.ServiceStartDates || row.serviceStartDates || row.StartDate || row.startDate || '')
+        .split(';').map((x: string) => x.trim())
+      const ends = String(row.ServiceEndDates || row.serviceEndDates || row.EndDate || row.endDate || row.ExpiryDate || '')
+        .split(';').map((x: string) => x.trim())
+      const amounts = String(row.ServiceAmounts || row.serviceAmounts || row.Amount || row.amount || '')
+        .split(';').map((x: string) => x.trim())
+
+      names.forEach((name: string, idx: number) => {
+        out.push({
+          serviceName: name,
+          startDate: parseDate(starts[idx] ?? starts[0]),
+          expiryDate: parseDate(ends[idx] ?? ends[0]),
+          amount: Number(amounts[idx] ?? amounts[0]) || 0,
+          billingCycle: String(row.BillingCycle || row.billingCycle || 'ONE_TIME').toUpperCase(),
+          status: 'ACTIVE',
+          departmentName: String(row.Department || row.department || ''),
+        })
+      })
+      return out
+    }
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i]
@@ -483,18 +581,60 @@ export async function POST(req: NextRequest) {
             city: row.city || row.City || null,
             state: row.state || row.State || null,
             gstNo: row.gstNo || row.GSTIN || null,
+            pincode: row.pincode || row.Pincode || null,
+            altPhone: row.altPhone || row.AltPhone ? String(row.altPhone || row.AltPhone) : null,
             status: (row.status || row.Status || 'ACTIVE').toUpperCase(),
-            onboardingDate: new Date(),
+            onboardingDate: (() => {
+              const d = parseDate(row.onboardingDate || row.OnboardingDate)
+              return d || new Date()
+            })(),
             createdById: (session as any).userId,
           },
         })
         created.push(client)
+
+        // ---- services for this client (multiple supported) ----
+        for (const sv of parseServices(row)) {
+          try {
+            const cat = catalogByName[sv.serviceName.trim().toLowerCase()]
+            const departmentId =
+              (sv.departmentName && deptByName[String(sv.departmentName).trim().toLowerCase()]) ||
+              cat?.departmentId ||
+              null
+
+            const clientService = await prisma.clientService.create({
+              data: {
+                clientId: client.id,
+                serviceCatalogId: cat?.id || null,
+                serviceName: sv.serviceName,
+                departmentId,
+                startDate: sv.startDate || new Date(),
+                expiryDate: sv.expiryDate,
+                amount: sv.amount || cat?.basePrice || 0,
+                billingCycle: sv.billingCycle || cat?.billingCycle || 'ONE_TIME',
+                status: ['ACTIVE', 'PAUSED', 'CANCELLED', 'EXPIRED'].includes(sv.status) ? sv.status : 'ACTIVE',
+              },
+            })
+            servicesCreated++
+
+            // Same rule as the UI: the handling department's head becomes the
+            // project manager automatically.
+            const headUserId = departmentId ? deptHeadByDeptId[departmentId] : null
+            if (headUserId) {
+              await prisma.projectAssignment.create({
+                data: { clientServiceId: clientService.id, managerId: headUserId, role: 'MANAGER', isActive: true },
+              })
+            }
+          } catch {
+            errors.push({ row: i + 1, error: `Client created but service "${sv.serviceName}" failed` })
+          }
+        }
       } catch {
         errors.push({ row: i + 1, error: 'Failed to create client (duplicate or invalid data)' })
       }
     }
 
-    return successResponse({ imported: created.length, errors }, created.length)
+    return successResponse({ imported: created.length, servicesCreated, errors }, created.length)
   }
 
   // ---- Import leads ----

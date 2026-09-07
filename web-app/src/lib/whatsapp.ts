@@ -1,7 +1,7 @@
 // src/lib/whatsapp.ts
-// WhatsApp API wrapper using BUZWAP/waapi.hoverbusinessservices.com endpoint
+// WhatsApp API wrapper (BUZWAP-compatible). Endpoint comes from WHATSAPP_API_URL env var — point this at your own WhatsApp Business API provider.
 // Docs endpoint format:
-//   http://waapi.hoverbusinessservices.com/api/sendmsgutil.php
+//   your WhatsApp API provider's send endpoint (set via WHATSAPP_API_URL)
 //     ?user=X&pass=Y&sender=Z&phone=N&text=TEMPLATE_NAME
 //     &priority=wa&stype=normal&Params=p1,p2,p3
 import { prisma } from './prisma'

@@ -1,5 +1,6 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
+import { BRAND } from '@/lib/branding'
 import { useAuth } from '@/hooks/useAuth'
 import { Eye, EyeOff, Loader2, ArrowLeft, LayoutGrid, Users, KanbanSquare, CheckCircle2, KeyRound } from 'lucide-react'
 import { useRouter } from 'next/navigation'
@@ -203,7 +204,7 @@ export default function LoginPage() {
         <div>
           <div className="flex items-center gap-2.5">
             <div className="w-200 h-auto rounded-lg bg-white flex items-center justify-center p-2">
-              <img src="./images/hbs-logo.png" alt="Hover CRM" className="h-14" />
+              <img src={BRAND.logoUrl} alt={BRAND.appName} className="h-14" />
             </div>
            
           </div>
@@ -214,7 +215,7 @@ export default function LoginPage() {
             Run your business<br />from one dashboard
           </h1>
           <p className="text-indigo-100 text-sm mb-8 max-w-sm">
-            Hover Business Services LLP — contacts, deals and tasks, all synced in real time.
+            {BRAND.name} — contacts, deals and tasks, all synced in real time.
           </p>
           <div className="space-y-4">
             {features.map((f, i) => (
@@ -228,7 +229,7 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <p className="text-indigo-200 text-xs">© {new Date().getFullYear()} Hover Business Services LLP</p>
+        <p className="text-indigo-200 text-xs">© {new Date().getFullYear()} {BRAND.name}</p>
 
         <div className="absolute -right-24 -top-24 w-72 h-72 rounded-full bg-white/5" />
         <div className="absolute -right-10 bottom-20 w-40 h-40 rounded-full bg-white/5" />
@@ -240,7 +241,7 @@ export default function LoginPage() {
           {/* mobile logo */}
           <div className="lg:hidden flex items-center gap-2.5 mb-8">
             <div className="w-200 h-auto rounded-lg bg-white flex items-center justify-center p-2">
-              <img src="https://hoverbusinessservices.com/images/hbs-logo.png" alt="Hover CRM" className="h-14" />
+              <img src={BRAND.logoUrl} alt={BRAND.appName} className="h-14" />
             </div>
            
           </div>
@@ -476,7 +477,7 @@ export default function LoginPage() {
           </div>
 
           <p className="text-center text-xs text-gray-400 mt-6">
-            Access restricted to authorized Hover Business Services LLP personnel.
+            Access restricted to authorized {BRAND.name} personnel.
           </p>
         </div>
       </div>

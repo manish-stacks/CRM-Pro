@@ -9,6 +9,7 @@ import { logFromRequest } from '@/lib/audit'
 import { generateClientCode } from '@/lib/idgen'
 import { completeVisitForLead, CloseOutcome } from '@/lib/visitSync'
 import { Notifications } from '@/lib/notify'
+import { canSeeBeyondOwn } from '@/lib/permissions'
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -21,7 +22,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const lead = await prisma.lead.findUnique({ where: { id }, include: { client: true } })
   if (!lead) return notFoundResponse('Lead')
 
-  const canCloseAny = ['SUPER_ADMIN', 'ADMIN', 'MANAGER'].includes(session.role)
+  const canCloseAny = canSeeBeyondOwn(session.role)
   const isOwner = [lead.assignedToId, lead.meetingAssignedToId, lead.createdById].includes(session.userId)
   if (!canCloseAny && !isOwner) return errorResponse('Forbidden', 403)
 

@@ -5,6 +5,7 @@
 // what the "Share Link" button now points to (replacing the old
 // /invoice/view/[token] HTML page, which just duplicated this PDF's design).
 import { NextRequest, NextResponse } from 'next/server'
+import { BRAND } from '@/lib/branding'
 import { prisma } from '@/lib/prisma'
 import { buildInvoiceBody, CompanyInfo } from '@/lib/businessPdf'
 import { renderBusinessPdf } from '@/lib/pdfRenderer'
@@ -25,7 +26,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
   settings.forEach((s: { key: string; value: string }) => { settingsMap[s.key] = s.value })
 
   const company: CompanyInfo = {
-    companyName: settingsMap.company_name || 'Hover Business Services LLP',
+    companyName: settingsMap.company_name || BRAND.name,
     companyAddress: settingsMap.company_address || undefined,
     companyPhone: settingsMap.company_phone || undefined,
     companyEmail: settingsMap.company_email || undefined,

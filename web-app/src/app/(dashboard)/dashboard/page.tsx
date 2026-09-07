@@ -12,6 +12,7 @@ import api from '@/lib/axios'
 import { FIELD_LABELS } from '@/lib/profileCompletion'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
+import { isCompanyWideRole } from '@/lib/permissions'
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316', '#84cc16', '#6366f1']
 const STATUS_COLORS: Record<string, string> = {
@@ -119,7 +120,7 @@ export default function DashboardPage() {
   // Regular employees don't see business/revenue metrics
   const showBiz = user?.role !== 'EMPLOYEE'
   // Revenue Trend chart + Month Revenue stat: admins only
-  const showRevenue = ['SUPER_ADMIN', 'ADMIN'].includes(user?.role || '')
+  const showRevenue = isCompanyWideRole(user?.role || '')
 
   const greeting = () => {
     const h = new Date().getHours()
@@ -140,7 +141,7 @@ export default function DashboardPage() {
 
       {/* Header */}
       <div
-        className="animate-rise relative overflow-hidden rounded-2xl px-6 py-6 flex items-start justify-between bg-rose-50"
+        className="animate-rise relative overflow-hidden rounded-2xl px-6 py-6 flex items-start justify-between bg-brand-50"
         style={{
           backgroundImage: "url('/images/city-skyline.png')",
           backgroundRepeat: 'no-repeat',
@@ -154,7 +155,7 @@ export default function DashboardPage() {
         </div>
         <div className="relative text-right flex items-center gap-3">
           <div className="w-11 h-11 rounded-full bg-white flex items-center justify-center shadow-sm flex-shrink-0">
-            <Clock className="text-rose-400" size={20} />
+            <Clock className="text-brand-400" size={20} />
           </div>
           <div>
             <p className="text-2xl font-bold tabular-nums text-gray-900">{time.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</p>
@@ -199,7 +200,7 @@ export default function DashboardPage() {
             <div className="flex items-center gap-4 flex-shrink-0">
               <Link
                 href="/profile"
-                className="px-5 py-2.5 rounded-full text-sm font-semibold text-white bg-rose-500 hover:bg-rose-700 transition-colors whitespace-nowrap"
+                className="px-5 py-2.5 rounded-full text-sm font-semibold text-white bg-brand-500 hover:bg-brand-700 transition-colors whitespace-nowrap"
               >
                 Complete Now →
               </Link>
@@ -219,7 +220,7 @@ export default function DashboardPage() {
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide my-1">Status</p>
             <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-semibold ${isPunchedIn ? 'bg-emerald-100 text-emerald-700' :
               isPunchedOut ? 'bg-gray-100 text-gray-700' :
-                'bg-rose-50 text-rose-500'
+                'bg-brand-50 text-brand-500'
               }`}>
               <span className="relative w-2 h-2 rounded-full bg-current">
                 {isPunchedIn && <span className="pulse-ring absolute inset-0 text-emerald-500" />}
@@ -252,7 +253,7 @@ export default function DashboardPage() {
                         key={mode}
                         onClick={() => handlePunch(mode)}
                         disabled={punching}
-                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-full bg-white border border-gray-200 hover:border-rose-300 hover:bg-rose-50 hover:-translate-y-0.5 text-xs font-semibold text-gray-700 hover:text-rose-500 transition-all duration-200 disabled:opacity-50"
+                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-full bg-white border border-gray-200 hover:border-brand-300 hover:bg-brand-50 hover:-translate-y-0.5 text-xs font-semibold text-gray-700 hover:text-brand-500 transition-all duration-200 disabled:opacity-50"
                       >
                         {mode === 'WFO' ? <Briefcase size={13} /> : mode === 'WFH' ? <Home size={13} /> : <MapPin size={13} />}
                         {mode}
@@ -263,7 +264,7 @@ export default function DashboardPage() {
                 <button
                   onClick={() => handlePunch()}
                   disabled={punching}
-                  className={`flex items-center justify-center gap-2 px-5 py-3 rounded-full font-semibold text-sm transition-all duration-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 ${isPunchedIn ? 'bg-gray-700 hover:bg-gray-800 text-white' : 'bg-rose-500 hover:bg-rose-700 text-white'
+                  className={`flex items-center justify-center gap-2 px-5 py-3 rounded-full font-semibold text-sm transition-all duration-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 ${isPunchedIn ? 'bg-gray-700 hover:bg-gray-800 text-white' : 'bg-brand-500 hover:bg-brand-700 text-white'
                     } disabled:opacity-50`}
                 >
                   {punching ? <Loader2 size={16} className="animate-spin" /> :

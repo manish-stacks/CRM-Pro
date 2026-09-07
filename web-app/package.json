@@ -18,7 +18,7 @@
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
-    "firebase": "^10.12.2",
+    "@aws-sdk/client-s3": "^3.1127.0",
     "@hookform/resolvers": "^3.9.1",
     "@prisma/client": "^6.19.3",
     "axios": "^1.15.2",
@@ -27,6 +27,7 @@
     "clsx": "^2.1.1",
     "cookies-next": "^5.0.2",
     "date-fns": "^4.1.0",
+    "firebase": "^10.12.2",
     "jose": "^5.9.6",
     "jspdf": "^2.5.2",
     "jspdf-autotable": "^3.8.4",

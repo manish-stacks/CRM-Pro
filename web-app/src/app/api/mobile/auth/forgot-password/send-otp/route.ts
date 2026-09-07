@@ -2,6 +2,7 @@
 // PUBLIC (no auth): staff/marketing user requests a password-reset OTP by email.
 // Mirrors the client flow but against the User model.
 import { NextRequest, NextResponse } from 'next/server'
+import { BRAND } from '@/lib/branding'
 import { prisma } from '@/lib/prisma'
 import { generateOtp, hashOtp, OTP_TTL_MS } from '@/lib/otp'
 import { sendWhatsapp } from '@/lib/whatsapp'
@@ -42,7 +43,7 @@ export async function POST(req: NextRequest) {
     if (user.email) {
       sendMail({
         to: user.email,
-        subject: 'Your HBS password reset code',
+        subject: `Your ${BRAND.short} password reset code`,
         html: wrapEmailHtml(
           'Password Reset Code',
           `<p>Hi ${user.name},</p>

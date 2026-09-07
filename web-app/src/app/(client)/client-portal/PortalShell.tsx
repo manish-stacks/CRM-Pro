@@ -8,6 +8,7 @@ import {
   Mail, TrendingUp, Sparkles, Lock, X, Send,
 } from 'lucide-react'
 import { useClientPortal } from './context'
+import { BRAND } from '@/lib/branding'
 
 const NAV = [
   { href: '/client-portal', label: 'Overview', icon: TrendingUp },
@@ -45,7 +46,7 @@ export default function PortalShell({ children }: { children: React.ReactNode })
           <div className="absolute -bottom-32 -left-20 w-96 h-96 rounded-full bg-brand-400/20 blur-3xl" />
           <div className="relative">
             <div className="w-40 h-auto bg-white backdrop-blur flex items-center justify-center p-1 rounded-sm">
-              <img src="https://hoverbusinessservices.com/images/hbs-logo.png" alt="HBS" className="w-full" />
+              <img src={BRAND.logoUrl} alt={BRAND.appName} className="w-full" />
             </div>
           </div>
           <div className="relative space-y-4">
@@ -57,14 +58,14 @@ export default function PortalShell({ children }: { children: React.ReactNode })
               ))}
             </div>
           </div>
-          <p className="relative text-xs text-brand-200">© {new Date().getFullYear()} Hover Business Services</p>
+          <p className="relative text-xs text-brand-200">© {new Date().getFullYear()} {BRAND.name}</p>
         </div>
 
         {/* Login form */}
         <div className="flex items-center justify-center p-6 bg-slate-50">
           <div className="w-full max-w-sm">
             <div className="lg:hidden text-center mb-6">
-              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-brand-500 to-brand-600 mx-auto flex items-center justify-center text-white font-bold text-xl">HBS</div>
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-brand-500 to-brand-600 mx-auto flex items-center justify-center text-white font-bold text-xl">{BRAND.short}</div>
             </div>
             <h1 className="text-2xl font-bold text-gray-900">Client Portal</h1>
             <p className="text-sm text-gray-500 mt-1 mb-6">Sign in to your account</p>

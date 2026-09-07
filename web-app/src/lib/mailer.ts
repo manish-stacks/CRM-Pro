@@ -2,6 +2,7 @@
 // Nodemailer SMTP wrapper + EmailLog persistence
 import nodemailer, { Transporter } from 'nodemailer'
 import { prisma } from './prisma'
+import { BRAND } from './branding'
 import { getSetting } from './settings'
 
 let transporter: Transporter | null = null
@@ -42,7 +43,7 @@ export interface SendMailResult {
  * Send an email with SMTP; also logs to EmailLog table
  */
 export async function sendMail(opts: SendMailOptions): Promise<SendMailResult> {
-  const from = `"${process.env.SMTP_FROM_NAME || 'HBS CRM'}" <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER}>`
+  const from = `"${process.env.SMTP_FROM_NAME || BRAND.appName}" <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER}>`
   const to = Array.isArray(opts.to) ? opts.to.join(', ') : opts.to
   const cc = opts.cc ? (Array.isArray(opts.cc) ? opts.cc.join(', ') : opts.cc) : undefined
 
@@ -108,7 +109,7 @@ export async function sendMail(opts: SendMailOptions): Promise<SendMailResult> {
  * Simple HTML wrapper for consistent branded emails
  */
 export function wrapEmailHtml(title: string, body: string, ctaText?: string, ctaUrl?: string): string {
-  const companyName = process.env.COMPANY_NAME || 'HBS CRM'
+  const companyName = BRAND.name
   return `
 <!DOCTYPE html>
 <html>

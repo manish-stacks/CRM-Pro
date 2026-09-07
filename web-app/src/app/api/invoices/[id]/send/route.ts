@@ -1,6 +1,7 @@
 // src/app/api/invoices/[id]/send/route.ts
 // Send invoice via email + WhatsApp
 import { NextRequest } from 'next/server'
+import { BRAND } from '@/lib/branding'
 import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/auth'
 import { successResponse, errorResponse, notFoundResponse } from '@/lib/api'
@@ -36,7 +37,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     `
     const r = await sendMail({
       to: invoice.client.email,
-      subject: `Invoice ${invoice.invoiceNumber} — ${process.env.COMPANY_NAME || 'HBS'}`,
+      subject: `Invoice ${invoice.invoiceNumber} — ${BRAND.name}`,
       html: wrapEmailHtml(`Invoice ${invoice.invoiceNumber}`, body, 'Pay Now', portalUrl),
       referenceType: 'INVOICE',
       referenceId: id,

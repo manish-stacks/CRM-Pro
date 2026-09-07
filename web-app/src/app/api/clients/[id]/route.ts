@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/auth'
 import { successResponse, errorResponse, notFoundResponse } from '@/lib/api'
 import { logFromRequest } from '@/lib/audit'
+import { deleteFile, publicIdFromUrl } from '@/lib/cloudinary'
 
 const CLIENT_UPDATABLE = new Set([
   'companyName', 'clientName', 'phone', 'altPhone', 'email',
@@ -98,8 +99,20 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     data.gstApplicable = data.gstApplicable === true || data.gstApplicable === 'true'
   }
 
+  // If the logo/image is being replaced or cleared, remember the old R2 file
+  // so we can delete it after the update succeeds (best-effort cleanup).
+  let oldImageUrl: string | null = null
+  if ('image' in data) {
+    const current = await prisma.client.findUnique({ where: { id }, select: { image: true } })
+    if (current?.image && current.image !== data.image) oldImageUrl = current.image
+  }
+
   try {
     const client = await prisma.client.update({ where: { id }, data })
+    if (oldImageUrl) {
+      const publicId = publicIdFromUrl(oldImageUrl)
+      if (publicId) deleteFile(publicId).catch(() => {})
+    }
     await logFromRequest(req, {
       userId: session.userId,
       action: 'UPDATE',
@@ -122,8 +135,17 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const c = await prisma.client.findUnique({ where: { id } })
   if (!c) return notFoundResponse('Client')
 
+  // Any report files that will cascade-delete with the client — clean those
+  // up from R2 too, not just the client's own logo/GMB screenshot.
+  const reports = await prisma.clientReport.findMany({ where: { clientId: id }, select: { fileUrl: true } })
+  const filesToDelete = [c.image, c.gmbScreenshot, ...reports.map(r => r.fileUrl)].filter(Boolean) as string[]
+
   try {
     await prisma.client.delete({ where: { id } })
+    for (const url of filesToDelete) {
+      const publicId = publicIdFromUrl(url)
+      if (publicId) deleteFile(publicId).catch(() => {})
+    }
     await logFromRequest(req, {
       userId: session.userId,
       action: 'DELETE',

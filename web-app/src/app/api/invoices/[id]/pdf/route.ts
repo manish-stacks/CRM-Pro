@@ -3,6 +3,7 @@
 // header/footer repeating on every page — same pattern as the letters
 // module. Used by the admin dashboard invoice detail page.
 import { NextRequest, NextResponse } from 'next/server'
+import { BRAND } from '@/lib/branding'
 import { prisma } from '@/lib/prisma'
 import { getRequestSession } from '@/lib/auth'
 import { Settings } from '@/lib/settings'
@@ -31,7 +32,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   ])
 
   const company: CompanyInfo = {
-    companyName: companyName || 'Hover Business Services LLP',
+    companyName: companyName || BRAND.name,
     companyAddress: companyAddress || undefined,
     companyPhone: companyPhone || undefined,
     companyEmail: companyEmail || undefined,

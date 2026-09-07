@@ -1,5 +1,5 @@
 // src/lib/idCard.ts
-// Overlays employee photo/name/ID/phone/e-mail/QR on top of the HBS ID card
+// Overlays employee photo/name/ID/phone/e-mail/QR on top of the company ID card
 // template image (public/idcard/template.jpg) and previews it (like invoice PDFs)
 // instead of force-downloading.
 import jsPDF from 'jspdf'

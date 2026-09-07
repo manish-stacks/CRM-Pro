@@ -5,8 +5,9 @@ import Link from 'next/link'
 import api from '@/lib/axios'
 import { useAuth } from '@/hooks/useAuth'
 import { Button, Input, Select, SearchSelect, Modal, EmptyState, Pagination, SearchInput, Spinner } from '@/components/ui'
+import { useMemo } from 'react'
 import { formatDate } from '@/lib/utils'
-import { FileBarChart2, Plus, Eye, Download, Trash2, CheckCircle2, FileEdit, Building2 } from 'lucide-react'
+import { FileBarChart2, Plus, Eye, Download, Trash2, CheckCircle2, FileEdit, Building2, SlidersHorizontal } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
@@ -27,6 +28,15 @@ export default function SeoReportsPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('')
+  const [clientId, setClientId] = useState('')
+  const [clientFilterLabel, setClientFilterLabel] = useState('')
+  const [service, setService] = useState('')
+  const [month, setMonth] = useState('')
+  const [year, setYear] = useState('')
+  const [createdBy, setCreatedBy] = useState('')
+  const [from, setFrom] = useState('')
+  const [to, setTo] = useState('')
+  const [showFilters, setShowFilters] = useState(false)
 
   const [modal, setModal] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -40,14 +50,37 @@ export default function SeoReportsPage() {
       const p: Record<string, string> = { page: String(page), limit: '20' }
       if (search) p.search = search
       if (status) p.status = status
+      if (clientId) p.clientId = clientId
+      if (service) p.service = service
+      if (month) p.month = month
+      if (year) p.year = year
+      if (createdBy) p.createdById = createdBy
+      if (from) p.from = from
+      if (to) p.to = to
       const r = await api.get(`/seo-reports?${new URLSearchParams(p)}`)
       setRows(r.data.data || [])
       setTotal(r.data.total || 0)
     } catch { toast.error('Failed to load reports') }
     finally { setLoading(false) }
-  }, [page, search, status])
+  }, [page, search, status, clientId, service, month, year, createdBy, from, to])
 
   useEffect(() => { load() }, [load])
+  useEffect(() => { setPage(1) }, [search, status, clientId, service, month, year, createdBy, from, to])
+
+  const serviceNames = useMemo(
+    () => Array.from(new Set(rows.map(r => r.clientService?.serviceName).filter(Boolean))) as string[],
+    [rows]
+  )
+  const creators = useMemo(
+    () => Array.from(new Set(rows.map(r => r.createdBy?.name).filter(Boolean))) as string[],
+    [rows]
+  )
+  const activeFilterCount = [status, clientId, service, month, year, createdBy, from, to].filter(Boolean).length
+
+  const clearFilters = () => {
+    setStatus(''); setClientId(''); setClientFilterLabel(''); setService('')
+    setMonth(''); setYear(''); setCreatedBy(''); setFrom(''); setTo('')
+  }
 
   useEffect(() => {
     if (!form.clientId) { setServices([]); return }
@@ -88,15 +121,71 @@ export default function SeoReportsPage() {
         </Button>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <div className="flex-1 min-w-[200px]">
-          <SearchInput value={search} onChange={v => { setSearch(v); setPage(1) }} placeholder="Search client, month, report no..." />
+      <div className="bg-white rounded-xl border border-gray-200 p-3 space-y-3">
+        <div className="flex flex-wrap gap-2">
+          <div className="flex-1 min-w-[200px]">
+            <SearchInput value={search} onChange={setSearch} placeholder="Search client, month, report no..." />
+          </div>
+          <Select
+            value={status}
+            onChange={e => setStatus(e.target.value)}
+            options={[{ value: '', label: 'All Status' }, { value: 'DRAFT', label: 'Draft' }, { value: 'SUBMITTED', label: 'Submitted' }]}
+          />
+          <Button variant="secondary" onClick={() => setShowFilters(v => !v)}>
+            <SlidersHorizontal size={14} /> Filters
+            {activeFilterCount > 0 && (
+              <span className="ml-1 bg-brand-100 text-brand-700 text-[10px] rounded px-1.5">{activeFilterCount}</span>
+            )}
+          </Button>
+          {activeFilterCount > 0 && (
+            <button onClick={clearFilters} className="text-xs text-brand-600 hover:underline px-1">Clear all</button>
+          )}
         </div>
-        <Select
-          value={status}
-          onChange={e => { setStatus(e.target.value); setPage(1) }}
-          options={[{ value: '', label: 'All Status' }, { value: 'DRAFT', label: 'Draft' }, { value: 'SUBMITTED', label: 'Submitted' }]}
-        />
+
+        {showFilters && (
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2 border-t border-gray-100">
+            <SearchSelect
+              label="Client"
+              value={clientId}
+              valueLabel={clientFilterLabel}
+              onSelect={(v, label) => { setClientId(v); setClientFilterLabel(label) }}
+              fetchOptions={async (q) => {
+                const r = await api.get(`/clients?limit=20${q ? `&search=${encodeURIComponent(q)}` : ''}`)
+                return (r.data.data || []).map((c: any) => ({ value: c.id, label: `${c.companyName} (${c.clientCode})` }))
+              }}
+              placeholder="Any client"
+            />
+            <Select
+              label="Service"
+              value={service}
+              onChange={e => setService(e.target.value)}
+              options={[{ value: '', label: 'All services' }, ...serviceNames.map(n => ({ value: n, label: n }))]}
+            />
+            <Select
+              label="Month"
+              value={month}
+              onChange={e => setMonth(e.target.value)}
+              options={[{ value: '', label: 'All months' }, ...MONTHS.map(m => ({ value: m, label: m }))]}
+            />
+            <Select
+              label="Year"
+              value={year}
+              onChange={e => setYear(e.target.value)}
+              options={[
+                { value: '', label: 'All years' },
+                ...Array.from({ length: 6 }, (_, i) => String(new Date().getFullYear() - i)).map(y => ({ value: y, label: y })),
+              ]}
+            />
+            <Select
+              label="Created By"
+              value={createdBy}
+              onChange={e => setCreatedBy(e.target.value)}
+              options={[{ value: '', label: 'Anyone' }, ...creators.map(n => ({ value: n, label: n }))]}
+            />
+            <Input label="Created From" type="date" value={from} max={to || undefined} onChange={e => setFrom(e.target.value)} />
+            <Input label="Created To" type="date" value={to} min={from || undefined} onChange={e => setTo(e.target.value)} />
+          </div>
+        )}
       </div>
 
       {loading ? (

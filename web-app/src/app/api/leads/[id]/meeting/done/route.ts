@@ -10,6 +10,7 @@ import { successResponse, errorResponse, notFoundResponse } from '@/lib/api'
 import { logFromRequest } from '@/lib/audit'
 import { Notifications } from '@/lib/notify'
 import { completeVisitForLead } from '@/lib/visitSync'
+import { canSeeBeyondOwn } from '@/lib/permissions'
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -24,7 +25,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const lead = await prisma.lead.findUnique({ where: { id } })
   if (!lead) return notFoundResponse('Lead')
 
-  const canAny = ['SUPER_ADMIN', 'ADMIN', 'MANAGER'].includes(session.role)
+  const canAny = canSeeBeyondOwn(session.role)
   const isMeetingOwner = lead.meetingAssignedToId === session.userId
   if (!canAny && !isMeetingOwner) return errorResponse('Forbidden', 403)
 

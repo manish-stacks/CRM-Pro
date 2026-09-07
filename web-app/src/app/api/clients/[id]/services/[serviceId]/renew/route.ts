@@ -7,6 +7,7 @@ import { successResponse, errorResponse, notFoundResponse } from '@/lib/api'
 import { logFromRequest } from '@/lib/audit'
 import { generateInvoiceNumber } from '@/lib/idgen'
 import { sendWhatsapp } from '@/lib/whatsapp'
+import { isNotOwnScopeRole } from '@/lib/permissions'
 
 // Compute new expiry given current + cycle
 function addCycle(current: Date, cycle: string): Date {
@@ -29,7 +30,7 @@ export async function POST(
   if (auth instanceof Response) return auth
   const session = (auth as any).session
 
-  if (!['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'MARKETING_EXECUTIVE'].includes(session.role)) {
+  if (!isNotOwnScopeRole(session.role)) {
     return errorResponse('Forbidden', 403)
   }
 

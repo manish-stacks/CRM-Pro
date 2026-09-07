@@ -3,11 +3,13 @@
 // header/footer repeating on every page — same pattern as the letters
 // module. Replaces the old approach of returning raw HTML.
 import { NextRequest, NextResponse } from 'next/server'
+import { BRAND } from '@/lib/branding'
 import { prisma } from '@/lib/prisma'
 import { getRequestSession } from '@/lib/auth'
 import { Settings } from '@/lib/settings'
 import { buildPayslipBody, CompanyInfo } from '@/lib/businessPdf'
 import { renderBusinessPdf } from '@/lib/pdfRenderer'
+import { isCompanyWideRole } from '@/lib/permissions'
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -30,7 +32,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     if (!payslip) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
     // Non-admins can only download their own payslip — matches the payroll list scoping.
-    if (!['SUPER_ADMIN', 'ADMIN'].includes(session.role) && payslip.employee.userId !== session.userId) {
+    if (!isCompanyWideRole(session.role) && payslip.employee.userId !== session.userId) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
@@ -47,7 +49,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     ])
 
     const company: CompanyInfo = {
-      companyName: companyName || 'Hover Business Services LLP',
+      companyName: companyName || BRAND.name,
       companyAddress: companyAddress || undefined,
       companyPhone: companyPhone || undefined,
       companyEmail: companyEmail || undefined,

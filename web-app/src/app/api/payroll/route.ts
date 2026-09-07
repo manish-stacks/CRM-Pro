@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/auth'
 import { successResponse, errorResponse, getPaginationParams } from '@/lib/api'
 import { logFromRequest } from '@/lib/audit'
+import { isCompanyWideRole } from '@/lib/permissions'
 
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req)
@@ -32,10 +33,10 @@ export async function GET(req: NextRequest) {
     else return successResponse([], 0)
   }
 
-  if (employeeId && ['SUPER_ADMIN', 'ADMIN'].includes(session.role)) {
+  if (employeeId && isCompanyWideRole(session.role)) {
     where.employeeId = employeeId
   }
-  if (departmentId && ['SUPER_ADMIN', 'ADMIN'].includes(session.role)) {
+  if (departmentId && isCompanyWideRole(session.role)) {
     const deptEmps = await prisma.employee.findMany({ where: { departmentId }, select: { id: true } })
     where.employeeId = { in: deptEmps.map(e => e.id) }
   }

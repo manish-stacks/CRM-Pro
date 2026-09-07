@@ -20,27 +20,23 @@ function downsamplePath(path: { lat: number; lng: number }[], max: number) {
 }
 
 // Ping coordinates are raw GPS points recorded every so often — connecting
-// them with a straight polyline cuts across blocks/parks instead of
-// following the street. Google's Roads API snaps + interpolates the path
-// onto the real road network so the drawn route looks like an actual drive.
-// Falls back to the raw path if the API errors out (e.g. not enabled on the key).
-async function snapPathToRoads(path: { lat: number; lng: number }[]): Promise<{ lat: number; lng: number }[] | null> {
+// them with a straight polyline cuts across blocks/parks instead of following
+// the street. Snapping now happens SERVER-side (/api/tracking/snap-roads),
+// because the public browser key can't call the Roads API (it doesn't accept
+// HTTP-referrer restrictions) — which is why the line always came back as
+// straight state-to-state segments. The server tries Roads, then Directions,
+// and only then gives up and returns the raw trail.
+async function snapPathToRoads(
+  path: { lat: number; lng: number }[]
+): Promise<{ path: { lat: number; lng: number }[]; mode: string; distanceKm?: number } | null> {
   if (path.length < 2) return null
   try {
-    // Roads API accepts up to 100 points per request.
-    const pointsParam = downsamplePath(path, 100).map(p => `${p.lat},${p.lng}`).join('|')
-    const url = `https://roads.googleapis.com/v1/snapToRoads?path=${encodeURIComponent(pointsParam)}&interpolate=true&key=${GOOGLE_MAPS_KEY}`
-    const res = await fetch(url)
-    const json = await res.json()
-    if (json.error) {
-      // e.g. "Roads API" not enabled on this key/project, or billing off.
-      console.error('Roads API snap failed:', json.error.status, json.error.message)
-      return null
-    }
-    if (!json.snappedPoints?.length) return null
-    return json.snappedPoints.map((p: any) => ({ lat: p.location.latitude, lng: p.location.longitude }))
+    const res = await api.post('/tracking/snap-roads', { path })
+    const d = res.data?.data
+    if (!d?.path || d.path.length < 2) return null
+    return d
   } catch (e) {
-    console.error('Roads API snap request failed:', e)
+    console.error('Road snap request failed:', e)
     return null
   }
 }
@@ -248,16 +244,17 @@ export default function TrackingPage() {
           // handful of clustered points (near-stationary day) since snapping
           // wouldn't change the line but still costs a billed API call —
           // and skipped entirely on a cache hit, reusing the prior result.
-          let snapped: { lat: number; lng: number }[] | null
+          let snapped: { path: { lat: number; lng: number }[]; mode: string; distanceKm?: number } | null
           if (cached) {
             snapped = cached.snapped
           } else {
             snapped = (path.length >= 3 && distanceKm > 0.1) ? await snapPathToRoads(path) : null
             routeCacheRef.current.set(cacheKey, { data, snapped })
           }
-          const linePath = snapped && snapped.length >= 2 ? snapped : path
-          if (!snapped && path.length >= 3 && distanceKm > 0.1) {
-            toast('Route line is not road-snapped — check console (Roads API may not be enabled on this key)', { icon: '⚠️', duration: 6000 })
+          const roadPath = snapped && snapped.mode !== 'raw' && snapped.path.length >= 2 ? snapped.path : null
+          const linePath = roadPath || path
+          if (!roadPath && path.length >= 3 && distanceKm > 0.1) {
+            toast('Showing the raw GPS trail — enable the Roads or Directions API on GOOGLE_MAPS_SERVER_KEY for a road-following route', { icon: '⚠️', duration: 7000 })
           }
           const line = new g.maps.Polyline({
             path: linePath, strokeColor: '#e11d48', strokeWeight: 5, strokeOpacity: 0.95,
@@ -297,8 +294,14 @@ export default function TrackingPage() {
           const firstT = new Date(pings[0].recordedAt)
           const lastT = new Date(pings[pings.length - 1].recordedAt)
           const durationMins = Math.max(0, Math.round((lastT.getTime() - firstT.getTime()) / 60000))
+          // Road distance beats the straight-line estimate when we have it
+          const roadKm = snapped?.distanceKm ?? (roadPath
+            ? roadPath.slice(1).reduce((sum: number, pt: any, i: number) => sum + haversineKm(roadPath[i], pt), 0)
+            : null)
           setRouteStats({
-            distanceKm, durationMins,
+            distanceKm: roadKm ?? distanceKm,
+            routeMode: snapped?.mode || 'raw',
+            durationMins,
             stops: visits.length,
             lastUpdate: lastT,
           })
@@ -426,7 +429,12 @@ export default function TrackingPage() {
             {tab === 'route' && routeStats && (
               <div className="absolute left-3 bottom-3 right-3 sm:right-auto sm:min-w-[260px] bg-white/95 backdrop-blur rounded-xl shadow-lg border border-gray-100 px-4 py-3 flex items-center gap-4">
                 <div>
-                  <p className="text-[11px] text-gray-400 font-medium">Distance covered</p>
+                  <p className="text-[11px] text-gray-400 font-medium">
+                    Distance covered
+                    {routeStats.routeMode && routeStats.routeMode !== 'raw' && (
+                      <span className="ml-1 text-[9px] uppercase tracking-wide text-emerald-600">road</span>
+                    )}
+                  </p>
                   <p className="text-lg font-bold text-gray-900">{routeStats.distanceKm.toFixed(1)} km</p>
                 </div>
                 <div className="h-8 w-px bg-gray-100" />

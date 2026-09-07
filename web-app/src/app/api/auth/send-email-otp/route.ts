@@ -2,6 +2,7 @@
 // Sends a 6-digit code to the logged-in user's own email to verify it's
 // real and reachable. Required for everyone except Admin/Super Admin.
 import { NextRequest } from 'next/server'
+import { BRAND } from '@/lib/branding'
 import { prisma } from '@/lib/prisma'
 import { getRequestSession } from '@/lib/auth'
 import { successResponse, errorResponse, unauthorizedResponse } from '@/lib/api'
@@ -37,7 +38,7 @@ export async function POST(req: NextRequest) {
 
   const result = await sendMail({
     to: user.email,
-    subject: 'Verify your email — HBS CRM',
+    subject: `Verify your email — ${BRAND.appName}`,
     html: wrapEmailHtml(
       'Verify your email',
       `<p>Hi ${user.name},</p>

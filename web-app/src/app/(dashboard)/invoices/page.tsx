@@ -7,12 +7,13 @@ import { Input, Select, EmptyState, Pagination, Badge } from '@/components/ui'
 import { formatDate, formatCurrency } from '@/lib/utils'
 import { FileText, Plus, Search, Eye, Loader2, AlertCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { isNotOwnScopeRole } from '@/lib/permissions'
 
 const STATUSES = ['DRAFT', 'PENDING', 'PARTIAL', 'PAID', 'OVERDUE', 'CANCELLED']
 
 export default function InvoicesPage() {
   const { user } = useAuth()
-  const canCreate = ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'MARKETING_EXECUTIVE'].includes(user?.role || '')
+  const canCreate = isNotOwnScopeRole(user?.role || '')
 
   const [invoices, setInvoices] = useState<any[]>([])
   const [total, setTotal] = useState(0)

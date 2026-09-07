@@ -14,15 +14,17 @@ import {
   Loader2, Package, FileText, CreditCard, MessageSquare, RefreshCw,
   Send, Copy, Check, Plus, KeyRound, RotateCcw, Users2, TrendingUp,
   DollarSign, AlertCircle, Calendar, Video, X,
-  Trash2, FileBarChart2, Eye
+  Trash2, FileBarChart2, Eye, ImagePlus, PauseCircle, PlayCircle, Search
 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { openSeoReportPdf } from '@/lib/seoReportPdf'
+import { BRAND } from '@/lib/branding'
 
 const BILLING_CYCLES = ['ONE_TIME', 'MONTHLY', 'QUARTERLY', 'YEARLY']
 
 // Only these roles can add/edit services, see pricing, and view
 // Proposals / Invoices / Payments.
-const CAN_EDIT_ROLES = ['SUPER_ADMIN', 'ADMIN', 'MARKETING_EXECUTIVE']
+const CAN_EDIT_ROLES = ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'MARKETING_EXECUTIVE']
 
 export default function ClientDetailPage() {
   const params = useParams()
@@ -33,7 +35,7 @@ export default function ClientDetailPage() {
   const id = params.id as string
   const [client, setClient] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState<'services' | 'proposals' | 'invoices' | 'payments' | 'tickets' | 'reports' | 'seo-reports' | 'team'>('services')
+  const [tab, setTab] = useState<'services' | 'proposals' | 'invoices' | 'payments' | 'tickets' | 'seo-reports' | 'team'>('services')
 
   const [modal, setModal] = useState<'none' | 'service' | 'renew' | 'portal' | 'edit'>('none')
   const [saving, setSaving] = useState(false)
@@ -42,6 +44,8 @@ export default function ClientDetailPage() {
 
   const [serviceCatalog, setServiceCatalog] = useState<any[]>([])
   const [departments, setDepartments] = useState<any[]>([])
+  const [logoBusy, setLogoBusy] = useState(false)
+  const [editForm, setEditForm] = useState<any>({})
   const [target, setTarget] = useState<any>(null)
 
   const [svcForm, setSvcForm] = useState({
@@ -120,6 +124,85 @@ export default function ClientDetailPage() {
     } finally { setSaving(false) }
   }
 
+  // Client logo lives on the client profile — upload once here and every SEO
+  // report (and the portal) picks it up automatically.
+  const uploadLogo = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    if (file.size > 5 * 1024 * 1024) { toast.error('Max 5MB'); return }
+    setLogoBusy(true)
+    try {
+      const dataUrl: string = await new Promise((res, rej) => {
+        const fr = new FileReader()
+        fr.onload = () => res(String(fr.result)); fr.onerror = rej
+        fr.readAsDataURL(file)
+      })
+      const up = await api.post('/upload', { dataUrl, folder: 'client-images', resourceType: 'image' })
+      await api.put(`/clients/${id}`, { image: up.data.data.url || up.data.data.secure_url })
+      toast.success('Logo updated')
+      fetchClient()
+    } catch { toast.error('Logo upload failed') }
+    finally { setLogoBusy(false) }
+  }
+
+  const removeLogo = async () => {
+    if (!confirm('Remove the client logo?')) return
+    setLogoBusy(true)
+    try {
+      await api.put(`/clients/${id}`, { image: '' })
+      toast.success('Logo removed')
+      fetchClient()
+    } catch { toast.error('Could not remove logo') }
+    finally { setLogoBusy(false) }
+  }
+
+  const openEdit = () => {
+    setEditForm({
+      companyName: client.companyName || '', clientName: client.clientName || '',
+      phone: client.phone || '', altPhone: client.altPhone || '', email: client.email || '',
+      address: client.address || '', city: client.city || '', state: client.state || '',
+      pincode: client.pincode || '', gstNo: client.gstNo || '',
+      gstApplicable: !!client.gstApplicable, status: client.status || 'ACTIVE',
+      onboardingDate: client.onboardingDate ? String(client.onboardingDate).split('T')[0] : '',
+    })
+    setModal('edit')
+  }
+
+  const saveEdit = async () => {
+    if (!editForm.companyName || !editForm.clientName || !editForm.phone) {
+      toast.error('Company, contact name and phone are required'); return
+    }
+    setSaving(true)
+    try {
+      await api.put(`/clients/${id}`, editForm)
+      toast.success('Client updated')
+      setModal('none')
+      fetchClient()
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Update failed')
+    } finally { setSaving(false) }
+  }
+
+  const setServiceStatus = async (svc: any, status: string) => {
+    const verb = status === 'ACTIVE' ? 'resume' : status === 'PAUSED' ? 'pause' : 'stop'
+    if (!confirm(`Are you sure you want to ${verb} "${svc.serviceName}"?`)) return
+    try {
+      await api.patch(`/clients/${id}/services/${svc.id}`, { status })
+      toast.success(`Service ${status === 'ACTIVE' ? 'resumed' : status.toLowerCase()}`)
+      fetchClient()
+    } catch (e: any) { toast.error(e.response?.data?.error || 'Failed') }
+  }
+
+  const deleteService = async (svc: any) => {
+    if (!confirm(`Delete "${svc.serviceName}"? This removes its project assignments permanently.`)) return
+    try {
+      await api.delete(`/clients/${id}/services/${svc.id}`)
+      toast.success('Service deleted')
+      fetchClient()
+    } catch (e: any) { toast.error(e.response?.data?.error || 'Failed') }
+  }
+
   const openRenew = (svc: any) => {
     setTarget(svc)
     setRenewForm({
@@ -187,7 +270,8 @@ export default function ClientDetailPage() {
     // { key: 'proposals', label: 'Proposals', icon: FileText, count: client._count?.proposals, restricted: true },
     { key: 'invoices', label: 'Invoices', icon: FileText, count: client._count?.invoices, restricted: true },
     { key: 'payments', label: 'Payments', icon: CreditCard, count: null, restricted: true },
-    { key: 'reports', label: 'Reports', icon: FileText, count: client._count?.reports, restricted: false },
+    // The old generic "Reports" tab is gone — SEO / GMB Reports is the single
+    // place reports live now (it also lists anything already pushed to the portal).
     { key: 'seo-reports', label: 'SEO / GMB Reports', icon: FileBarChart2, count: null, restricted: false },
     { key: 'team', label: 'Team', icon: User, count: null, restricted: false },
     { key: 'tickets', label: 'Tickets', icon: MessageSquare, count: client._count?.supportTickets, restricted: false },
@@ -204,8 +288,15 @@ export default function ClientDetailPage() {
       <div className="card p-5">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div className="flex items-start gap-4 flex-1 min-w-0">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-brand-500 to-brand-600 flex items-center justify-center text-white text-2xl font-bold flex-shrink-0">
-              {getInitials(client.clientName)}
+            <div className="relative w-16 h-16 flex-shrink-0">
+              {client.image ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={client.image} alt={client.companyName} className="w-16 h-16 rounded-2xl object-contain bg-white border border-gray-200" />
+              ) : (
+                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-brand-500 to-brand-600 flex items-center justify-center text-white text-2xl font-bold">
+                  {getInitials(client.clientName)}
+                </div>
+              )}
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1 text-xs flex-wrap">
@@ -229,6 +320,11 @@ export default function ClientDetailPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {canEdit && (
+              <button onClick={openEdit} className="btn-secondary btn-sm">
+                <Edit3 size={13} /> Edit Client
+              </button>
+            )}
             {canEdit && (
               <button onClick={() => setModal('portal')} className="btn-secondary btn-sm">
                 <KeyRound size={13} /> Portal Access
@@ -340,10 +436,27 @@ export default function ClientDetailPage() {
                         </div>
                         {/* Price visible only to canEdit roles */}
                         {canEdit && <div className="font-bold text-gray-900">{formatCurrency(s.amount)}</div>}
-                        {canEdit && s.expiryDate && (
+                        {canEdit && s.expiryDate && s.status === 'ACTIVE' && (
                           <button onClick={() => openRenew(s)}
                             className="btn-secondary btn-sm border-emerald-300 text-emerald-700">
                             <RotateCcw size={12} /> Renew
+                          </button>
+                        )}
+                        {canEdit && (s.status === 'ACTIVE' ? (
+                          <button onClick={() => setServiceStatus(s, 'CANCELLED')}
+                            className="btn-secondary btn-sm border-amber-300 text-amber-700" title="Stop this service">
+                            <PauseCircle size={12} /> Stop
+                          </button>
+                        ) : (
+                          <button onClick={() => setServiceStatus(s, 'ACTIVE')}
+                            className="btn-secondary btn-sm border-emerald-300 text-emerald-700" title="Resume this service">
+                            <PlayCircle size={12} /> Resume
+                          </button>
+                        ))}
+                        {canEdit && (
+                          <button onClick={() => deleteService(s)}
+                            className="btn-secondary btn-sm border-red-300 text-red-600" title="Delete this service">
+                            <Trash2 size={12} />
                           </button>
                         )}
                       </div>
@@ -426,11 +539,6 @@ export default function ClientDetailPage() {
             <PaymentsSection clientId={client.id} />
           )}
 
-          {/* REPORTS */}
-          {tab === 'reports' && (
-            <ReportsSection clientId={client.id} services={client.services} />
-          )}
-
           {/* SEO / GMB REPORTS */}
           {tab === 'seo-reports' && (
             <SeoReportsSection clientId={client.id} services={client.services} canEdit={canEdit} />
@@ -468,6 +576,72 @@ export default function ClientDetailPage() {
           )}
         </div>
       </div>
+
+      {/* Edit Client Modal — available to Admin, TL (Manager) and Marketing */}
+      {canEdit && (
+        <Modal open={modal === 'edit'} onClose={() => setModal('none')} title="Edit Client">
+          <div className="space-y-3">
+            {/* Logo lives on the client profile — set it once here and it flows
+                into the portal and every SEO / GMB report automatically. */}
+            <div className="flex items-center gap-3 border border-gray-200 rounded-xl p-3">
+              {client.image ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={client.image} alt="logo" className="w-14 h-14 rounded-xl object-contain bg-white border border-gray-200" />
+              ) : (
+                <div className="w-14 h-14 rounded-xl bg-gray-100 flex items-center justify-center text-gray-400">
+                  <ImagePlus size={18} />
+                </div>
+              )}
+              <div className="flex-1">
+                <p className="text-sm font-medium text-gray-800">Client Logo</p>
+                <p className="text-[11px] text-gray-500">Used on the portal and on every SEO / GMB report. Upload once.</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="btn-secondary btn-sm cursor-pointer">
+                  {logoBusy ? <Loader2 size={13} className="animate-spin" /> : <ImagePlus size={13} />}
+                  {client.image ? 'Replace' : 'Upload'}
+                  <input type="file" accept="image/*" className="hidden" onChange={uploadLogo} disabled={logoBusy} />
+                </label>
+                {client.image && (
+                  <button type="button" onClick={removeLogo} className="btn-secondary btn-sm border-red-300 text-red-600">
+                    <Trash2 size={13} />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <Input label="Company Name *" value={editForm.companyName || ''} onChange={e => setEditForm((p: any) => ({ ...p, companyName: e.target.value }))} />
+              <Input label="Contact Name *" value={editForm.clientName || ''} onChange={e => setEditForm((p: any) => ({ ...p, clientName: e.target.value }))} />
+              <Input label="Phone *" value={editForm.phone || ''} onChange={e => setEditForm((p: any) => ({ ...p, phone: e.target.value }))} />
+              <Input label="Alt Phone" value={editForm.altPhone || ''} onChange={e => setEditForm((p: any) => ({ ...p, altPhone: e.target.value }))} />
+            </div>
+            <Input label="Email" type="email" value={editForm.email || ''} onChange={e => setEditForm((p: any) => ({ ...p, email: e.target.value }))} />
+            <Textarea label="Address" rows={2} value={editForm.address || ''} onChange={e => setEditForm((p: any) => ({ ...p, address: e.target.value }))} />
+            <div className="grid grid-cols-3 gap-3">
+              <Input label="City" value={editForm.city || ''} onChange={e => setEditForm((p: any) => ({ ...p, city: e.target.value }))} />
+              <Input label="State" value={editForm.state || ''} onChange={e => setEditForm((p: any) => ({ ...p, state: e.target.value }))} />
+              <Input label="Pincode" value={editForm.pincode || ''} onChange={e => setEditForm((p: any) => ({ ...p, pincode: e.target.value }))} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Select label="Status" value={editForm.status || 'ACTIVE'} onChange={e => setEditForm((p: any) => ({ ...p, status: e.target.value }))}
+                options={['ACTIVE', 'INACTIVE', 'CHURNED'].map(v => ({ value: v, label: v }))} />
+              <Input label="Onboarding Date" type="date" value={editForm.onboardingDate || ''} onChange={e => setEditForm((p: any) => ({ ...p, onboardingDate: e.target.value }))} />
+            </div>
+            <div className="grid grid-cols-2 gap-3 items-end">
+              <Input label="GST No." value={editForm.gstNo || ''} onChange={e => setEditForm((p: any) => ({ ...p, gstNo: e.target.value }))} />
+              <label className="flex items-center gap-2 h-9 text-sm">
+                <input type="checkbox" checked={!!editForm.gstApplicable} onChange={e => setEditForm((p: any) => ({ ...p, gstApplicable: e.target.checked }))} />
+                GST Applicable
+              </label>
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="secondary" onClick={() => setModal('none')}>Cancel</Button>
+              <Button onClick={saveEdit} loading={saving}>Save Changes</Button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {/* Add Service Modal */}
       {canEdit && (
@@ -707,193 +881,6 @@ function PaymentsSection({ clientId }: { clientId: string }) {
 }
 
 // Reports sub-section
-function ReportsSection({ clientId, services }: { clientId: string, services: any[] }) {
-  const [reports, setReports] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-  const [modal, setModal] = useState(false)
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [saving, setSaving] = useState(false)
-  const [form, setForm] = useState({
-    title: '', description: '', reportType: 'TEXT',
-    fileUrl: '', fileType: '', fileSize: 0, reportPeriod: '', content: '',
-    reportDate: new Date().toISOString().split('T')[0],
-    clientServiceId: '',
-    notifyClient: false,
-  })
-
-  const load = () => api.get(`/clients/${clientId}/reports`).then(r => setReports(r.data.data || [])).catch(() => { }).finally(() => setLoading(false))
-
-  useEffect(() => { load() }, [clientId])
-
-  const fileToDataUrl = (file: File): Promise<string> =>
-    new Promise((res, rej) => {
-      const reader = new FileReader()
-      reader.onload = () => res(reader.result as string)
-      reader.onerror = rej
-      reader.readAsDataURL(file)
-    })
-
-  const [uploading, setUploading] = useState(false)
-
-  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    if (file.size > 8 * 1024 * 1024) { toast.error('Max 8MB'); return }
-    setUploading(true)
-    try {
-      // /api/upload expects JSON { dataUrl, folder } — NOT FormData
-      const dataUrl = await fileToDataUrl(file)
-      const r = await api.post('/upload', { dataUrl, folder: 'client-reports' })
-      const uploaded = r.data.data
-      const isImage = file.type.startsWith('image/')
-      const isPdf = file.type === 'application/pdf'
-      setForm(p => ({
-        ...p,
-        fileUrl: uploaded.url,
-        fileType: file.type,
-        fileSize: uploaded.bytes || file.size,
-        reportType: isImage ? 'IMAGE' : isPdf ? 'PDF' : 'MIXED',
-      }))
-      toast.success('File uploaded')
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Upload failed')
-    } finally {
-      setUploading(false)
-    }
-  }
-
-  const emptyForm = {
-    title: '', description: '', reportType: 'TEXT',
-    fileUrl: '', fileType: '', fileSize: 0, reportPeriod: '', content: '',
-    reportDate: new Date().toISOString().split('T')[0],
-    clientServiceId: '',
-    notifyClient: false,
-  }
-
-  const openAdd = () => { setEditingId(null); setForm(emptyForm); setModal(true) }
-  const openEdit = (r: any) => {
-    setEditingId(r.id)
-    setForm({
-      title: r.title || '', description: r.description || '', reportType: r.reportType || 'TEXT',
-      fileUrl: r.fileUrl || '', fileType: r.fileType || '', fileSize: r.fileSize || 0,
-      reportPeriod: r.reportPeriod || '', content: r.content || '',
-      reportDate: r.reportDate ? r.reportDate.split('T')[0] : new Date().toISOString().split('T')[0],
-      clientServiceId: r.clientServiceId || '',
-      notifyClient: false,
-    })
-    setModal(true)
-  }
-
-  const save = async () => {
-    if (!form.title) { toast.error('Title required'); return }
-    setSaving(true)
-    try {
-      if (editingId) {
-        await api.put(`/clients/${clientId}/reports/${editingId}`, form)
-        toast.success('Report updated')
-      } else {
-        await api.post(`/clients/${clientId}/reports`, form)
-        toast.success('Report added' + (form.notifyClient ? ' + WhatsApp sent' : ''))
-      }
-      setModal(false)
-      setEditingId(null)
-      setForm(emptyForm)
-      load()
-    } catch (e: any) {
-      toast.error(e.response?.data?.error || 'Failed')
-    } finally { setSaving(false) }
-  }
-
-  const del = async (id: string) => {
-    if (!confirm('Delete this report?')) return
-    await api.delete(`/clients/${clientId}/reports/${id}`)
-    toast.success('Deleted')
-    load()
-  }
-
-  if (loading) return <p className="text-sm text-gray-400 text-center py-4"><Loader2 className="animate-spin inline" /></p>
-
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="font-semibold text-gray-900">Client Reports</h3>
-        <Button size="sm" onClick={openAdd}><Plus size={13} /> Add Report</Button>
-      </div>
-      {reports.length === 0 ? (
-        <EmptyState icon={<FileText size={20} />} title="No reports" description="Upload SEO reports, monthly summaries, screenshots, PDFs" />
-      ) : (
-        <div className="space-y-2">
-          {reports.map(r => (
-            <div key={r.id} className="border border-gray-200 rounded-lg p-3">
-              <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center text-purple-700">
-                  <FileText size={18} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <p className="font-medium text-sm">{r.title}</p>
-                    <span className="badge bg-slate-100 text-slate-700 text-[10px]">{r.reportType}</span>
-                    {r.reportPeriod && <span className="badge bg-purple-100 text-purple-700 text-[10px]">{r.reportPeriod}</span>}
-                    {r.clientService && <span className="badge bg-brand-50 text-brand-700 text-[10px]">{r.clientService.serviceName}</span>}
-                  </div>
-                  {r.description && <p className="text-xs text-gray-600 mt-1">{r.description}</p>}
-                  {r.content && <p className="text-sm text-gray-700 mt-1 whitespace-pre-wrap">{r.content}</p>}
-                  {r.fileUrl && (
-                    <a href={r.fileUrl} target="_blank" className="text-xs text-brand-600 hover:underline flex items-center gap-1 mt-1">
-                      📎 View attachment
-                    </a>
-                  )}
-                  <p className="text-xs text-gray-500 mt-1">
-                    {r.uploadedBy?.name} · {formatDate(r.reportDate)}
-                  </p>
-                </div>
-                <div className="flex flex-col gap-1">
-                  <button onClick={() => openEdit(r)} className="text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded p-1" title="Edit"><Edit3 size={12} /></button>
-                  <button onClick={() => del(r.id)} className="text-red-500 hover:bg-red-50 rounded p-1" title="Delete"><Trash2 size={12} /></button>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <Modal open={modal} onClose={() => { setModal(false); setEditingId(null) }} title={editingId ? 'Edit Client Report' : 'Add Client Report'}>
-        <div className="space-y-3">
-          <Input label="Title *" value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))}
-            placeholder="e.g. January 2026 SEO Report" />
-          <div className="grid grid-cols-2 gap-3">
-            <Input label="Report Period" value={form.reportPeriod} onChange={e => setForm(p => ({ ...p, reportPeriod: e.target.value }))}
-              placeholder="Jan 2026, Week 1 Feb, Q1..." />
-            <Input label="Report Date" type="date" value={form.reportDate} onChange={e => setForm(p => ({ ...p, reportDate: e.target.value }))} />
-          </div>
-          <Select label="Related Service (optional)" value={form.clientServiceId} onChange={e => setForm(p => ({ ...p, clientServiceId: e.target.value }))} options={[
-            { value: '', label: '— None —' },
-            ...services.map((s: any) => ({ value: s.id, label: s.serviceName }))
-          ]} />
-          <Textarea label="Description / Highlights" value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} rows={2} />
-          <Textarea label="Report Content (text)" value={form.content} onChange={e => setForm(p => ({ ...p, content: e.target.value }))} rows={4}
-            placeholder="Rich text content of the report..." />
-          <div>
-            <label className="label">Attach File (image / PDF)</label>
-            <input type="file" accept="image/*,application/pdf" onChange={handleFile} disabled={uploading} className="input" />
-            {uploading && <p className="text-xs text-brand-600 mt-1"><Loader2 size={11} className="animate-spin inline" /> Uploading...</p>}
-            {form.fileUrl && !uploading && <p className="text-xs text-emerald-600 mt-1">✓ Uploaded: <a href={form.fileUrl} target="_blank" className="underline">View</a></p>}
-          </div>
-          <label className="flex items-center gap-2 text-sm bg-brand-50 border border-blue-200 rounded-lg p-3 cursor-pointer">
-            <input type="checkbox" checked={form.notifyClient} onChange={e => setForm(p => ({ ...p, notifyClient: e.target.checked }))} />
-            <span>📲 Send WhatsApp notification to client</span>
-          </label>
-          <div className="flex justify-end gap-2 pt-1">
-            <Button variant="secondary" onClick={() => { setModal(false); setEditingId(null) }}>Cancel</Button>
-            <Button onClick={save} loading={saving}>{editingId ? 'Update Report' : 'Save Report'}</Button>
-          </div>
-        </div>
-      </Modal>
-    </div>
-  )
-}
-
-// Team assignments sub-section — assign dept head + members inline
 function TeamSection({ clientId, services, canEdit, user, onChanged }: {
   clientId: string, services: any[], canEdit: boolean, user: any, onChanged: () => void,
 }) {
@@ -1159,6 +1146,12 @@ function SeoReportsSection({ clientId, services, canEdit }: { clientId: string; 
     reportDate: new Date().toISOString().split('T')[0],
   })
 
+  // Filters
+  const [fSearch, setFSearch] = useState('')
+  const [fStatus, setFStatus] = useState('ALL')
+  const [fService, setFService] = useState('ALL')
+  const [fYear, setFYear] = useState('ALL')
+
   const load = useCallback(() => {
     api.get(`/seo-reports?clientId=${clientId}&limit=50`)
       .then(r => setRows(r.data.data || []))
@@ -1167,6 +1160,22 @@ function SeoReportsSection({ clientId, services, canEdit }: { clientId: string; 
   }, [clientId])
 
   useEffect(() => { load() }, [load])
+
+  const years = Array.from(new Set(rows.map(r => (r.reportMonth || '').match(/\d{4}/)?.[0]).filter(Boolean))).sort().reverse()
+  const serviceNames = Array.from(new Set(rows.map(r => r.clientService?.serviceName).filter(Boolean)))
+
+  const filtered = rows.filter(r => {
+    if (fStatus !== 'ALL' && r.status !== fStatus) return false
+    if (fService !== 'ALL' && r.clientService?.serviceName !== fService) return false
+    if (fYear !== 'ALL' && !String(r.reportMonth || '').includes(fYear)) return false
+    if (fSearch.trim()) {
+      const q = fSearch.trim().toLowerCase()
+      const hay = `${r.reportNumber} ${r.title} ${r.reportMonth} ${r.createdBy?.name || ''}`.toLowerCase()
+      if (!hay.includes(q)) return false
+    }
+    return true
+  })
+  const hasFilters = fStatus !== 'ALL' || fService !== 'ALL' || fYear !== 'ALL' || !!fSearch
 
   const create = async () => {
     if (!form.reportMonth.trim()) { toast.error('Enter the reporting period'); return }
@@ -1185,6 +1194,47 @@ function SeoReportsSection({ clientId, services, canEdit }: { clientId: string; 
     catch (e: any) { toast.error(e.response?.data?.message || 'Failed') }
   }
 
+  // Always fetch fresh instead of trusting r.pdfUrl — that can have a stale
+  // host baked in from whichever origin it was last submitted from.
+  const [copiedId, setCopiedId] = useState<string | null>(null)
+  const copyLink = async (r: any) => {
+    try {
+      const url = (await api.get(`/seo-reports/${r.id}/share-link?origin=${encodeURIComponent(window.location.origin)}`)).data.data.url
+      await navigator.clipboard.writeText(url)
+      setCopiedId(r.id)
+      toast.success('Link copied')
+      setTimeout(() => setCopiedId(null), 1500)
+    } catch {
+      toast.error('Could not get link')
+    }
+  }
+  const openLink = async (r: any) => {
+    try {
+      const url = (await api.get(`/seo-reports/${r.id}/share-link?origin=${encodeURIComponent(window.location.origin)}`)).data.data.url
+      window.open(url, '_blank')
+    } catch { toast.error('Could not get link') }
+  }
+
+  const [previewingId, setPreviewingId] = useState<string | null>(null)
+  const preview = async (r: any) => {
+    setPreviewingId(r.id)
+    const t = toast.loading('Building PDF…')
+    try {
+      const full = await api.get(`/seo-reports/${r.id}`)
+      const rep = full.data.data
+      const meta = {
+        businessName: rep.client?.companyName || '',
+        agencyName: rep.agencyName || BRAND.name,
+        reportMonth: rep.reportMonth || '',
+        serviceName: rep.clientService?.serviceName || null,
+      }
+      await openSeoReportPdf(meta, rep.data || {})
+      toast.success('Opened in a new tab', { id: t })
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || e?.message || 'Preview failed', { id: t })
+    } finally { setPreviewingId(null) }
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between mb-3">
@@ -1196,13 +1246,42 @@ function SeoReportsSection({ clientId, services, canEdit }: { clientId: string; 
         )}
       </div>
 
+      {rows.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-3">
+          <div className="relative flex-1 min-w-[180px]">
+            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input className="input pl-7 text-xs" placeholder="Search report no, title, month, person..."
+              value={fSearch} onChange={e => setFSearch(e.target.value)} />
+          </div>
+          <select className="input text-xs max-w-[140px]" value={fStatus} onChange={e => setFStatus(e.target.value)}>
+            <option value="ALL">All status</option>
+            <option value="DRAFT">Draft</option>
+            <option value="SUBMITTED">Submitted</option>
+          </select>
+          <select className="input text-xs max-w-[170px]" value={fService} onChange={e => setFService(e.target.value)}>
+            <option value="ALL">All services</option>
+            {serviceNames.map(n => <option key={n} value={n}>{n}</option>)}
+          </select>
+          <select className="input text-xs max-w-[110px]" value={fYear} onChange={e => setFYear(e.target.value)}>
+            <option value="ALL">All years</option>
+            {years.map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
+          {hasFilters && (
+            <button onClick={() => { setFSearch(''); setFStatus('ALL'); setFService('ALL'); setFYear('ALL') }}
+              className="text-xs text-brand-600 hover:underline px-1">Clear</button>
+          )}
+        </div>
+      )}
+
       {loading ? (
         <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <div key={i} className="skeleton h-14 rounded-lg" />)}</div>
       ) : rows.length === 0 ? (
         <EmptyState icon={<FileBarChart2 size={20} />} title="No SEO reports" description="Build the monthly SEO + GMB report and send it to the client" />
+      ) : filtered.length === 0 ? (
+        <EmptyState icon={<Search size={20} />} title="No matching reports" description="Try changing or clearing the filters" />
       ) : (
         <div className="space-y-2">
-          {rows.map(r => (
+          {filtered.map(r => (
             <div key={r.id} className="border border-gray-200 rounded-lg p-3 flex items-center gap-3">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
@@ -1218,8 +1297,11 @@ function SeoReportsSection({ clientId, services, canEdit }: { clientId: string; 
               </div>
               <div className="flex items-center gap-1.5">
                 <Link href={`/seo-reports/${r.id}`} className="p-1.5 rounded hover:bg-gray-100 text-gray-600" title="Open"><Eye size={15} /></Link>
+                <button onClick={() => copyLink(r)} className="p-1.5 rounded hover:bg-gray-100 text-blue-600" title="Copy report link">
+                  {copiedId === r.id ? <Check size={15} /> : <Copy size={15} />}
+                </button>
                 {r.pdfUrl && (
-                  <a href={r.pdfUrl} target="_blank" rel="noreferrer" className="p-1.5 rounded hover:bg-gray-100 text-blue-600" title="Open PDF"><FileText size={15} /></a>
+                  <button onClick={() => openLink(r)} className="p-1.5 rounded hover:bg-gray-100 text-blue-600" title="Open report link"><FileText size={15} /></button>
                 )}
                 {canEdit && (
                   <button onClick={() => remove(r.id)} className="p-1.5 rounded hover:bg-red-50 text-red-600" title="Delete"><Trash2 size={15} /></button>

@@ -106,6 +106,8 @@ model User {
   reminders              Reminder[]
   notes                  Note[]
   leavesApproved         Leave[]              @relation("LeaveApprovedBy")
+  appRoleId              String?
+  appRole                AppRole?             @relation(fields: [appRoleId], references: [id])
   seoReportsCreated      SeoReport[]          @relation("SeoReportCreator")
   seoReportsSubmitted    SeoReport[]          @relation("SeoReportSubmitter")
 
@@ -1344,6 +1346,7 @@ model SeoReport {
   status              String    @default("DRAFT") // DRAFT | SUBMITTED
   data                String?   @db.LongText
   pdfUrl              String?
+  shareToken          String?   @unique // Public "view report" link token (like Invoice.shareToken) — PDF is built on the fly, never stored, so no upload storage is used
   clientReportId      String?
   submittedAt         DateTime?
   createdById         String
@@ -1359,4 +1362,28 @@ model SeoReport {
   @@index([clientId, reportDate])
   @@index([status])
   @@map("seo_reports")
+}
+
+
+// Custom, permission-based roles. A user keeps their built-in `role` string
+// (used by the existing hierarchy checks); attaching an AppRole overrides what
+// they can actually reach, module by module. No AppRole = built-in defaults
+// from src/lib/permissions.ts.
+model AppRole {
+  id          String   @id @default(cuid())
+  key         String   @unique          // SUB_ADMIN, ACCOUNTS, SEO_EXECUTIVE...
+  name        String
+  description String?  @db.Text
+  baseRole    String   @default("EMPLOYEE") // built-in role a member of this role maps to
+  permissions String   @db.LongText      // JSON array of "module.action"
+  isSystem    Boolean  @default(false)   // shipped preset — cannot be deleted
+  isActive    Boolean  @default(true)
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users User[]
+
+  @@index([isActive])
+  @@map("app_roles")
 }

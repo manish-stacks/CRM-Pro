@@ -64,7 +64,7 @@ export default function MyTicketsPage() {
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">My Tickets</h1>
-          <p className="text-sm text-gray-500 mt-1">Internal tickets — raise or resolve issues within HBS</p>
+          <p className="text-sm text-gray-500 mt-1">Internal tickets — raise or resolve internal issues</p>
         </div>
         <Button onClick={() => setModal('create')}><Plus size={14} /> Raise Ticket</Button>
       </div>

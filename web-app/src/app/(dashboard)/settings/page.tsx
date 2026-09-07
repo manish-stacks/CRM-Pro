@@ -3,13 +3,14 @@ import { useState, useEffect, useRef } from 'react'
 import api from '@/lib/axios'
 import { useAuth } from '@/hooks/useAuth'
 import { Button, Input, Select, Textarea } from '@/components/ui'
-import { Settings as SettingsIcon, Building2, DollarSign, Calendar, Clock, Save, Loader2, Camera, Bell, Upload, X, Video, FileText } from 'lucide-react'
+import { Settings as SettingsIcon, Building2, DollarSign, Calendar, Clock, Save, Loader2, Camera, Bell, Upload, X, Video, FileText, Palette } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { THEME_PALETTES, todaysPalette, getPaletteById, applyPalette } from '@/lib/themeColors'
 
 // Default settings shown in the form (populated from API + falls back to these)
 const DEFAULTS: Record<string, any> = {
   // Company
-  company_name: 'Hover Business Services',
+  company_name: '',
   company_address: '',
   company_phone: '',
   company_email: '',
@@ -57,11 +58,13 @@ const DEFAULTS: Record<string, any> = {
   payroll_tds_percent: 5,
   payroll_tds_annual_threshold: 500000,
   payroll_tds_monthly_exempt: 41667,
-  hr_email: 'info@hovermedia.in',
+  hr_email: '',
   // Meeting slot booking (telecaller -> marketing exec, by area)
   meeting_office_start: '10:00',
   meeting_office_end: '18:30',
   meeting_slot_minutes: 90,
+  // Appearance — 'auto' picks one of 10 colors daily; anything else locks it
+  theme_color: 'auto',
 }
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -154,6 +157,7 @@ export default function SettingsPage() {
         Object.assign(merged, grouped[cat])
       }
       setValues(merged)
+      try { localStorage.setItem('theme_color_override', merged.theme_color || 'auto') } catch {}
     }).catch(() => {}).finally(() => setLoading(false))
   }, [])
 
@@ -189,12 +193,14 @@ export default function SettingsPage() {
         meetings: ['meeting_office_start', 'meeting_office_end', 'meeting_slot_minutes'],
         tracker: ['tracker_enabled', 'tracker_idle_threshold_seconds'],
         notifications: ['email_enabled', 'whatsapp_enabled'],
+        appearance: ['theme_color'],
       }
       const settings: Record<string, { value: any; category: string }> = {}
       for (const [cat, keys] of Object.entries(CATS)) {
         for (const k of keys) settings[k] = { value: values[k], category: cat }
       }
       await api.put('/settings', { settings })
+      try { localStorage.setItem('theme_color_override', values.theme_color || 'auto') } catch {}
       toast.success('Settings saved')
     } catch (e: any) {
       toast.error(e.response?.data?.error || 'Failed')
@@ -228,6 +234,7 @@ export default function SettingsPage() {
             { key: 'meetings', label: 'Meeting Slots', icon: Video },
             { key: 'tracker', label: 'Desktop Tracker', icon: Camera },
             { key: 'notifications', label: 'Notifications', icon: Bell },
+            { key: 'appearance', label: 'Appearance', icon: Palette },
           ].map((t: any) => (
             <button key={t.key} onClick={() => setTab(t.key)}
               className={`px-5 py-3 text-sm font-medium border-b-2 flex items-center gap-2 whitespace-nowrap ${
@@ -341,7 +348,7 @@ export default function SettingsPage() {
                 <Input label="Invoice Due Days" type="number" value={values.invoice_due_days ?? 15} onChange={e => set('invoice_due_days', Number(e.target.value))} />
               </div>
               <Input label="Invoice Prefix" value={values.invoice_prefix || 'INV-'} onChange={e => set('invoice_prefix', e.target.value)}
-                placeholder="e.g. INV-, HBS/INV/, etc." />
+                placeholder="e.g. INV-, ABC/INV/, etc." />
               <div>
                 <label className="label">Accepted Payment Methods</label>
                 <div className="flex gap-2 flex-wrap mt-1">
@@ -619,6 +626,32 @@ export default function SettingsPage() {
               <p className="text-xs text-gray-500">
                 Skipped emails/WhatsApp messages are still saved in the Logs with a <code>SKIPPED</code> status, so it's clear later that they weren't sent because the feature was disabled — not due to some other failure.
               </p>
+            </>
+          )}
+
+          {tab === 'appearance' && (
+            <>
+              <p className="text-sm text-gray-500">
+                By default the app's accent color changes automatically every day (today's auto color is highlighted below). Pick a color to lock it instead, or choose "Auto" to go back to the daily rotation.
+              </p>
+              <div className="grid grid-cols-5 sm:grid-cols-6 gap-3">
+                {[{ id: 'auto', label: 'Auto (daily)' }, ...THEME_PALETTES].map((p: any) => {
+                  const selected = (values.theme_color || 'auto') === p.id
+                  const isToday = p.id === todaysPalette().id
+                  const swatchRgb = p.id === 'auto' ? todaysPalette().shades[500] : p.shades?.[500]
+                  return (
+                    <button key={p.id} type="button"
+                      onClick={() => { set('theme_color', p.id); applyPalette(p.id === 'auto' ? todaysPalette() : getPaletteById(p.id)!) }}
+                      className={`flex flex-col items-center gap-1.5 p-2 rounded-xl border-2 transition-all ${selected ? 'border-gray-900' : 'border-transparent hover:border-gray-200'}`}>
+                      <div className="w-9 h-9 rounded-full ring-1 ring-black/5 relative"
+                        style={{ background: `rgb(${swatchRgb})` }}>
+                        {isToday && p.id !== 'auto' && <span className="absolute -top-1 -right-1 w-3 h-3 bg-amber-400 rounded-full ring-2 ring-white" title="Today's auto color" />}
+                      </div>
+                      <span className="text-[11px] text-gray-600">{p.label}</span>
+                    </button>
+                  )
+                })}
+              </div>
             </>
           )}
         </div>

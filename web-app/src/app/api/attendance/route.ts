@@ -2,6 +2,7 @@
 // Phase 2: Punch in/out saves geolocation + device + IP.
 // GET filters: date, month, department, username, status.
 import { NextRequest, NextResponse } from 'next/server'
+import { BRAND } from '@/lib/branding'
 import { prisma } from '@/lib/prisma'
 import { requireAuth, hasMinRole } from '@/lib/auth'
 import { successResponse, errorResponse, getPaginationParams } from '@/lib/api'
@@ -12,6 +13,7 @@ import { Settings } from '@/lib/settings'
 import { getTeamScope } from '@/lib/teamScope'
 import { getProfileCompletion, PROFILE_COMPLETION_THRESHOLD } from '@/lib/profileCompletion'
 import { reverseGeocodeForPunch } from '@/lib/reverseGeocodeServer'
+import { canSeeBeyondOwn, isCompanyWideRole } from '@/lib/permissions'
 
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req)
@@ -53,7 +55,7 @@ export async function GET(req: NextRequest) {
 
   // Role-based visibility
   // Non-admins: see own + team (dept they head + direct reports). Covers EMPLOYEE-role heads.
-  if (!['SUPER_ADMIN', 'ADMIN'].includes(session.role)) {
+  if (!isCompanyWideRole(session.role)) {
     const scope = await getTeamScope(session.userId)
     if (!scope.visibleIds.length) return successResponse([], 0)
     where.employeeId = { in: scope.visibleIds }
@@ -70,7 +72,7 @@ export async function GET(req: NextRequest) {
   // Single-employee filter (used by the employee detail page's Attendance tab).
   // Non-admins can only pass an employeeId that is already inside their scope.
   if (employeeId) {
-    if (['SUPER_ADMIN', 'ADMIN'].includes(session.role)) {
+    if (isCompanyWideRole(session.role)) {
       where.employeeId = employeeId
     } else if (where.employeeId?.in) {
       where.employeeId = where.employeeId.in.includes(employeeId)
@@ -79,7 +81,7 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  if (search && ['SUPER_ADMIN', 'ADMIN', 'MANAGER'].includes(session.role)) {
+  if (search && canSeeBeyondOwn(session.role)) {
     const users = await prisma.user.findMany({
       where: { name: { contains: search } },
       select: { id: true },
@@ -207,7 +209,7 @@ export async function POST(req: NextRequest) {
     // Field staff punch in/out from the mobile app only (exact GPS fix, free
     // on-device geocoding). This web route stays open for every other role.
     if ((action === 'punch_in' || action === 'punch_out') && session.role === 'MARKETING_EXECUTIVE') {
-      return errorResponse('Please use the HBS mobile app to punch in/out', 403)
+      return errorResponse('Please use the mobile app to punch in/out', 403)
     }
 
     const today = todayDateOnly()

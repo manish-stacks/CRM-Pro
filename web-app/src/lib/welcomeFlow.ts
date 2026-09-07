@@ -4,6 +4,7 @@
 import { hash } from 'bcryptjs'
 import { prisma } from './prisma'
 import { sendMail, wrapEmailHtml } from './mailer'
+import { BRAND } from './branding'
 import { sendWhatsapp } from './whatsapp'
 
 function generatePassword(len = 10): string {
@@ -53,7 +54,7 @@ export async function activateClientPortal(clientId: string, options: {
   if (client.email) {
     const body = `
       <p>Hi <b>${client.clientName}</b>,</p>
-      <p>Welcome to <b>${process.env.COMPANY_NAME || 'HBS'}</b>! Your client portal has been set up. Use the credentials below to access your account and track services, invoices, payments, and reports:</p>
+      <p>Welcome to <b>${BRAND.name}</b>! Your client portal has been set up. Use the credentials below to access your account and track services, invoices, payments, and reports:</p>
       <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin:16px 0;">
         <p style="margin:0 0 6px;"><b>Portal URL:</b> <a href="${portalUrl}">${portalUrl}</a></p>
         <p style="margin:0 0 6px;"><b>Email:</b> ${client.email}</p>
@@ -64,7 +65,7 @@ export async function activateClientPortal(clientId: string, options: {
     `
     const r = await sendMail({
       to: client.email,
-      subject: `Welcome to ${process.env.COMPANY_NAME || 'HBS'} — Your Portal Access`,
+      subject: `Welcome to ${BRAND.name} — Your Portal Access`,
       html: wrapEmailHtml('Welcome!', body, 'Open Client Portal', portalUrl),
       referenceType: 'CLIENT',
       referenceId: clientId,
@@ -108,7 +109,7 @@ export async function sendEmployeeWelcome(userId: string, plainPassword: string)
   if (!user) throw new Error('User not found')
 
   const loginUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/login`
-  const companyName = process.env.COMPANY_NAME || 'HBS'
+  const companyName = BRAND.name
 
   // ============ Email ============
   let emailSent = false

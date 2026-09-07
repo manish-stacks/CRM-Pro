@@ -1,6 +1,7 @@
 // prisma/seed.ts
 import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcryptjs'
+import { BRAND } from '../src/lib/branding'
 
 const prisma = new PrismaClient()
 
@@ -31,13 +32,13 @@ const SERVICES = [
 ]
 
 const SETTINGS = [
-  { key: 'company_name',    value: 'Hover Business Services LLP',       category: 'company' },
-  { key: 'company_short',   value: 'HBS',                               category: 'company' },
-  { key: 'company_email',   value: 'info@hoverbusinessservices.com',    category: 'company' },
-  { key: 'company_phone',   value: '+91 9000000000',                    category: 'company' },
-  { key: 'company_address', value: 'New Delhi, India',                  category: 'company' },
+  { key: 'company_name',    value: BRAND.name,                          category: 'company' },
+  { key: 'company_short',   value: BRAND.short,                         category: 'company' },
+  { key: 'company_email',   value: BRAND.domain ? `info@${BRAND.domain}` : '', category: 'company' },
+  { key: 'company_phone',   value: '',                                  category: 'company' },
+  { key: 'company_address', value: '',                                  category: 'company' },
   { key: 'company_gst',     value: '',                                  category: 'company' },
-  { key: 'employee_id_prefix', value: 'HBS',                            category: 'general' },
+  { key: 'employee_id_prefix', value: BRAND.short,                      category: 'general' },
   { key: 'currency',        value: 'INR',                               category: 'general' },
   { key: 'currency_symbol', value: '₹',                                 category: 'general' },
   { key: 'weekly_off_days', value: JSON.stringify([0, 6]),              category: 'general' }, // Sun, Sat
@@ -47,7 +48,7 @@ const SETTINGS = [
 ]
 
 async function main() {
-  console.log('🌱 Seeding HBS CRM v2.0...\n')
+  console.log(`🌱 Seeding ${BRAND.appName}...\n`)
 
   // ============ Departments ============
   console.log('📁 Creating departments...')
@@ -101,7 +102,7 @@ async function main() {
     update: {},
     create: {
       userId: superAdmin.id,
-      employeeId: 'HBS00000',
+      employeeId: `${BRAND.short}00000`,
       position: 'Super Administrator',
       salary: 100000,
       joiningDate: new Date('2024-01-01'),
@@ -139,7 +140,7 @@ async function main() {
       update: {},
       create: {
         userId: user.id,
-        employeeId: `HBS${String(i + 1).padStart(5, '0')}`,
+        employeeId: `${BRAND.short}${String(i + 1).padStart(5, '0')}`,
         departmentId: deptMap[u.deptSlug] || null,
         position: u.role.replace(/_/g, ' '),
         salary: u.role === 'MANAGER' ? 45000 : 25000 + i * 2000,

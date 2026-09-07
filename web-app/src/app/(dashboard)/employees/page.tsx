@@ -1,4 +1,5 @@
 'use client'
+import { BRAND } from '@/lib/branding'
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { useAuth } from '@/hooks/useAuth'
@@ -65,7 +66,7 @@ export default function EmployeesPage() {
 
   const [showFilter, setShowFilter] = useState(false)
   const [filters, setFilters] = useState({ search: '', departmentId: '', role: '', status: 'true', gender: '' })
-  const [company, setCompany] = useState<any>({ name: 'Hover Business Services' })
+  const [company, setCompany] = useState<any>({ name: BRAND.name })
 
   const [modal, setModal] = useState<'none' | 'add' | 'toggle'>('none')
   const [target, setTarget] = useState<any>(null)
@@ -95,7 +96,7 @@ export default function EmployeesPage() {
   useEffect(() => {
     api.get('/settings').then(r => {
       const g = r.data.data?.grouped?.company || {}
-      setCompany({ name: g.company_name || 'Hover Business Services', phone: g.company_phone, email: g.company_email })
+      setCompany({ name: g.company_name || BRAND.name, phone: g.company_phone, email: g.company_email })
     }).catch(() => { })
   }, [])
   useEffect(() => {
@@ -364,7 +365,7 @@ export default function EmployeesPage() {
         <div className="space-y-4">
           <div className="bg-brand-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-800">
             <p className="font-semibold mb-1">👋 Quick setup</p>
-            <p>Fill in the basics below. Employee ID will auto-generate (HBS format). The employee will fill in personal, ID, bank, and other details themselves after first login via their Profile page.</p>
+            <p>Fill in the basics below. Employee ID will auto-generate. The employee will fill in personal, ID, bank, and other details themselves after first login via their Profile page.</p>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <Input label="Full Name *" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />

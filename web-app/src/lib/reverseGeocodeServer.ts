@@ -14,6 +14,8 @@ const TYPE_PRIORITY = [
   'sublocality_level_1', 'sublocality', 'neighborhood', 'locality',
 ]
 
+import { BRAND } from './branding'
+
 async function fetchWithTimeout(url: string, ms: number, headers?: Record<string, string>) {
   const ctrl = new AbortController()
   const t = setTimeout(() => ctrl.abort(), ms)
@@ -46,7 +48,7 @@ async function nominatim(lat: number, lng: number, timeoutMs: number): Promise<s
     const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`
     const res = await fetchWithTimeout(url, timeoutMs, {
       'Accept-Language': 'en',
-      'User-Agent': 'HBS-CRM/1.0 (attendance geocoding)',
+      'User-Agent': `${BRAND.short}-CRM/1.0 (attendance geocoding)`,
     })
     if (!res.ok) return null
     const data = await res.json()

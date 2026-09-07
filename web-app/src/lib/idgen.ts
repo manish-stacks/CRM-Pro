@@ -1,11 +1,12 @@
 // src/lib/idgen.ts
+import { BRAND } from './branding'
 // Sequential ID generators for Employee, Lead, Client, Invoice, Proposal, Tickets
 // Uses count-based sequential numbers with a prefix.
 // NOTE: For high-concurrency production, replace with a transactional counter
 // table to eliminate the race window between count() and create().
 import { prisma } from './prisma'
 
-const EMPLOYEE_PREFIX = process.env.EMPLOYEE_ID_PREFIX || 'HBS'
+const EMPLOYEE_PREFIX = process.env.EMPLOYEE_ID_PREFIX || BRAND.short
 
 export async function generateEmployeeId(): Promise<string> {
   const count = await prisma.employee.count()

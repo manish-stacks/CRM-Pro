@@ -8,6 +8,7 @@ import { logFromRequest } from '@/lib/audit'
 import { getTeamScope } from '@/lib/teamScope'
 import { sendMail, wrapEmailHtml } from '@/lib/mailer'
 import { Settings } from '@/lib/settings'
+import { canSeeBeyondOwn, isCompanyWideRole } from '@/lib/permissions'
 
 const LEAVE_TYPES = ['PAID', 'UNPAID', 'SICK', 'CASUAL', 'MATERNITY', 'PATERNITY']
 const DURATIONS   = ['SINGLE_DAY', 'MULTIPLE_DAYS', 'SHORT_HOURLY']
@@ -39,7 +40,7 @@ export async function GET(req: NextRequest) {
   }
 
   // Role-based visibility: non-admins see own + team (dept they head + direct reports)
-  if (!['SUPER_ADMIN', 'ADMIN'].includes(session.role)) {
+  if (!isCompanyWideRole(session.role)) {
     const scope = await getTeamScope(session.userId)
     if (!scope.visibleIds.length) return successResponse([], 0)
     where.employeeId = { in: scope.visibleIds }
@@ -50,10 +51,10 @@ export async function GET(req: NextRequest) {
     const deptEmps = await prisma.employee.findMany({ where: { departmentId }, select: { id: true } })
     where.employeeId = { in: deptEmps.map(e => e.id) }
   }
-  if (employeeId && ['SUPER_ADMIN', 'ADMIN', 'MANAGER'].includes(session.role)) {
+  if (employeeId && canSeeBeyondOwn(session.role)) {
     where.employeeId = employeeId
   }
-  if (search && ['SUPER_ADMIN', 'ADMIN', 'MANAGER'].includes(session.role)) {
+  if (search && canSeeBeyondOwn(session.role)) {
     const users = await prisma.user.findMany({
       where: { name: { contains: search } },
       select: { id: true },

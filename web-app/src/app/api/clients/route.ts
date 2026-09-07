@@ -9,6 +9,7 @@ import { generateClientCode } from '@/lib/idgen'
 import { logFromRequest } from '@/lib/audit'
 import { activateClientPortal } from '@/lib/welcomeFlow'
 import { todayDateOnly } from '@/lib/attendanceDate'
+import { isNotOwnScopeRole } from '@/lib/permissions'
 
 const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000
 
@@ -154,7 +155,7 @@ export async function POST(req: NextRequest) {
   // Admin/Manager, Marketing Executive, and Telecaller can all create clients manually
   // Only Admin, the telecalling head (MANAGER) and Marketing Executives may
   // add a client. Telecallers convert a lead instead of creating directly.
-  if (!['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'MARKETING_EXECUTIVE'].includes(session.role)) {
+  if (!isNotOwnScopeRole(session.role)) {
     return errorResponse('Forbidden', 403)
   }
 

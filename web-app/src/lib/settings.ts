@@ -2,6 +2,7 @@
 // Simple typed helper for the Setting key-value store.
 // Supports strings, numbers, booleans, and JSON blobs.
 import { prisma } from './prisma'
+import { BRAND } from './branding'
 
 // In-memory cache — settings rarely change, cheap to re-read
 type Cache = { at: number; value: any }
@@ -55,12 +56,12 @@ export function invalidateAllSettings() {
 
 // Convenience getters with sensible defaults
 export const Settings = {
-  companyName: () => getSetting<string>('company_name', 'Hover Business Services'),
-  companyAddress: () => getSetting<string>('company_address', '916, 9th Floor, Pearls Omaxe Tower, Netaji Subhash Place, Pitampura, New Delhi - 110034'),
-  companyPhone: () => getSetting<string>('company_phone', '+919899691389'),
-  companyEmail: () => getSetting<string>('company_email', 'info@hovermedia.in'),
-  companyGst: () => getSetting<string>('company_gst', '07APGPG3277A1Z9'),
-  companyLogo: () => getSetting<string>('company_logo_url', 'https://hoverbusinessservices.com/images/hbs-logo.png'),
+  companyName: () => getSetting<string>('company_name', BRAND.name),
+  companyAddress: () => getSetting<string>('company_address', ''),
+  companyPhone: () => getSetting<string>('company_phone', ''),
+  companyEmail: () => getSetting<string>('company_email', BRAND.domain ? `info@${BRAND.domain}` : ''),
+  companyGst: () => getSetting<string>('company_gst', ''),
+  companyLogo: () => getSetting<string>('company_logo_url', BRAND.logoUrl),
   companySignature: () => getSetting<string>('company_signature_url', ''),
   holidayCalendarUrl: () => getSetting<string>('holiday_calendar_url', ''),
   currency: () => getSetting<string>('currency', 'INR'),
@@ -84,7 +85,7 @@ export const Settings = {
   invoicePrefix: () => getSetting<string>('invoice_prefix', 'INV-'),
   paymentMethods: () => getSetting<string[]>('payment_methods', ['UPI', 'CASH', 'BANK_TRANSFER', 'CHEQUE', 'CARD']),
   timezone: () => getSetting<string>('timezone', 'Asia/Kolkata'),
-  hrEmail: () => getSetting<string>('hr_email', 'info@hovermedia.in'),
+  hrEmail: () => getSetting<string>('hr_email', BRAND.domain ? `hr@${BRAND.domain}` : ''),
   // Meeting slot booking — office window + slot size used to compute
   // available meeting slots per area for the telecaller's booking picker.
   meetingOfficeStart: () => getSetting<string>('meeting_office_start', '10:00'),

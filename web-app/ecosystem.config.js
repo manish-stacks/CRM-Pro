@@ -1,7 +1,7 @@
 module.exports = {
   apps: [
     {
-      name: "hbs-crm",
+      name: "crm-app",
       script: "npm",
       args: "start",
       cwd: "/root/CRM-Pro/web-app",

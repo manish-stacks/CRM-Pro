@@ -2,7 +2,7 @@
 // Public "verify employee ID card" page — this is where the QR code on the
 // printed ID card redirects to. No login required; anyone who scans the
 // card (security guard, client, vendor) can confirm the person is a real,
-// currently-active HBS employee.
+// currently-active employee.
 'use client'
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'

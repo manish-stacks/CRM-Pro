@@ -7,6 +7,8 @@
 // Letter, Relieving & Experience Letter) — only the bracketed/variable
 // details are filled in from what the admin enters.
 
+import { BRAND } from './branding'
+
 function fmtINR(n: number): string {
   return Math.round(n || 0).toLocaleString('en-IN')
 }
@@ -96,7 +98,7 @@ export function buildOfferLetterBody(d: OfferLetterData): string {
 
   <p>You are requested to sign below in token of your acceptance of the terms and conditions of this letter of intent and return the duplicate copy duly signed by you to us.</p>
 
-  <p>Should you have any queries please feel free to write to us at ${esc(d.company.companyEmail || 'info@hovermedia.in')}.</p>
+  <p>Should you have any queries please feel free to write to us at ${esc(d.company.companyEmail || (BRAND.domain ? `info@${BRAND.domain}` : ''))}.</p>
 
   <p>We are very excited about you joining us &amp; we look forward to having you with ${esc(d.company.companyName)}.</p>
 

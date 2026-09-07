@@ -1,6 +1,7 @@
 // src/app/api/employees/[id]/reset-password/route.ts
 // Admin can set/reset an employee's login password
 import { NextRequest } from 'next/server'
+import { BRAND } from '@/lib/branding'
 import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/auth'
@@ -50,11 +51,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     try {
       await sendMail({
         to: emp.user.email,
-        subject: 'Your HBS account password was changed',
+        subject: `Your ${BRAND.short} account password was changed`,
         html: wrapEmailHtml(
           'Password Updated',
           `<p>Hi ${emp.user.name},</p>
-           <p>Your HBS account password has been reset by an administrator.</p>
+           <p>Your ${BRAND.short} account password has been reset by an administrator.</p>
            <p><b>Email:</b> ${emp.user.email}<br/><b>New Password:</b> ${password}</p>
            <p>Please log in and change this password from your profile.</p>`
         ),

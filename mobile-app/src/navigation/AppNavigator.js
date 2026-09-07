@@ -20,6 +20,7 @@ import ServiceDetailScreen from '../screens/ServiceDetailScreen';
 import RenewalsScreen from '../screens/RenewalsScreen';
 import ProposalsScreen from '../screens/ProposalsScreen';
 import AllTicketsScreen from '../screens/AllTicketsScreen';
+import ReportsScreen from '../screens/ReportsScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
 import EditProfileScreen from '../screens/profile/EditProfileScreen';
 import ChangePasswordScreen from '../screens/profile/ChangePasswordScreen';
@@ -92,6 +93,7 @@ function ClientTabs() {
       <Tab.Screen name="Renewals" component={RenewalsScreen} options={HIDDEN_TAB} />
       <Tab.Screen name="Proposals" component={ProposalsScreen} options={HIDDEN_TAB} />
       <Tab.Screen name="AllTickets" component={AllTicketsScreen} options={HIDDEN_TAB} />
+      <Tab.Screen name="Reports" component={ReportsScreen} options={HIDDEN_TAB} />
       <Tab.Screen name="Notifications" component={NotificationsScreen} options={HIDDEN_TAB} />
       <Tab.Screen name="EditProfile" component={EditProfileScreen} options={HIDDEN_TAB} />
       <Tab.Screen name="ChangePassword" component={ChangePasswordScreen} options={HIDDEN_TAB} />

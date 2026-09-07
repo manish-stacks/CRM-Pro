@@ -11,6 +11,7 @@ import { sendMail, wrapEmailHtml } from '@/lib/mailer'
 import { Notifications } from '@/lib/notify'
 import { dateOnly } from '@/lib/attendanceDate'
 import { getTeamScope } from '@/lib/teamScope'
+import { isCompanyWideRole } from '@/lib/permissions'
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -32,7 +33,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     // Managers (team leads) can only approve/reject leaves of their own team
     // (dept they head + direct reports). Admins can act on anyone.
-    const isAdmin = ['SUPER_ADMIN', 'ADMIN'].includes(session.role)
+    const isAdmin = isCompanyWideRole(session.role)
     if (!isAdmin) {
       const scope = await getTeamScope(session.userId)
       if (!scope.visibleIds.includes(leave.employeeId)) return errorResponse('Forbidden', 403)

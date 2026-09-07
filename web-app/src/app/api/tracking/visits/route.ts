@@ -10,6 +10,7 @@ import { successResponse, errorResponse, getPaginationParams } from '@/lib/api'
 import { logFromRequest } from '@/lib/audit'
 import { Notifications } from '@/lib/notify'
 import { dateOnly } from '@/lib/attendanceDate'
+import { isNotOwnScopeRole } from '@/lib/permissions'
 
 // scheduledDate is a @db.Date column (stored as UTC-midnight of the IST
 // calendar date) — bound the range using that same convention, resolved via
@@ -25,7 +26,7 @@ export async function GET(req: NextRequest) {
   if (auth instanceof Response) return auth
   const session = (auth as any).session
   // Admin/Manager see everyone's sheet; a MARKETING_EXECUTIVE sees only their own.
-  if (!['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'MARKETING_EXECUTIVE'].includes(session.role)) {
+  if (!isNotOwnScopeRole(session.role)) {
     return errorResponse('Forbidden', 403)
   }
   const isAdmin = hasMinRole(session.role, 'MANAGER')
@@ -106,7 +107,7 @@ export async function POST(req: NextRequest) {
   const auth = await requireAuth(req)
   if (auth instanceof Response) return auth
   const session = (auth as any).session
-  if (!['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'MARKETING_EXECUTIVE'].includes(session.role)) {
+  if (!isNotOwnScopeRole(session.role)) {
     return errorResponse('Forbidden', 403)
   }
   const isAdmin = hasMinRole(session.role, 'MANAGER')
@@ -126,7 +127,7 @@ export async function POST(req: NextRequest) {
   })
   if (!target) return errorResponse('User not found', 404)
   if (!target.isActive) return errorResponse('Cannot assign a visit to a disabled user')
-  if (!['MARKETING_EXECUTIVE', 'MANAGER', 'ADMIN', 'SUPER_ADMIN'].includes(target.role)) {
+  if (!isNotOwnScopeRole(target.role)) {
     return errorResponse('Visits can only be assigned to a MARKETING_EXECUTIVE (or higher)')
   }
 

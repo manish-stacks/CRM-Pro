@@ -31,6 +31,12 @@ export async function GET(req: NextRequest) {
   const status = sp.get('status') || ''
   const clientId = sp.get('clientId') || ''
   const search = sp.get('search') || ''
+  const service = sp.get('service') || ''
+  const month = sp.get('month') || ''
+  const year = sp.get('year') || ''
+  const createdById = sp.get('createdById') || ''   // accepts a user id or a name
+  const from = sp.get('from') || ''
+  const to = sp.get('to') || ''
 
   const allowed = await scopedServiceIds(session.userId, session.role)
 
@@ -45,6 +51,24 @@ export async function GET(req: NextRequest) {
       { client: { is: { companyName: { contains: search } } } },
     ]
   }
+  // reportMonth is free text ("August 2026"), so month/year filter on it directly
+  if (service) where.clientService = { is: { serviceName: service } }
+  if (month) where.reportMonth = { contains: month }
+  if (year) {
+    where.AND = [...(where.AND || []), { reportMonth: { contains: year } }]
+  }
+  if (createdById) {
+    where.AND = [
+      ...(where.AND || []),
+      { OR: [{ createdById }, { createdBy: { is: { name: createdById } } }] },
+    ]
+  }
+  if (from || to) {
+    where.createdAt = {}
+    if (from) where.createdAt.gte = new Date(from)
+    if (to) where.createdAt.lte = new Date(to + 'T23:59:59')
+  }
+
   if (allowed) {
     where.AND = [
       ...(where.AND || []),

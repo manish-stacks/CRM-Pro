@@ -7,13 +7,14 @@ import { Button, Input, Select, EmptyState, Pagination, Badge } from '@/componen
 import { formatDate, formatCurrency } from '@/lib/utils'
 import { FileText, Plus, Search, Filter, X, Eye, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { isNotOwnScopeRole } from '@/lib/permissions'
 
 const STATUSES = ['DRAFT', 'SENT', 'VIEWED', 'ACCEPTED', 'REJECTED', 'EXPIRED']
 
 export default function ProposalsPage() {
   const { user, isAtLeast } = useAuth()
   // Admin, telecalling head (MANAGER) and Marketing Executive only
-  const canCreate = ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'MARKETING_EXECUTIVE'].includes(user?.role || '')
+  const canCreate = isNotOwnScopeRole(user?.role || '')
 
   const [proposals, setProposals] = useState<any[]>([])
   const [total, setTotal] = useState(0)

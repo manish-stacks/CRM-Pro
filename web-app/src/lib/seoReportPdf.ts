@@ -68,15 +68,28 @@ const BOTTOM = 274           // last usable Y
 export async function toDataUrl(src?: string | null): Promise<string | null> {
   if (!src) return null
   if (src.startsWith('data:')) return src
+
+  const blobToDataUrl = (blob: Blob) => new Promise<string>((resolve, reject) => {
+    const fr = new FileReader()
+    fr.onload = () => resolve(String(fr.result))
+    fr.onerror = reject
+    fr.readAsDataURL(blob)
+  })
+
+  // 1) direct fetch — works for Cloudinary and anything else CORS-friendly
   try {
     const res = await fetch(src, { mode: 'cors' })
-    const blob = await res.blob()
-    return await new Promise<string>((resolve, reject) => {
-      const fr = new FileReader()
-      fr.onload = () => resolve(String(fr.result))
-      fr.onerror = reject
-      fr.readAsDataURL(blob)
-    })
+    if (res.ok) return await blobToDataUrl(await res.blob())
+  } catch { /* falls through to the proxy */ }
+
+  // 2) server-side proxy — needed for the agency logo, which is usually hosted
+  //    on the company website and blocks cross-origin reads (that's why it was
+  //    silently missing from the footer).
+  try {
+    const res = await fetch(`/api/proxy-image?url=${encodeURIComponent(src)}`)
+    if (!res.ok) return null
+    const j = await res.json()
+    return j?.data?.dataUrl || null
   } catch {
     return null
   }

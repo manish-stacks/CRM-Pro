@@ -266,6 +266,21 @@ export default function HomeScreen({ navigation }) {
             </View>
           ) : null}
 
+          {/* Quick links — Reports gets its own entry so monthly SEO/GMB
+              reports aren't buried inside a single service's detail page. */}
+          <View style={s.quickRow}>
+            {[
+              { label: 'Reports', icon: 'document-text-outline', screen: 'Reports' },
+              { label: 'Invoices', icon: 'card-outline', screen: 'Payments' },
+              { label: 'Support', icon: 'help-circle-outline', screen: 'Support' },
+            ].map(q => (
+              <TouchableOpacity key={q.label} style={s.quickCard} onPress={() => navigation.navigate(q.screen)}>
+                <Ionicons name={q.icon} size={20} color={colors.primary} />
+                <Text style={s.quickLabel}>{q.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
           {/* Renewal Alerts */}
           {expiring.length > 0 && (
             <>
@@ -338,6 +353,9 @@ const styles = (c) => StyleSheet.create({
   iconBtn: { width: 40, height: 40, backgroundColor: c.card2, borderWidth: 1.5, borderColor: c.border, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   badge: { position: 'absolute', top: -4, right: -4, width: 16, height: 16, backgroundColor: c.primary, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   scroll: { padding: 20, paddingBottom: 20 },
+  quickRow: { flexDirection: 'row', gap: 10, marginTop: 4, marginBottom: 4 },
+  quickCard: { flex: 1, backgroundColor: c.card, borderWidth: 1.5, borderColor: c.border, borderRadius: 14, paddingVertical: 14, alignItems: 'center', gap: 6 },
+  quickLabel: { fontSize: 12, fontWeight: '700', color: c.text },
   greetCard: { borderRadius: 20, padding: 20, marginBottom: 20 },
   statsRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
   statCard: { flex: 1, backgroundColor: c.card2, borderWidth: 1.5, borderColor: c.border, borderRadius: 12, padding: 12, alignItems: 'center' },

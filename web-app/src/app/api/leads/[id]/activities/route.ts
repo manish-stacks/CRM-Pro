@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/auth'
 import { successResponse, successStatusResponse, errorResponse, notFoundResponse } from '@/lib/api'
 import { logFromRequest } from '@/lib/audit'
+import { canSeeBeyondOwn } from '@/lib/permissions'
 
 const VALID_TYPES = ['CALL', 'REMARK', 'FOLLOWUP_SCHEDULED', 'STATUS_CHANGE', 'MEETING_SCHEDULED', 'ASSIGNMENT', 'NOTE', 'EMAIL', 'WHATSAPP']
 
@@ -17,7 +18,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const lead = await prisma.lead.findUnique({ where: { id }, select: { id: true, assignedToId: true, meetingAssignedToId: true, createdById: true } })
   if (!lead) return notFoundResponse('Lead')
 
-  const canSeeAny = ['SUPER_ADMIN', 'ADMIN', 'MANAGER'].includes(session.role)
+  const canSeeAny = canSeeBeyondOwn(session.role)
   const isOwner = [lead.assignedToId, lead.meetingAssignedToId, lead.createdById].includes(session.userId)
   if (!canSeeAny && !isOwner) return errorResponse('Forbidden', 403)
 
@@ -38,7 +39,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const lead = await prisma.lead.findUnique({ where: { id } })
   if (!lead) return notFoundResponse('Lead')
 
-  const canEditAny = ['SUPER_ADMIN', 'ADMIN', 'MANAGER'].includes(session.role)
+  const canEditAny = canSeeBeyondOwn(session.role)
   const isOwner = [lead.assignedToId, lead.meetingAssignedToId, lead.createdById].includes(session.userId)
   if (!canEditAny && !isOwner) return errorResponse('Forbidden', 403)
 

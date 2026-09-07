@@ -11,6 +11,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import api from '@/lib/axios'
+import { BRAND } from '@/lib/branding'
 import { useAuth } from '@/hooks/useAuth'
 
 const POLL_MS = 20_000
@@ -61,7 +62,7 @@ export function BrowserNotifications() {
         for (const n of fresh) {
           const notif = new Notification(n.title, {
             body: n.message || '',
-            icon: '/images/hbs-logo.png',
+            icon: BRAND.logoUrl,
             tag: n.id, // de-dupes if the same notification is polled twice
           })
           notif.onclick = () => {

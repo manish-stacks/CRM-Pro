@@ -1,5 +1,6 @@
 // src/app/api/letters/[id]/pdf/route.ts
 import { NextRequest, NextResponse } from 'next/server'
+import { BRAND } from '@/lib/branding'
 import { prisma } from '@/lib/prisma'
 import { getRequestSession, hasMinRole } from '@/lib/auth'
 import { unauthorizedResponse, forbiddenResponse, notFoundResponse, errorResponse } from '@/lib/api'
@@ -46,7 +47,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   ])
 
   const company: CompanyInfo = {
-    companyName: companyName || 'Hover Business Services',
+    companyName: companyName || BRAND.name,
     companyAddressLine1: companyAddress || undefined,
     companyPhone: companyPhone || undefined,
     companyEmail: companyEmail || undefined,

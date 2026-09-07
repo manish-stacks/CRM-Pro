@@ -5,6 +5,7 @@ import { NextRequest } from 'next/server'
 import { requireAuth } from '@/lib/auth'
 import { successResponse, errorResponse } from '@/lib/api'
 import { buildSchedule } from '@/lib/marketingSchedule'
+import { canSeeBeyondOwn } from '@/lib/permissions'
 
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req)
@@ -16,7 +17,7 @@ export async function GET(req: NextRequest) {
   const days = Math.min(7, Math.max(1, Number(searchParams.get('days') || 1)))
   const userId = searchParams.get('userId')
 
-  const canAny = ['SUPER_ADMIN', 'ADMIN', 'MANAGER'].includes(session.role)
+  const canAny = canSeeBeyondOwn(session.role)
   const target = userId && canAny ? userId : session.userId
   if (userId && !canAny && userId !== session.userId) return errorResponse('Forbidden', 403)
 

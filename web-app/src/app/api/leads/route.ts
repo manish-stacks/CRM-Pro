@@ -9,6 +9,8 @@ import { logFromRequest } from '@/lib/audit'
 import { Notifications } from '@/lib/notify'
 import { dateOnly } from '@/lib/attendanceDate'
 import { getTeamUserIds } from '@/lib/teamScope'
+import { canSeeBeyondOwn, COMPANY_WIDE_ROLES } from '@/lib/permissions'
+import { userCan } from '@/lib/permissions.server'
 
 const VALID_STATUSES = ['NEW', 'NOT_INTERESTED', 'FOLLOW_UP', 'RINGING', 'MEETING_SCHEDULED', 'CALLBACK', 'CONVERTED', 'CLOSED']
 
@@ -144,7 +146,7 @@ export async function GET(req: NextRequest) {
 
   // Role-based visibility.
   const and: any[] = []
-  let canFilterOthers = ['SUPER_ADMIN', 'ADMIN', 'MANAGER'].includes(session.role)
+  let canFilterOthers = canSeeBeyondOwn(session.role)
 
   // ---- "Due" quick filter -------------------------------------------------
   // Next action = whichever of followUp / callback / meeting is set. A lead is
@@ -260,7 +262,11 @@ export async function POST(req: NextRequest) {
   if (auth instanceof Response) return auth
   const session = (auth as any).session
 
-  if (!['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'TELECALLER', 'MARKETING_EXECUTIVE'].includes(session.role)) {
+  // Whoever actually has the "leads.create" permission may create a lead —
+  // this now follows the real permission grant (built-in or custom role)
+  // instead of a fixed role-key list, so a custom role with leads.create
+  // works here automatically.
+  if (!(await userCan(session.userId, session.role, 'leads.create'))) {
     return errorResponse('Forbidden', 403)
   }
 
@@ -297,7 +303,7 @@ export async function POST(req: NextRequest) {
         finalAssigneeId = session.userId
       } else {
         const defaultAdmin = await prisma.user.findFirst({
-          where: { role: { in: ['SUPER_ADMIN', 'ADMIN'] }, isActive: true },
+          where: { role: { in: COMPANY_WIDE_ROLES }, isActive: true },
           orderBy: { createdAt: 'asc' },
         })
         finalAssigneeId = defaultAdmin?.id || session.userId

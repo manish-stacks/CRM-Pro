@@ -97,6 +97,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     },
   })
 
+  // Old PDF being replaced/cleared? drop it from Cloudflare R2.
+  if (pdfUrl !== undefined && report.pdfUrl && report.pdfUrl !== pdfUrl) {
+    const pid = publicIdFromUrl(report.pdfUrl)
+    if (pid) deleteFile(pid, 'raw').catch(() => {})
+  }
+
   await logFromRequest(req, {
     userId: session.userId, action: 'UPDATE', entityType: 'SeoReport', entityId: id,
   })

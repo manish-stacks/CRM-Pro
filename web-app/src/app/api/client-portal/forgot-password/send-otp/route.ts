@@ -4,6 +4,7 @@
 // (hbs_password_reset template) + email. Response is intentionally generic so
 // we don't reveal which emails are registered.
 import { NextRequest, NextResponse } from 'next/server'
+import { BRAND } from '@/lib/branding'
 import { prisma } from '@/lib/prisma'
 import { generateOtp, hashOtp, OTP_TTL_MS } from '@/lib/otp'
 import { sendWhatsapp } from '@/lib/whatsapp'
@@ -46,7 +47,7 @@ export async function POST(req: NextRequest) {
     if (client.email) {
       sendMail({
         to: client.email,
-        subject: 'Your HBS password reset code',
+        subject: `Your ${BRAND.short} password reset code`,
         html: wrapEmailHtml(
           'Password Reset Code',
           `<p>Hi ${client.clientName},</p>

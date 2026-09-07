@@ -12,6 +12,7 @@ import { notify } from '@/lib/notify'
 import { Settings } from '@/lib/settings'
 import { isAfterOfficeHours, generateSlots } from '@/lib/meetingSlots'
 import { dateOnly } from '@/lib/attendanceDate'
+import { canSeeBeyondOwn } from '@/lib/permissions'
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -31,7 +32,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const lead = await prisma.lead.findUnique({ where: { id } })
   if (!lead) return notFoundResponse('Lead')
 
-  const canAny = ['SUPER_ADMIN', 'ADMIN', 'MANAGER'].includes(session.role)
+  const canAny = canSeeBeyondOwn(session.role)
   const isMeetingOwner = lead.meetingAssignedToId === session.userId
   if (!canAny && !isMeetingOwner) return errorResponse('Forbidden', 403)
 

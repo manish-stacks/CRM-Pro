@@ -344,7 +344,7 @@ export default function AttendancePage() {
                   <div className="text-center bg-slate-50 border border-dashed border-gray-300 rounded-lg px-4 py-3">
                     <Smartphone size={18} className="mx-auto text-gray-400 mb-1.5" />
                     <p className="text-xs font-medium text-gray-600">Punch in from the mobile app</p>
-                    <p className="text-[11px] text-gray-400 mt-0.5">Field staff punch in/out from the HBS app — the phone's GPS gives an exact location fix.</p>
+                    <p className="text-[11px] text-gray-400 mt-0.5">Field staff punch in/out from the mobile app — the phone's GPS gives an exact location fix.</p>
                   </div>
                 )}
                 {today?.punchIn && !isPunchedOut && (

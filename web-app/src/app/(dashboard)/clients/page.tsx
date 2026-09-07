@@ -14,15 +14,16 @@ import {
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import toast from 'react-hot-toast'
+import { isCompanyWideRole, isNotOwnScopeRole, canSeeBeyondOwn } from '@/lib/permissions'
 
 const STATUSES = ['ACTIVE', 'INACTIVE', 'CHURNED']
 
 export default function ClientsPage() {
   const { user, isAtLeast } = useAuth()
   // Admin, telecalling head (MANAGER) and Marketing Executive only
-  const canCreate = ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'MARKETING_EXECUTIVE'].includes(user?.role || '')
+  const canCreate = isNotOwnScopeRole(user?.role || '')
   // Admin + TL (MANAGER) only
-  const canExportImport = ['SUPER_ADMIN', 'ADMIN', 'MANAGER'].includes(user?.role || '')
+  const canExportImport = canSeeBeyondOwn(user?.role || '')
 
   const [clients, setClients] = useState<any[]>([])
   const [total, setTotal] = useState(0)
@@ -47,7 +48,7 @@ export default function ClientsPage() {
   const [importRows, setImportRows] = useState<any[]>([])
   const [importFileName, setImportFileName] = useState('')
   const [importing, setImporting] = useState(false)
-  const [importResult, setImportResult] = useState<{ imported: number; errors: any[] } | null>(null)
+  const [importResult, setImportResult] = useState<{ imported: number; servicesCreated?: number; errors: any[] } | null>(null)
 
   const [form, setForm] = useState({
     companyName: '', clientName: '', phone: '', altPhone: '', email: '',
@@ -77,7 +78,7 @@ export default function ClientsPage() {
       // Own admin option — Admin/Super Admin aren't a role by themselves in
       // these lists, so they'd never show up otherwise. Adding self lets an
       // admin pick themselves as Telecaller/Marketing Person too.
-      const selfOption = ['SUPER_ADMIN', 'ADMIN'].includes(user?.role || '')
+      const selfOption = isCompanyWideRole(user?.role || '')
         ? [{ id: user!.id, name: user!.name, role: user!.role }]
         : []
       api.get('/users/by-role?roles=TELECALLER,MANAGER&headOfRole=TELECALLER')
@@ -98,9 +99,9 @@ export default function ClientsPage() {
       // pick themselves — pre-fill it, same as the mobile app. Admin gets
       // pre-filled with their own name in both, since they can be either.
       telecallerId: user?.role === 'TELECALLER' ? (user.id || '')
-        : ['SUPER_ADMIN', 'ADMIN'].includes(user?.role || '') ? (user?.id || '') : '',
+        : isCompanyWideRole(user?.role || '') ? (user?.id || '') : '',
       marketingPersonId: user?.role === 'MARKETING_EXECUTIVE' ? (user.id || '')
-        : ['SUPER_ADMIN', 'ADMIN'].includes(user?.role || '') ? (user?.id || '') : '',
+        : isCompanyWideRole(user?.role || '') ? (user?.id || '') : '',
       onboardingDate: new Date().toISOString().split('T')[0],
       sendWelcome: true,
     })
@@ -146,8 +147,20 @@ export default function ClientsPage() {
         address: r.address || r.Address || '',
         city: r.city || r.City || '',
         state: r.state || r.State || '',
+        pincode: r.pincode || r.Pincode || '',
+        altPhone: r.altPhone || r.AltPhone || '',
         gstNo: r.gstNo || r.GSTIN || '',
         status: r.status || r.Status || 'ACTIVE',
+        onboardingDate: r.onboardingDate || r.OnboardingDate || '',
+        // Services — a client can have several. Either the round-trip
+        // "ServiceDetails" column from Export, or plain name/date lists.
+        ServiceDetails: r.ServiceDetails || r.serviceDetails || '',
+        Services: r.Services || r.services || r.ServiceName || r.serviceName || '',
+        ServiceStartDates: r.ServiceStartDates || r.serviceStartDates || r.StartDate || r.startDate || '',
+        ServiceEndDates: r.ServiceEndDates || r.serviceEndDates || r.EndDate || r.endDate || r.ExpiryDate || '',
+        ServiceAmounts: r.ServiceAmounts || r.serviceAmounts || r.Amount || r.amount || '',
+        BillingCycle: r.BillingCycle || r.billingCycle || '',
+        Department: r.Department || r.department || '',
       }))
       setImportRows(normalized)
     } catch {
@@ -165,7 +178,11 @@ export default function ClientsPage() {
     setImporting(true)
     try {
       const r = await api.post('/import-export', { clients: importRows })
-      setImportResult({ imported: r.data.data.imported, errors: r.data.data.errors || [] })
+      setImportResult({
+        imported: r.data.data.imported,
+        servicesCreated: r.data.data.servicesCreated,
+        errors: r.data.data.errors || [],
+      })
       toast.success(`${r.data.data.imported} client(s) imported`)
       fetchClients()
     } catch (e: any) {
@@ -196,8 +213,8 @@ export default function ClientsPage() {
     } finally { setSaving(false) }
   }
 
-  const canEditAssign = ['SUPER_ADMIN', 'ADMIN', 'MANAGER'].includes(user?.role || '')
-  const canDelete = ['SUPER_ADMIN', 'ADMIN'].includes(user?.role || '')
+  const canEditAssign = canSeeBeyondOwn(user?.role || '')
+  const canDelete = isCompanyWideRole(user?.role || '')
   const isEdit = modal === 'edit'
 
   const [deleteTarget, setDeleteTarget] = useState<any>(null)
@@ -259,10 +276,14 @@ export default function ClientsPage() {
   }
 
   const downloadSampleCsv = () => {
-    const headers = ['Company', 'Name', 'Phone', 'Email', 'Address', 'City', 'State', 'GSTIN']
+    // ServiceDetails holds MULTIPLE services in one cell:
+    //   Name | start | end | amount | cycle | status   →  services split by ' ;; '
+    const headers = ['Company', 'Name', 'Phone', 'Email', 'Address', 'City', 'State', 'GSTIN', 'OnboardingDate', 'ServiceDetails']
     const sampleRows = [
-      ['Sharma Traders', 'Rahul Sharma', '9876543210', 'rahul@example.com', 'MG Road, Pune', 'Pune', 'Maharashtra', 'GST1234567890'],
-      ['Verma Exports', 'Priya Verma', '9123456780', '', '', '', 'Maharashtra', 'GST0987654321'],
+      ['Sharma Traders', 'Rahul Sharma', '9876543210', 'rahul@example.com', 'MG Road, Pune', 'Pune', 'Maharashtra', 'GST1234567890', '2026-01-15',
+        'SEO | 2026-01-15 | 2027-01-14 | 12000 | MONTHLY | ACTIVE ;; Website Development | 2026-02-01 | 2026-05-31 | 45000 | ONE_TIME | ACTIVE'],
+      ['Verma Exports', 'Priya Verma', '9123456780', '', '', '', 'Maharashtra', 'GST0987654321', '2026-03-02',
+        'Google Ads | 2026-03-02 |  | 8000 | MONTHLY | ACTIVE'],
     ]
     const csv = ['\uFEFF' + headers.join(','), ...sampleRows.map(r => r.map(v => `"${v.replace(/"/g, '""')}"`).join(','))].join('\n')
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
@@ -525,9 +546,9 @@ export default function ClientsPage() {
               )}
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <Select label="Telecaller" value={form.telecallerId} onChange={e => setForm(p => ({ ...p, telecallerId: e.target.value }))} options={telecallerPool.map(u => ({ value: u.id, label: u.role === 'MANAGER' ? `${u.name} (Head)` : ['SUPER_ADMIN', 'ADMIN'].includes(u.role) ? `${u.name} (Admin)` : u.name }))} />
+              <Select label="Telecaller" value={form.telecallerId} onChange={e => setForm(p => ({ ...p, telecallerId: e.target.value }))} options={telecallerPool.map(u => ({ value: u.id, label: u.role === 'MANAGER' ? `${u.name} (Head)` : isCompanyWideRole(u.role) ? `${u.name} (Admin)` : u.name }))} />
 
-              <Select label="Marketing Person" value={form.marketingPersonId} onChange={e => setForm(p => ({ ...p, marketingPersonId: e.target.value }))} options={marketingPool.map(u => ({ value: u.id, label: u.role === 'MANAGER' ? `${u.name} (Head)` : ['SUPER_ADMIN', 'ADMIN'].includes(u.role) ? `${u.name} (Admin)` : u.name }))} />
+              <Select label="Marketing Person" value={form.marketingPersonId} onChange={e => setForm(p => ({ ...p, marketingPersonId: e.target.value }))} options={marketingPool.map(u => ({ value: u.id, label: u.role === 'MANAGER' ? `${u.name} (Head)` : isCompanyWideRole(u.role) ? `${u.name} (Admin)` : u.name }))} />
 
             </div>
             {isEdit ? (
@@ -560,6 +581,10 @@ export default function ClientsPage() {
             Upload a <span className="font-medium">.csv</span> or <span className="font-medium">.xlsx</span> file.
             Columns like Company/Name/Phone/Email/Address/City/State/GSTIN are picked up automatically —
             it works with the file from <span className="font-medium">Export</span> too.
+            <br />
+            Services go in one <span className="font-medium">ServiceDetails</span> column —
+            <span className="font-mono text-[11px]"> Name | start | end | amount | cycle | status</span>,
+            with <span className="font-mono text-[11px]"> ;; </span> between multiple services.
           </p>
           <button type="button" onClick={downloadSampleCsv} className="text-xs text-brand-600 hover:underline flex items-center gap-1">
             <Download size={12} /> Download sample CSV (with correct headers)
@@ -579,6 +604,9 @@ export default function ClientsPage() {
                 {importRows.filter(r => r.companyName && r.clientName && r.phone).length} valid ·{' '}
                 {importRows.filter(r => !r.companyName || !r.clientName || !r.phone).length} missing company/name/phone (will be skipped)
               </p>
+              <p className="text-xs text-gray-500 mt-0.5">
+                {importRows.filter(r => r.ServiceDetails || r.Services).length} row(s) carry services — they will be created with their start/end dates and the department head auto-assigned.
+              </p>
             </div>
           )}
 
@@ -586,6 +614,9 @@ export default function ClientsPage() {
             <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-sm">
               <p className="flex items-center gap-1.5 font-medium text-emerald-700">
                 <CheckCircle2 size={15} /> {importResult.imported} client(s) imported
+                {typeof importResult.servicesCreated === 'number' && importResult.servicesCreated > 0 && (
+                  <span className="text-emerald-700"> · {importResult.servicesCreated} service(s)</span>
+                )}
               </p>
               {importResult.errors.length > 0 && (
                 <div className="mt-2 text-xs text-red-600">

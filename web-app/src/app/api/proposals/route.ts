@@ -6,6 +6,7 @@ import { requireAuth, getRequestSession } from '@/lib/auth'
 import { successResponse, successStatusResponse, errorResponse, unauthorizedResponse, getPaginationParams } from '@/lib/api'
 import { generateProposalNumber, randomToken } from '@/lib/idgen'
 import { logFromRequest } from '@/lib/audit'
+import { isNotOwnScopeRole } from '@/lib/permissions'
 
 interface ProposalItemInput {
   serviceId?: string
@@ -100,7 +101,7 @@ export async function POST(req: NextRequest) {
 
   // Only Admin, the telecalling head (MANAGER) and Marketing Executives may
   // raise a proposal. Telecallers pass the lead up instead of quoting directly.
-  if (!['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'MARKETING_EXECUTIVE'].includes(session.role)) {
+  if (!isNotOwnScopeRole(session.role)) {
     return errorResponse('Forbidden', 403)
   }
 
