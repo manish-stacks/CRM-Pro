@@ -90,7 +90,7 @@ export default function SettingsPage() {
   const [values, setValues] = useState<Record<string, any>>(DEFAULTS)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [tab, setTab] = useState<'company' | 'finance' | 'hrm' | 'attendance' | 'meetings' | 'tracker' | 'notifications'>('company')
+  const [tab, setTab] = useState<'company' | 'finance' | 'hrm' | 'attendance' | 'meetings' | 'tracker' | 'notifications' | 'appearance'>('company')
   const [sigUploading, setSigUploading] = useState(false)
   const sigRef = useRef<HTMLInputElement>(null)
   const [holidayCalUrl, setHolidayCalUrl] = useState('')
