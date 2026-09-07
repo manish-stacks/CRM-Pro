@@ -16,7 +16,7 @@ next-env.d.ts
 
 # Prisma
 prisma/migrations/dev.db*
-/scripts
+/scripts-data
 # Env
 .env
 .env.local
