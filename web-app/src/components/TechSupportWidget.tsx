@@ -38,7 +38,7 @@ export function TechSupportWidget() {
       <button
         onClick={() => setOpen(true)}
         title="Report a CRM / tech problem"
-        className="fixed bottom-6 right-6 z-40 w-13 h-13 rounded-full bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-500/30 flex items-center justify-center transition-transform hover:scale-105"
+        className="fixed bottom-6 right-6 z-40 w-13 h-13 rounded-full bg-brand-500 hover:bg-brand-700 text-white shadow-lg shadow-brand-500/30 flex items-center justify-center transition-transform hover:scale-105"
         style={{ width: 52, height: 52 }}
       >
         <BotMessageSquare size={22} />
@@ -49,7 +49,7 @@ export function TechSupportWidget() {
           <div className="bg-white w-full sm:w-96 rounded-t-2xl sm:rounded-2xl shadow-2xl p-5">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
-                <div className="w-9 h-9 rounded-xl bg-red-50 text-red-500 flex items-center justify-center"><BotMessageSquare size={18} /></div>
+                <div className="w-9 h-9 rounded-xl bg-brand-50 text-brand-500 flex items-center justify-center"><BotMessageSquare size={18} /></div>
                 <div>
                   <h3 className="font-semibold text-gray-900 text-sm">Tech Support</h3>
                   <p className="text-xs text-gray-400">Report a CRM issue — goes straight to Admin</p>

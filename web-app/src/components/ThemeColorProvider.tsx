@@ -7,6 +7,7 @@
 // works with zero extra API calls on every page load.
 import { useEffect } from 'react'
 import { todaysPalette, getPaletteById, applyPalette } from '@/lib/themeColors'
+import { ThemeColorFab } from './ThemeColorFab'
 
 export function ThemeColorProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
@@ -15,5 +16,5 @@ export function ThemeColorProvider({ children }: { children: React.ReactNode }) 
     const palette = (locked && locked !== 'auto' && getPaletteById(locked)) || todaysPalette()
     applyPalette(palette)
   }, [])
-  return <>{children}</>
+  return <>{children}<ThemeColorFab /></>
 }

@@ -192,9 +192,9 @@ export function CelebrationWidget({ leaveBalance }: { leaveBalance?: any }) {
       {/* Today's celebrations widget on dashboard */}
       {todayCount > 0 && (
         <div className={isEmployee ? 'grid grid-cols-1 md:grid-cols-2 gap-6 items-start' : ''}>
-          <div className="card p-5 bg-gradient-to-br from-pink-50 via-white to-rose-50 border-pink-100">
+          <div className="card p-5 bg-gradient-to-br from-brand-50 via-white to-brand-50 border-brand-100">
             <div className="flex items-center gap-2 mb-4">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-pink-500 to-rose-500 flex items-center justify-center text-white">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-500 to-brand-600 flex items-center justify-center text-white">
                 <PartyPopper size={20} />
               </div>
               <div>
@@ -205,7 +205,7 @@ export function CelebrationWidget({ leaveBalance }: { leaveBalance?: any }) {
             <div className="space-y-2">
               {otherBirthdays.map(b => (
                 <div key={'b'+b.id} className="flex items-center gap-3 p-2.5 bg-white rounded-lg border border-pink-100">
-                  <div className="w-10 h-10 rounded-full bg-pink-100 flex items-center justify-center text-pink-700 font-bold relative">
+                  <div className="w-10 h-10 rounded-full bg-brand-100 flex items-center justify-center text-pink-700 font-bold relative">
                     {b.avatar ? <img src={b.avatar} className="w-full h-full rounded-full object-cover" /> : getInitials(b.name)}
                     <span className="absolute -top-1 -right-1 text-lg">🎂</span>
                   </div>
@@ -214,14 +214,14 @@ export function CelebrationWidget({ leaveBalance }: { leaveBalance?: any }) {
                     <p className="text-xs text-gray-500">🎉 Happy Birthday • {b.department}</p>
                   </div>
                   <button onClick={() => wishNow(b, 'birthday')}
-                    className="text-xs font-semibold text-pink-600 hover:bg-pink-50 rounded-lg px-2.5 py-1.5 flex items-center gap-1 flex-shrink-0">
+                    className="text-xs font-semibold text-brand-600 hover:bg-pink-50 rounded-lg px-2.5 py-1.5 flex items-center gap-1 flex-shrink-0">
                     <MessageSquare size={12} /> Wish
                   </button>
                 </div>
               ))}
               {otherAnniversaries.map(a => (
-                <div key={'a'+a.id} className="flex items-center gap-3 p-2.5 bg-white rounded-lg border border-rose-100">
-                  <div className="w-10 h-10 rounded-full bg-rose-100 flex items-center justify-center text-rose-700 font-bold relative">
+                <div key={'a'+a.id} className="flex items-center gap-3 p-2.5 bg-white rounded-lg border border-brand-100">
+                  <div className="w-10 h-10 rounded-full bg-brand-100 flex items-center justify-center text-brand-700 font-bold relative">
                     {a.avatar ? <img src={a.avatar} className="w-full h-full rounded-full object-cover" /> : getInitials(a.name)}
                     <span className="absolute -top-1 -right-1 text-lg">✨</span>
                   </div>
@@ -230,7 +230,7 @@ export function CelebrationWidget({ leaveBalance }: { leaveBalance?: any }) {
                     <p className="text-xs text-gray-500">{a.years === 0 ? '👋 Welcome to the team!' : `🎊 ${a.years} year${a.years > 1 ? 's' : ''} at company`} • {a.department}</p>
                   </div>
                   <button onClick={() => wishNow(a, a.years === 0 ? 'welcome' : 'anniversary')}
-                    className="text-xs font-semibold text-rose-600 hover:bg-rose-50 rounded-lg px-2.5 py-1.5 flex items-center gap-1 flex-shrink-0">
+                    className="text-xs font-semibold text-brand-600 hover:bg-brand-50 rounded-lg px-2.5 py-1.5 flex items-center gap-1 flex-shrink-0">
                     <MessageSquare size={12} /> Wish
                   </button>
                 </div>
@@ -276,7 +276,7 @@ export function CelebrationWidget({ leaveBalance }: { leaveBalance?: any }) {
 
       {/* Upcoming (next 7 days) */}
       {upcomingCount > 0 && (
-        <div className="card p-5">
+        <div className="card p-5 mt-2">
           <div className="flex items-center gap-2 mb-3">
             <Calendar size={16} className="text-slate-600" />
             <h3 className="font-semibold text-gray-900 text-sm">Coming Up (7 days)</h3>
