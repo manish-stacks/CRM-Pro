@@ -25,7 +25,7 @@ const TARGETS: { model: keyof PrismaClient; field: string; folder: any }[] = [
 async function migrateField(model: keyof PrismaClient, field: string, folder: any) {
   const table = (prisma as any)[model]
   const rows = await table.findMany({ where: { [field]: { contains: 'res.cloudinary.com' } } })
-  console.log(`${model}.${field}: ${rows.length} file(s) to migrate`)
+  console.log(`${String(model)}.${field}: ${rows.length} file(s) to migrate`)
   for (const row of rows) {
     const oldUrl = row[field]
     if (!isCloudinary(oldUrl)) continue
