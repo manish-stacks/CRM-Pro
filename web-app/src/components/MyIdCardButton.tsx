@@ -14,10 +14,11 @@ export function MyIdCardButton() {
 
   const open = async () => {
     setLoading(true)
+    const win = window.open('', '_blank')
     try {
       const r = await api.get('/auth/profile')
       const p = r.data.data
-      if (!p?.employee) { toast.error("No employee record found for your account"); return }
+      if (!p?.employee) { win?.close(); toast.error("No employee record found for your account"); return }
       await generateIdCard({
         employeeId: p.employee.employeeId,
         name: p.name,
@@ -29,8 +30,9 @@ export function MyIdCardButton() {
         joiningDate: p.employee.joiningDate,
         avatarUrl: p.avatar,
         avatarInitials: getInitials(p.name || 'NA'),
-      })
+      }, {}, win)
     } catch {
+      win?.close()
       toast.error('Could not generate ID card')
     } finally { setLoading(false) }
   }

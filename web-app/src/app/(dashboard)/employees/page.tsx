@@ -172,6 +172,7 @@ export default function EmployeesPage() {
   }
 
   const makeIdCard = async (e: any) => {
+    const win = window.open('', '_blank')
     try {
       const r = await api.get(`/employees/${e.id}`)
       const emp = r.data.data
@@ -186,17 +187,24 @@ export default function EmployeesPage() {
         joiningDate: emp.joiningDate,
         avatarUrl: emp.user?.avatar,
         avatarInitials: getInitials(emp.user?.name || e.user?.name || 'NA'),
-      }, company)
+      }, company, win)
     } catch {
+      win?.close()
       toast.error('Id card not generated')
     }
   }
 
   const downloadForm = async (e: any) => {
+    // Open the tab synchronously (still inside the click's call stack) —
+    // opening it after the awaits below makes the browser treat it as an
+    // unrequested popup and it lands on a blank about:blank tab instead of
+    // showing the PDF.
+    const win = window.open('', '_blank')
     try {
       const r = await api.get(`/employees/${e.id}`)
-      generateEmployeeFormPdf(r.data.data, company)
+      generateEmployeeFormPdf(r.data.data, company, win)
     } catch {
+      win?.close()
       toast.error('Failed to generate form')
     }
   }

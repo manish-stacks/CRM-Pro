@@ -61,6 +61,24 @@ async function loadImageAsDataUrl(url: string): Promise<string | null> {
   }
 }
 
+/** Same as loadImageAsDataUrl, but for URLs that may be on another origin
+ *  (e.g. the R2 bucket serving employee avatars). A direct browser fetch()
+ *  to a cross-origin host gets silently blocked by CORS unless that bucket
+ *  sends Access-Control-Allow-Origin — which R2 doesn't by default — so the
+ *  avatar was quietly falling back to the placeholder. Routes through
+ *  /api/proxy-image, which fetches server-side (no CORS) and returns a
+ *  data URL, same trick already used for external client/agency logos. */
+async function loadRemoteImageAsDataUrl(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(`/api/proxy-image?url=${encodeURIComponent(url)}`)
+    if (!res.ok) return null
+    const json = await res.json()
+    return json?.data?.dataUrl || null
+  } catch {
+    return null
+  }
+}
+
 /** Crops a data URL image into a circle (transparent corners) using a canvas — far more
  *  reliable across browsers/PDF viewers than jsPDF's own path-clipping. */
 function circularCrop(dataUrl: string, sizePx = 500): Promise<string> {
@@ -141,7 +159,7 @@ export async function buildIdCardDoc(emp: IdCardEmployee, company: Company = {})
   if (templateData) doc.addImage(templateData, 'JPEG', 0, 0, CARD_W, CARD_H)
 
   // ---- Employee photo, circularly cropped to fit exactly inside the template's circle ----
-  const rawAvatar = (emp.avatarUrl && await loadImageAsDataUrl(emp.avatarUrl)) || await loadImageAsDataUrl(DUMMY_AVATAR_URL)
+  const rawAvatar = (emp.avatarUrl && await loadRemoteImageAsDataUrl(emp.avatarUrl)) || await loadImageAsDataUrl(DUMMY_AVATAR_URL)
   if (rawAvatar) {
     try {
       const circular = await circularCrop(rawAvatar)
@@ -193,8 +211,16 @@ export async function buildIdCardDoc(emp: IdCardEmployee, company: Company = {})
   return doc
 }
 
-/** Opens the generated card in a new tab for preview (matches invoice PDF preview) — no forced download. */
-export async function generateIdCard(emp: IdCardEmployee, company: Company = {}) {
+/** Opens the generated card in a new tab for preview (matches invoice PDF preview) — no forced download.
+ *  Pass `targetWindow` (a tab opened synchronously on click) so the navigation still counts as
+ *  part of the user gesture — opening a new tab after all the awaits below get treated as an
+ *  unrequested popup by the browser and lands on a blank about:blank tab. */
+export async function generateIdCard(emp: IdCardEmployee, company: Company = {}, targetWindow?: Window | null) {
   const doc = await buildIdCardDoc(emp, company)
-  window.open(doc.output('bloburl'), '_blank')
+  const blobUrl = doc.output('bloburl') as unknown as string
+  if (targetWindow && !targetWindow.closed) {
+    targetWindow.location.href = blobUrl
+  } else {
+    window.open(blobUrl, '_blank')
+  }
 }
