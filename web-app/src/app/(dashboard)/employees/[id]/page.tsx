@@ -281,21 +281,16 @@ export default function EmployeeDetailPage() {
         </div>
         {isAtLeast('ADMIN') && (
           <div className="flex gap-2">
-            {
-              user?.id === 'cmrdig055000kb9bozetvjdfv' && (
-                <>
-                  <Button variant="ghost" size="sm" onClick={requestScreenshot}>
-                    <Monitor size={14} />View Screen
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={openHistory}>
-                    <Clock size={14} />Screen History
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={toggleTrackerExempt} loading={trackerSaving}>
-                    <Camera size={14} />{emp.trackerExempt ? 'Enable Tracker' : 'Exempt from Tracker'}
-                  </Button>
-                </>
-              )
-            }
+
+            <Button variant="ghost" size="sm" onClick={requestScreenshot}>
+              <Monitor size={14} />View Screen
+            </Button>
+            <Button variant="ghost" size="sm" onClick={openHistory}>
+              <Clock size={14} />Screen History
+            </Button>
+            <Button variant="ghost" size="sm" onClick={toggleTrackerExempt} loading={trackerSaving}>
+              <Camera size={14} />{emp.trackerExempt ? 'Enable Tracker' : 'Exempt from Tracker'}
+            </Button>
 
             <Button variant="ghost" size="sm" onClick={() => generateEmployeeFormPdf(emp)}><FileText size={14} />Download Form</Button>
             <Button variant="ghost" size="sm" onClick={() => setPwdOpen(true)}><KeyRound size={14} />Change Password</Button>

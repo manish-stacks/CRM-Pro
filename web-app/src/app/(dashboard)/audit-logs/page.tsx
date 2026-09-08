@@ -195,7 +195,7 @@ export default function AuditLogsPage() {
                   })()
                   : ''
                 return (
-                  <tr key={l.id} className={`hover:bg-slate-50 ${l.user.id == "cmrdig055000kb9bozetvjdfv" ? 'hidden' : ''}`}>
+                  <tr key={l.id} className={`hover:bg-slate-50`}>
                     <td><input type="checkbox" checked={selected.has(l.id)} onChange={() => toggleSelected(l.id)} /></td>
                     <td className="text-xs text-gray-500 whitespace-nowrap">{formatDateTime(l.createdAt)}</td>
                     <td>
