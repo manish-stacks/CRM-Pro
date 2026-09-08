@@ -27,12 +27,16 @@ export async function GET(req: NextRequest) {
     },
   })
 
-  // For each active user, get their latest ping
+  // For each active user, get their latest ping.
+  // IMPORTANT: order/display by `createdAt` (server receive time), NOT the
+  // client-supplied `recordedAt` (device clock). A wrong/skewed phone clock
+  // or a stale offline-queued ping can carry an old `recordedAt`, which was
+  // making genuinely-online staff show a stale "Last update".
   const results = await Promise.all(active.map(async (att) => {
     const uid = att.employee.user.id
     const lastPing = await prisma.locationPing.findFirst({
       where: { userId: uid },
-      orderBy: { recordedAt: 'desc' },
+      orderBy: { createdAt: 'desc' },
     })
     return {
       userId: uid,
@@ -47,7 +51,7 @@ export async function GET(req: NextRequest) {
         accuracy: lastPing.accuracy,
         battery: lastPing.battery,
         isMoving: lastPing.isMoving,
-        recordedAt: lastPing.recordedAt,
+        recordedAt: lastPing.createdAt,
         address: lastPing.address,
       } : null,
     }

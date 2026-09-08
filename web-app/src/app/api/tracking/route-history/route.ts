@@ -26,8 +26,12 @@ export async function GET(req: NextRequest) {
 
   const [pings, visits, user] = await Promise.all([
     prisma.locationPing.findMany({
-      where: { userId, recordedAt: { gte: day, lt: next } },
-      orderBy: { recordedAt: 'asc' },
+      // Bucket by `createdAt` (server receive time), not the client-supplied
+      // `recordedAt` (device clock) — a wrong/skewed phone clock was putting
+      // today's pings in the wrong day's bucket, making history for today
+      // look empty even though the device was reporting in fine.
+      where: { userId, createdAt: { gte: day, lt: next } },
+      orderBy: { createdAt: 'asc' },
       select: {
         latitude: true, longitude: true, accuracy: true, speed: true,
         battery: true, isMoving: true, source: true, recordedAt: true, address: true,
