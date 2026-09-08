@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
     name, email, phone, password, role,
     // ADMIN-ONLY employment
     position, salary, workMode, departmentId, joiningDate,
-    dateOfBirth,
+    dateOfBirth, reportingToId,
     // Marketing territory — required for MARKETING_EXECUTIVE so the telecaller's
     // "book a meeting by area" picker and /api/marketing/areas see them straight
     // away. Previously area could only be set later via the edit screen, so a
@@ -115,6 +115,7 @@ export async function POST(req: NextRequest) {
             joiningDate: joiningDate ? new Date(joiningDate) : null,
             dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
             area: area ? String(area).trim() : null,
+            reportingToId: reportingToId || null,
           },
         },
       },

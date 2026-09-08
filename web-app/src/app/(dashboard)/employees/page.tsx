@@ -76,8 +76,9 @@ export default function EmployeesPage() {
     name: '', email: '', phone: '', password: '',
     role: 'EMPLOYEE', position: '', departmentId: '',
     salary: '', workMode: 'WFO', joiningDate: new Date().toISOString().split('T')[0],
-    dateOfBirth: '', area: '',
+    dateOfBirth: '', area: '', reportingToId: '',
   })
+  const [managers, setManagers] = useState<any[]>([])
   const [toggleReason, setToggleReason] = useState('')
 
   const fetchEmployees = useCallback(async () => {
@@ -94,6 +95,9 @@ export default function EmployeesPage() {
 
   useEffect(() => { fetchEmployees() }, [fetchEmployees])
   useEffect(() => {
+    api.get('/employees?role=MANAGER&limit=200').then(r => setManagers(r.data.data || [])).catch(() => { })
+  }, [])
+  useEffect(() => {
     api.get('/settings').then(r => {
       const g = r.data.data?.grouped?.company || {}
       setCompany({ name: g.company_name || BRAND.name, phone: g.company_phone, email: g.company_email })
@@ -108,7 +112,7 @@ export default function EmployeesPage() {
       name: '', email: '', phone: '', password: '',
       role: 'EMPLOYEE', position: '', departmentId: '',
       salary: '', workMode: 'WFO', joiningDate: new Date().toISOString().split('T')[0],
-      dateOfBirth: '', area: '',
+      dateOfBirth: '', area: '', reportingToId: '',
     })
     setModal('add')
   }
@@ -388,10 +392,11 @@ export default function EmployeesPage() {
             <Input label="Position" value={form.position} onChange={e => setForm(p => ({ ...p, position: e.target.value }))} placeholder="e.g. Junior Developer" />
             <Input label="Monthly Salary" type="number" value={form.salary} onChange={e => setForm(p => ({ ...p, salary: e.target.value }))} placeholder="25000" />
           </div>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             <Select label="Work Mode" value={form.workMode} onChange={e => setForm(p => ({ ...p, workMode: e.target.value }))} options={WORK_MODES.map(w => ({ value: w, label: w }))} />
             <Input label="Joining Date" type="date" value={form.joiningDate} onChange={e => setForm(p => ({ ...p, joiningDate: e.target.value }))} />
             <Input label="Date of Birth" type="date" value={form.dateOfBirth} onChange={e => setForm(p => ({ ...p, dateOfBirth: e.target.value }))} />
+            <Select label="Reports To (Team Lead)" value={form.reportingToId} onChange={e => setForm(p => ({ ...p, reportingToId: e.target.value }))} options={[{ value: '', label: '— None —' }, ...managers.map((e: any) => ({ value: e.id, label: `${e.user?.name} · ${e.employeeId}${e.department?.name ? ` (${e.department.name})` : ''}` }))]} />
           </div>
 
           {/* Marketing territory — only relevant for a marketing person, but it
