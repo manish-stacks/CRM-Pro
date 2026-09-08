@@ -53,7 +53,7 @@ export default function LeadDetailPage() {
   const [lead, setLead] = useState<any>(null)
   const [loading, setLoading] = useState(true)
 
-  const [modal, setModal] = useState<'none' | 'activity' | 'meeting' | 'reassign' | 'convert' | 'lost' | 'notInterested' | 'edit' | 'noAnswer' | 'reschedule' | 'cancelMeeting'>('none')
+  const [modal, setModal] = useState<'none' | 'activity' | 'meeting' | 'reassign' | 'convert' | 'lost' | 'notInterested' | 'edit' | 'noAnswer' | 'reschedule' | 'cancelMeeting' | 'followup'>('none')
   const [saving, setSaving] = useState(false)
 
   const [executives, setExecutives] = useState<any[]>([])
@@ -90,6 +90,10 @@ export default function LeadDetailPage() {
   })
   // Close forms
   const [closeForm, setCloseForm] = useState({ reason: '', note: '', createClient: true })
+  // Follow-up after meeting done — client wants price / needs to think it
+  // over / etc. instead of a straight Convert or Lost.
+  const FOLLOWUP_REASONS = ['Client asked for price', 'Client is thinking it over', 'Waiting on client documents', 'Budget not approved yet', 'Other']
+  const [followUpForm, setFollowUpForm] = useState({ reason: FOLLOWUP_REASONS[0], date: '', time: '', note: '' })
 
   const fetchLead = useCallback(async () => {
     setLoading(true)
@@ -362,6 +366,25 @@ export default function LeadDetailPage() {
     }
   };
 
+  const submitFollowUp = async () => {
+    if (!followUpForm.date) { toast.error('Pick a follow-up date'); return }
+    setSaving(true)
+    try {
+      await api.post(`/leads/${id}/close`, {
+        action: 'followup',
+        reason: followUpForm.reason,
+        note: followUpForm.note,
+        followUpDate: followUpForm.date,
+        followUpTime: followUpForm.time,
+      })
+      toast.success('Follow-up scheduled')
+      setModal('none')
+      fetchLead()
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Failed')
+    } finally { setSaving(false) }
+  }
+
   if (loading) return <div className="p-12 text-center"><Loader2 className="animate-spin mx-auto text-gray-400" /></div>
   if (!lead) return null
 
@@ -465,6 +488,12 @@ export default function LeadDetailPage() {
               <button onClick={() => { setCloseForm(p => ({ ...p, createClient: true })); setModal('convert') }} disabled={saving}
                 className="badge bg-emerald-600 text-white hover:bg-emerald-700">
                 <CheckCircle2 size={11} /> Deal Done
+              </button>
+            )}
+            {lead.status === 'MEETING_DONE' && (canTL || lead.meetingAssignedToId === user?.id || lead.assignedToId === user?.id) && (
+              <button onClick={() => { setFollowUpForm({ reason: FOLLOWUP_REASONS[0], date: '', time: '', note: '' }); setModal('followup') }} disabled={saving}
+                className="badge bg-yellow-500 text-white hover:bg-yellow-600">
+                <CalendarClock size={11} /> Need Follow-up
               </button>
             )}
             <button onClick={() => setModal('lost')} disabled={saving}
@@ -962,6 +991,33 @@ export default function LeadDetailPage() {
             <Button variant="secondary" onClick={() => setModal('none')}>Cancel</Button>
             <Button onClick={() => closeAction('convert')} loading={saving} className="!bg-emerald-600 hover:!bg-emerald-700">
               <CheckCircle2 size={14} /> Confirm Deal Done
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Follow-up Modal — client didn't decide right after the meeting */}
+      <Modal open={modal === 'followup'} onClose={() => setModal('none')} title="📅 Schedule a Follow-up">
+        <div className="space-y-3">
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-900">
+            Not every client converts right after the meeting. This keeps the lead as <b>FOLLOW UP</b> (instead of forcing Deal Done / Lost) so the telecaller calls back on the date below.
+          </div>
+          <Select label="Why does this need a follow-up?" value={followUpForm.reason}
+            onChange={e => setFollowUpForm(p => ({ ...p, reason: e.target.value }))}
+            options={FOLLOWUP_REASONS.map(r => ({ value: r, label: r }))} />
+          <div className="grid grid-cols-2 gap-3">
+            <Input label="Follow-up date" type="date" value={followUpForm.date}
+              onChange={e => setFollowUpForm(p => ({ ...p, date: e.target.value }))} />
+            <Input label="Time (optional)" type="time" value={followUpForm.time}
+              onChange={e => setFollowUpForm(p => ({ ...p, time: e.target.value }))} />
+          </div>
+          <Textarea label="Notes (optional)" value={followUpForm.note} rows={2}
+            onChange={e => setFollowUpForm(p => ({ ...p, note: e.target.value }))}
+            placeholder="Any detail for the telecaller before they call back..." />
+          <div className="flex justify-end gap-2 pt-1">
+            <Button variant="secondary" onClick={() => setModal('none')}>Cancel</Button>
+            <Button onClick={submitFollowUp} loading={saving} className="!bg-yellow-500 hover:!bg-yellow-600">
+              <CalendarClock size={14} /> Schedule Follow-up
             </Button>
           </div>
         </div>

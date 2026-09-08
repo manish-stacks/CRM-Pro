@@ -26,6 +26,7 @@ function callPhone(phone) { if (phone) Linking.openURL(`tel:${phone}`).catch(() 
 const STATUS_COLORS = {
   MEETING_SCHEDULED: { bg: 'rgba(168,85,247,0.12)', text: '#A855F7' },
   MEETING_DONE: { bg: 'rgba(20,184,166,0.12)', text: '#14B8A6' },
+  FOLLOW_UP: { bg: 'rgba(234,179,8,0.12)', text: '#EAB308' },
   CONVERTED: { bg: 'rgba(34,197,94,0.12)', text: '#22C55E' },
   CLOSED: { bg: 'rgba(100,116,139,0.12)', text: '#64748B' },
   NOT_INTERESTED: { bg: 'rgba(239,68,68,0.12)', text: '#EF4444' },
@@ -70,6 +71,15 @@ export default function MeetingDetailScreen({ route, navigation }) {
   const [noAnswerReason, setNoAnswerReason] = useState('');
   const [showCancel, setShowCancel] = useState(false);
   const [cancelNotes, setCancelNotes] = useState('');
+
+  // Follow-up (after Meeting Done, client isn't ready to convert or lose —
+  // wants price / is thinking it over) — keeps the lead in FOLLOW_UP so a
+  // telecaller calls back, instead of forcing straight Convert/Lost.
+  const FOLLOWUP_REASONS = ['Client asked for price', 'Client is thinking it over', 'Waiting on client documents', 'Budget not approved yet', 'Other'];
+  const [showFollowUp, setShowFollowUp] = useState(false);
+  const [followUpReason, setFollowUpReason] = useState(FOLLOWUP_REASONS[0]);
+  const [followUpDate, setFollowUpDate] = useState('');
+  const [followUpNote, setFollowUpNote] = useState('');
 
   // Proposals (telecaller creates, marketing person can view for context)
   const [proposals, setProposals] = useState([]);
@@ -383,6 +393,24 @@ export default function MeetingDetailScreen({ route, navigation }) {
     } finally { setSaving(false); }
   };
 
+  const submitFollowUp = async () => {
+    if (!followUpDate) { Alert.alert('Missing info', 'Pick a follow-up date first.'); return; }
+    setSaving(true);
+    try {
+      await EmployeeAPI.closeMeeting(meetingId, {
+        action: 'followup',
+        reason: followUpReason,
+        note: followUpNote,
+        followUpDate,
+      });
+      setShowFollowUp(false);
+      Alert.alert('Follow-up Scheduled', 'The telecaller will be notified to call back on this date.');
+      fetchDetail();
+    } catch (e) {
+      showActionError(e);
+    } finally { setSaving(false); }
+  };
+
   const submitLost = async (action) => {
     setSaving(true);
     try {
@@ -539,6 +567,15 @@ export default function MeetingDetailScreen({ route, navigation }) {
                   <Text style={s.dealBtnTxt}>Deal Done — Convert to Client</Text>
                 </TouchableOpacity>
               )}
+              {data.status === 'MEETING_DONE' && (
+                <TouchableOpacity
+                  style={[s.dealBtn, { backgroundColor: '#EAB308', marginTop: 8 }]}
+                  onPress={() => { setFollowUpReason(FOLLOWUP_REASONS[0]); setFollowUpDate(''); setFollowUpNote(''); setShowFollowUp(true); }}
+                >
+                  <Ionicons name="calendar-outline" size={18} color="#fff" />
+                  <Text style={s.dealBtnTxt}>Need Follow-up (not ready yet)</Text>
+                </TouchableOpacity>
+              )}
               <TouchableOpacity style={[s.lostBtn, { borderColor: '#EF4444' }]} onPress={() => setShowLost(true)}>
                 <Ionicons name="close-circle-outline" size={17} color="#EF4444" />
                 <Text style={[s.lostBtnTxt, { color: '#EF4444' }]}>Mark Lost / Not Interested</Text>
@@ -644,6 +681,46 @@ export default function MeetingDetailScreen({ route, navigation }) {
             </View>
             <TouchableOpacity onPress={submitConvert} disabled={saving} style={{ marginTop: 20, backgroundColor: '#22C55E', borderRadius: 12, paddingVertical: 14, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8 }}>
               {saving ? <ActivityIndicator color="#fff" /> : <><Ionicons name="checkmark-circle" size={18} color="#fff" /><Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 }}>Confirm Deal Done</Text></>}
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+      </Modal>
+
+      {/* Follow-up Modal — client not ready to Convert/Lose right after the meeting */}
+      <Modal visible={showFollowUp} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowFollowUp(false)}>
+        <View style={[s.modal, { backgroundColor: colors.bg, paddingTop: 40 }]}>
+          <View style={s.modalHeader}>
+            <Text style={[s.modalTitle, { color: colors.text }]}>📅 Schedule Follow-up</Text>
+            <TouchableOpacity onPress={() => setShowFollowUp(false)}>
+              <Ionicons name="close" size={24} color={colors.text2} />
+            </TouchableOpacity>
+          </View>
+          <ScrollView style={{ padding: 20 }} keyboardShouldPersistTaps="handled">
+            <View style={[s.infoBanner, { backgroundColor: 'rgba(234,179,8,0.1)', borderColor: '#EAB308' }]}>
+              <Text style={{ fontSize: 13, color: '#A16207' }}>
+                Not every client converts right after the meeting. This keeps the lead as FOLLOW UP so the telecaller calls back, instead of forcing Deal Done / Lost now.
+              </Text>
+            </View>
+            <Text style={s.fieldLabel}>REASON</Text>
+            <View style={[s.fieldWrap, { backgroundColor: colors.bg2, borderColor: colors.border, paddingVertical: 0 }]}>
+              <Picker selectedValue={followUpReason} onValueChange={setFollowUpReason} style={{ color: colors.text }}>
+                {FOLLOWUP_REASONS.map(r => <Picker.Item key={r} label={r} value={r} />)}
+              </Picker>
+            </View>
+            <DatePickerField label="FOLLOW-UP DATE *" value={followUpDate} onChange={setFollowUpDate} minToday />
+            <Text style={[s.fieldLabel, { marginTop: 16 }]}>NOTES (OPTIONAL)</Text>
+            <View style={[s.fieldWrap, { backgroundColor: colors.bg2, borderColor: colors.border, alignItems: 'flex-start' }]}>
+              <TextInput
+                style={{ flex: 1, fontSize: 14, paddingVertical: 12, color: colors.text, minHeight: 70 }}
+                placeholder="Any detail for the telecaller before they call back..."
+                placeholderTextColor={colors.text3}
+                value={followUpNote}
+                onChangeText={setFollowUpNote}
+                multiline
+              />
+            </View>
+            <TouchableOpacity onPress={submitFollowUp} disabled={saving} style={{ marginTop: 20, backgroundColor: '#EAB308', borderRadius: 12, paddingVertical: 14, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8 }}>
+              {saving ? <ActivityIndicator color="#fff" /> : <><Ionicons name="calendar" size={18} color="#fff" /><Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 }}>Schedule Follow-up</Text></>}
             </TouchableOpacity>
           </ScrollView>
         </View>

@@ -17,7 +17,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (auth instanceof Response) return auth
   const session = (auth as any).session
 
-  const { action, reason, note, autoCreateClient = true } = await req.json()
+  const { action, reason, note, autoCreateClient = true, followUpDate, followUpTime } = await req.json()
 
   const lead = await prisma.lead.findUnique({ where: { id }, include: { client: true } })
   if (!lead) return notFoundResponse('Lead')
@@ -30,7 +30,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (action === 'convert') newStatus = 'CONVERTED'
   else if (action === 'lost') newStatus = 'CLOSED'
   else if (action === 'not_interested') newStatus = 'NOT_INTERESTED'
-  else return errorResponse('Invalid action. Use: convert | lost | not_interested')
+  // Client isn't ready to decide right after the meeting (wants price / is
+  // thinking it over / etc.) — don't force a hard Convert/Lost call. Park it
+  // back in FOLLOW_UP so the telecaller picks it up on the given date instead
+  // of every meeting-done lead defaulting to a straight conversion.
+  else if (action === 'followup') newStatus = 'FOLLOW_UP'
+  else return errorResponse('Invalid action. Use: convert | lost | not_interested | followup')
 
   if (newStatus === 'CONVERTED' && lead.status !== 'MEETING_DONE') {
     // Admin/TL and the telecaller who owns this lead can close the deal
@@ -42,30 +47,57 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
   }
 
+  if (newStatus === 'FOLLOW_UP' && !followUpDate) {
+    return errorResponse('Pick a follow-up date')
+  }
+
   const updated = await prisma.lead.update({
     where: { id },
     data: {
       status: newStatus,
       convertedAt: newStatus === 'CONVERTED' ? new Date() : null,
-      closedAt: newStatus !== 'CONVERTED' ? new Date() : null,
+      closedAt: (newStatus !== 'CONVERTED' && newStatus !== 'FOLLOW_UP') ? new Date() : null,
       closeReason: reason || null,
+      ...(newStatus === 'FOLLOW_UP' ? {
+        followUpDate: new Date(followUpDate),
+        followUpTime: followUpTime || null,
+        remark: reason || lead.remark,
+      } : {}),
     },
   })
 
   await prisma.leadActivity.create({
     data: {
       leadId: id,
-      type: 'STATUS_CHANGE',
+      type: newStatus === 'FOLLOW_UP' ? 'FOLLOWUP_SCHEDULED' : 'STATUS_CHANGE',
       title:
-        newStatus === 'CONVERTED' ? '🎉 Deal Done — Lead Converted!' :
-        newStatus === 'CLOSED'    ? 'Lead Closed (Lost)' :
-                                    'Lead Marked Not Interested',
+        newStatus === 'CONVERTED'  ? '🎉 Deal Done — Lead Converted!' :
+        newStatus === 'CLOSED'     ? 'Lead Closed (Lost)' :
+        newStatus === 'FOLLOW_UP'  ? `📅 Follow-up scheduled after meeting${reason ? ` — ${reason}` : ''}` :
+                                      'Lead Marked Not Interested',
       description: note || reason || null,
       fromStatus: lead.status,
       toStatus: newStatus,
+      nextActionDate: newStatus === 'FOLLOW_UP' ? new Date(followUpDate) : null,
+      nextActionTime: newStatus === 'FOLLOW_UP' ? (followUpTime || null) : null,
       createdById: session.userId,
     },
   })
+
+  if (newStatus === 'FOLLOW_UP') {
+    const notifyUserId = lead.assignedToId || lead.createdById
+    if (notifyUserId && notifyUserId !== session.userId) {
+      await Notifications.followUpScheduled(notifyUserId, lead.companyName || lead.clientName, id, followUpDate).catch(() => {})
+    }
+    await logFromRequest(req, {
+      userId: session.userId,
+      action: 'FOLLOW_UP',
+      entityType: 'Lead',
+      entityId: id,
+      metadata: { fromStatus: lead.status, reason, followUpDate, followUpTime },
+    })
+    return successResponse({ lead: updated })
+  }
 
   let clientId: string | null = lead.client?.id || null
   if (newStatus === 'CONVERTED' && autoCreateClient && !lead.client) {

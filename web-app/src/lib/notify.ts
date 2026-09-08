@@ -75,6 +75,19 @@ export const Notifications = {
       metadata: { screen: 'LeadDetail', leadId },
     }),
 
+  // Marketing exec set a follow-up after the meeting instead of closing the
+  // deal right away (client asked for pricing / needs time / etc.) — the
+  // telecaller needs to know so they call back on that date.
+  followUpScheduled: (userId: string, clientName: string, leadId: string, date: string) =>
+    notify({
+      userIds: userId,
+      title: 'Follow-up Scheduled',
+      message: `${clientName} needs a follow-up on ${new Date(date).toLocaleDateString('en-IN')} after the meeting`,
+      type: 'lead',
+      link: `/leads/${leadId}`,
+      metadata: { screen: 'LeadDetail', leadId },
+    }),
+
   // ---- Field visits ----
   visitAssigned: (userId: string, clientName: string, date: string, visitId: string) =>
     notify({
