@@ -472,7 +472,7 @@ export default function LeadDetailPage() {
                 <Ban size={11} /> No Answer
               </button>
             )}
-            {lead.status === 'MEETING_SCHEDULED' && (canTL || lead.meetingAssignedToId === user?.id) && (
+            {(lead.status === 'MEETING_SCHEDULED' || lead.status === 'FOLLOW_UP') && (canTL || lead.meetingAssignedToId === user?.id) && (
               <button onClick={openReschedule} disabled={saving}
                 className="badge bg-indigo-600 text-white hover:bg-indigo-700">
                 <RotateCcw size={11} /> Reschedule
@@ -490,10 +490,10 @@ export default function LeadDetailPage() {
                 <CheckCircle2 size={11} /> Deal Done
               </button>
             )}
-            {lead.status === 'MEETING_DONE' && (canTL || lead.meetingAssignedToId === user?.id || lead.assignedToId === user?.id) && (
+            {(lead.status === 'MEETING_DONE' || lead.status === 'FOLLOW_UP') && (canTL || lead.meetingAssignedToId === user?.id || lead.assignedToId === user?.id) && (
               <button onClick={() => { setFollowUpForm({ reason: FOLLOWUP_REASONS[0], date: '', time: '', note: '' }); setModal('followup') }} disabled={saving}
                 className="badge bg-yellow-500 text-white hover:bg-yellow-600">
-                <CalendarClock size={11} /> Need Follow-up
+                <CalendarClock size={11} /> {lead.status === 'FOLLOW_UP' ? 'Reschedule Follow-up' : 'Need Follow-up'}
               </button>
             )}
             <button onClick={() => setModal('lost')} disabled={saving}

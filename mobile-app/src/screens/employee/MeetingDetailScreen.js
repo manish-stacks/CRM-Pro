@@ -456,10 +456,10 @@ export default function MeetingDetailScreen({ route, navigation }) {
           <View style={[s.card, { borderColor: colors.border }]}>
             <Text style={[s.cardTitle, { color: colors.text }]}>Meeting Info</Text>
             {[
+              { icon: 'person-outline', label: 'Lead Number', val: data.lead_number },
               { icon: 'call-outline', label: 'Phone', val: data.client_phone },
               { icon: 'mail-outline', label: 'Email', val: data.client_email },
-              { icon: 'calendar-outline', label: 'Date', val: data.meeting_date },
-              { icon: 'time-outline', label: 'Time', val: data.meeting_time },
+              { icon: 'calendar-outline', label: 'Date', val: data.meeting_date + ' at ' + data.meeting_time  },
               { icon: 'location-outline', label: 'Location', val: data.address },
               { icon: 'pricetag-outline', label: 'Service Pitched', val: data.service_pitched },
             ].filter(i => i.val).map((item, i) => (
@@ -542,7 +542,7 @@ export default function MeetingDetailScreen({ route, navigation }) {
                 <Text style={[s.actionRowTxt, { color: '#F59E0B' }]}>Client Didn't Pick Up (No Answer)</Text>
                 <Ionicons name="chevron-forward" size={16} color="#F59E0B" />
               </TouchableOpacity>
-              {data.status === 'MEETING_SCHEDULED' && (
+              {(data.status === 'MEETING_SCHEDULED' || data.status === 'FOLLOW_UP') && (
                 <TouchableOpacity style={[s.actionRow, { borderColor: colors.border }]} onPress={openReschedule} disabled={saving}>
                   <Ionicons name="time-outline" size={18} color="#6366F1" />
                   <Text style={[s.actionRowTxt, { color: '#6366F1' }]}>Reschedule (pick a free slot)</Text>
@@ -567,13 +567,13 @@ export default function MeetingDetailScreen({ route, navigation }) {
                   <Text style={s.dealBtnTxt}>Deal Done — Convert to Client</Text>
                 </TouchableOpacity>
               )}
-              {data.status === 'MEETING_DONE' && (
+              {(data.status === 'MEETING_DONE' || data.status === 'FOLLOW_UP') && (
                 <TouchableOpacity
                   style={[s.dealBtn, { backgroundColor: '#EAB308', marginTop: 8 }]}
                   onPress={() => { setFollowUpReason(FOLLOWUP_REASONS[0]); setFollowUpDate(''); setFollowUpNote(''); setShowFollowUp(true); }}
                 >
                   <Ionicons name="calendar-outline" size={18} color="#fff" />
-                  <Text style={s.dealBtnTxt}>Need Follow-up (not ready yet)</Text>
+                  <Text style={s.dealBtnTxt}>{data.status === 'FOLLOW_UP' ? 'Reschedule Follow-up' : 'Need Follow-up (not ready yet)'}</Text>
                 </TouchableOpacity>
               )}
               <TouchableOpacity style={[s.lostBtn, { borderColor: '#EF4444' }]} onPress={() => setShowLost(true)}>
@@ -703,7 +703,7 @@ export default function MeetingDetailScreen({ route, navigation }) {
             </View>
             <Text style={s.fieldLabel}>REASON</Text>
             <View style={[s.fieldWrap, { backgroundColor: colors.bg2, borderColor: colors.border, paddingVertical: 0 }]}>
-              <Picker selectedValue={followUpReason} onValueChange={setFollowUpReason} style={{ color: colors.text }}>
+              <Picker selectedValue={followUpReason} onValueChange={setFollowUpReason} style={{ flex: 1, color: colors.text }}>
                 {FOLLOWUP_REASONS.map(r => <Picker.Item key={r} label={r} value={r} />)}
               </Picker>
             </View>

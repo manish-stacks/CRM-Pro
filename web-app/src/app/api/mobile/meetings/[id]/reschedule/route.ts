@@ -33,7 +33,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const isMeetingOwner = lead.meetingAssignedToId === session.userId
   if (!isMeetingOwner) return fail('Forbidden', 403)
 
-  if (!['MEETING_SCHEDULED', 'CALLBACK'].includes(lead.status)) {
+  if (!['MEETING_SCHEDULED', 'CALLBACK', 'FOLLOW_UP'].includes(lead.status)) {
     return fail(`Lead must be in MEETING_SCHEDULED or CALLBACK to reschedule (currently ${lead.status})`)
   }
 
