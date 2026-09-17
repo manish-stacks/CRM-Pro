@@ -8,6 +8,7 @@ import { prisma } from '@/lib/prisma'
 import { requireMobileEmployee, ok, fail } from '@/lib/mobileAuth'
 import { logFromRequest } from '@/lib/audit'
 import { notify } from '@/lib/notify'
+import { cancelPendingVisitsForLead } from '@/lib/cancelLeadVisits'
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -59,6 +60,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       metadata: JSON.stringify({ cancelledExecutiveId: previousExecId, oldSlot, notes, via: 'mobile' }),
     },
   })
+
+  // Cancel any pending visit auto-created for this meeting too (see web route for why).
+  await cancelPendingVisitsForLead(id, `[Auto-cancelled] Meeting was cancelled by ${cancelledBy}: ${notes}`)
 
   const targets = Array.from(new Set([lead.createdById, lead.assignedToId].filter(Boolean) as string[]))
     .filter(uid => uid !== session.userId)

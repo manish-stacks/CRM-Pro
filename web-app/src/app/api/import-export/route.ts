@@ -347,6 +347,7 @@ export async function GET(req: NextRequest) {
           include: {
             createdBy: { select: { name: true } },
             assignedTo: { select: { name: true } },
+            meetingAssignedTo: { select: { name: true } },
           },
           orderBy: { createdAt: 'desc' },
         })
@@ -356,9 +357,12 @@ export async function GET(req: NextRequest) {
           Phone: l.clientPhone,
           Email: l.clientEmail || '',
           Company: l.companyName || '',
+          Address: [l.address, l.area, l.city, l.state, l.pincode].filter(Boolean).join(', '),
           Source: l.source,
           Service: l.service || '',
           Status: l.status,
+          Remark: l.remark || '',
+          MeetingPerson: l.meetingAssignedTo?.name || '',
           CreatedBy: l.createdBy?.name || '',
           AssignedTo: l.assignedTo?.name || '',
           CreatedAt: l.createdAt.toISOString().split('T')[0],

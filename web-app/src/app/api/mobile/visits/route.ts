@@ -99,15 +99,16 @@ export async function GET(req: NextRequest) {
       include: { client: { select: { clientName: true, phone: true } } },
     }),
     (async () => {
-      const [all, todayC, pending, completed, upcoming, overdue] = await Promise.all([
+      const [all, todayC, pending, completed, upcoming, overdue, cancelled] = await Promise.all([
         prisma.clientVisit.count({ where: base }),
         prisma.clientVisit.count({ where: { ...base, scheduledDate: { gte: today.start, lte: today.end } } }),
         prisma.clientVisit.count({ where: { ...base, status: { in: ['PENDING', 'IN_PROGRESS'] } } }),
         prisma.clientVisit.count({ where: { ...base, status: 'COMPLETED' } }),
         prisma.clientVisit.count({ where: { ...base, status: { in: ['PENDING', 'IN_PROGRESS'] }, scheduledDate: { gt: today.end } } }),
         prisma.clientVisit.count({ where: { ...base, status: { in: ['PENDING', 'IN_PROGRESS'] }, scheduledDate: { lt: today.start } } }),
+        prisma.clientVisit.count({ where: { ...base, status: 'CANCELLED' } }),
       ])
-      return { all, today: todayC, pending, completed, upcoming, overdue }
+      return { all, today: todayC, pending, completed, upcoming, overdue, cancelled }
     })(),
   ])
 

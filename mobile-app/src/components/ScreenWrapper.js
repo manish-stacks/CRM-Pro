@@ -19,9 +19,14 @@ export default function ScreenWrapper({
                 <ScrollView
                     showsVerticalScrollIndicator={false}
                     contentContainerStyle={[
-                        // { paddingBottom: 10 },
+                        // Without this, buttons/fields at the end of a form sit flush
+                        // against the screen edge (or the bottom tab bar on some
+                        // devices) and look "hidden" / get clipped when scrolled all
+                        // the way down.
+                        { paddingBottom: 28 },
                         contentStyle,
                     ]}
+                    keyboardShouldPersistTaps="handled"
                     refreshControl={refreshControl}
                 >
                     {children}

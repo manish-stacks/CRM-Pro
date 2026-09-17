@@ -267,16 +267,19 @@ export default function MeetingSlotsPage() {
                                     <button onClick={() => setDetail({ ...sl.lead, exec: e, slot: sl.label })}
                                       className="w-full text-left bg-red-50 hover:bg-red-100 border border-red-200 rounded-md px-2 py-1.5 min-h-[46px] transition-colors">
                                       <div className="text-[11px] font-semibold text-red-800 truncate">
-                                        {/* {sl.lead.companyName || sl.lead.clientName} */}Booked
+                                        Booked
                                       </div>
-                                      {/* <div className="text-[10px] text-red-600/80 truncate">
-                                        {sl.lead.city || sl.lead.leadNumber}
-                                      </div> */}
+                                      {sl.lead.area && (
+                                        <div className="text-[10px] text-red-600/80 truncate">
+                                          {sl.lead.area}
+                                        </div>
+                                      )}
                                     </button>
                                   ) :
                                     (
-                                      <div className="bg-red-50 border border-red-200 rounded-md min-h-[46px] flex items-center justify-center text-[10px] font-medium text-red-700">
-                                        Booked
+                                      <div className="bg-red-50 border border-red-200 rounded-md min-h-[46px] flex flex-col items-center justify-center text-[10px] font-medium text-red-700 px-1">
+                                        <span>Booked</span>
+                                        {sl.lead.area && <span className="truncate text-red-600/80">{sl.lead.area}</span>}
                                       </div>
                                     )}
                               </td>

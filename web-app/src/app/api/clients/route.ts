@@ -96,9 +96,16 @@ export async function GET(req: NextRequest) {
   } else if (session.role === 'MARKETING_EXECUTIVE') {
     where.marketingPersonId = session.userId
   } else if (session.role === 'MANAGER') {
-    // TL sees only the clients they added themselves, plus any client where
-    // admin has since assigned them as telecaller/marketing/reporting person.
-    // Admin/Super Admin still see every client.
+    // TL sees: clients they added themselves, clients where admin has assigned
+    // them as telecaller/marketing/reporting person, AND clients whose
+    // service they've been made project-head of via the Project Assignments
+    // page (even if no client-level field points at them directly).
+    const headedServices = await prisma.projectAssignment.findMany({
+      where: { managerId: session.userId, isActive: true },
+      select: { clientService: { select: { clientId: true } } },
+    })
+    const headedClientIds = Array.from(new Set(headedServices.map(a => a.clientService.clientId)))
+
     where.AND = [
       ...(where.AND || []),
       {
@@ -108,6 +115,7 @@ export async function GET(req: NextRequest) {
           { marketingPersonId: session.userId },
           { reportingPersonId: session.userId },
           { assignedToId: session.userId },
+          ...(headedClientIds.length ? [{ id: { in: headedClientIds } }] : []),
         ],
       },
     ]

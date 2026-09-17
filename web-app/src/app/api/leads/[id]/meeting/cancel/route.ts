@@ -16,6 +16,7 @@ import { successResponse, errorResponse, notFoundResponse } from '@/lib/api'
 import { logFromRequest } from '@/lib/audit'
 import { notify } from '@/lib/notify'
 import { canSeeBeyondOwn } from '@/lib/permissions'
+import { cancelPendingVisitsForLead } from '@/lib/cancelLeadVisits'
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -73,6 +74,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       metadata: JSON.stringify({ cancelledExecutiveId: previousExecId, oldSlot, notes }),
     },
   })
+
+  // Any pending visit auto-created for this meeting is now dead too —
+  // cancel it so admin can spot it in the visits list instead of it
+  // sitting there forever as "pending" for a meeting that no longer exists.
+  await cancelPendingVisitsForLead(id, `[Auto-cancelled] Meeting was cancelled by ${cancelledBy}: ${notes}`)
 
   // Tell the people who can rebook it: the lead's creator and its telecaller.
   const targets = Array.from(new Set([lead.createdById, lead.assignedToId].filter(Boolean) as string[]))

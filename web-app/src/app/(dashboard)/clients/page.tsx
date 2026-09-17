@@ -15,6 +15,7 @@ import {
 import * as XLSX from 'xlsx'
 import toast from 'react-hot-toast'
 import { isCompanyWideRole, isNotOwnScopeRole, canSeeBeyondOwn } from '@/lib/permissions'
+import { lookupPincode } from '@/lib/pincode'
 
 const STATUSES = ['ACTIVE', 'INACTIVE', 'CHURNED']
 
@@ -527,7 +528,14 @@ export default function ClientsPage() {
             <div className="grid grid-cols-3 gap-3">
               <Input label="City" value={form.city} onChange={e => setForm(p => ({ ...p, city: e.target.value }))} />
               <Input label="State" value={form.state} onChange={e => setForm(p => ({ ...p, state: e.target.value }))} />
-              <Input label="Pincode" value={form.pincode} onChange={e => setForm(p => ({ ...p, pincode: e.target.value }))} />
+              <Input label="Pincode" value={form.pincode} maxLength={6} onChange={async e => {
+                const val = e.target.value.replace(/\D/g, '')
+                setForm(p => ({ ...p, pincode: val }))
+                if (val.length === 6) {
+                  const loc = await lookupPincode(val)
+                  if (loc) setForm(p => ({ ...p, city: loc.city || p.city, state: loc.state || p.state }))
+                }
+              }} />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>

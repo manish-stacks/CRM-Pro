@@ -621,8 +621,10 @@ model Lead {
   alternatePhone       String?
   link                 String?   // Website / social link
   address              String?
+  area                 String?   // Locality / area within the city
   city                 String?
   state                String?
+  pincode              String?
   source               String    @default("WEBSITE") // WEBSITE, REFERRAL, SOCIAL_MEDIA, COLD_CALL, EMAIL, WALKIN, OTHER
   service              String?   // Service pitched
   productPitched       String?
@@ -849,7 +851,7 @@ model ServiceCatalog {
   category    String?  // SEO, DEVELOPMENT, MARKETING, DESIGN, MAINTENANCE
   departmentId String? // Default handling dept
   basePrice   Float    @default(0)
-  billingCycle String  @default("ONE_TIME") // ONE_TIME, MONTHLY, QUARTERLY, YEARLY
+  billingCycle String  @default("ONE_TIME") // ONE_TIME, MONTHLY, QUARTERLY, HALF_YEARLY, YEARLY
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

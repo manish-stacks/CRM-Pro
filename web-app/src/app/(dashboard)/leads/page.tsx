@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import toast from 'react-hot-toast'
+import { lookupPincode } from '@/lib/pincode'
 
 const STATUSES = [
   { key: 'NEW', label: 'New', color: 'blue' },
@@ -86,7 +87,7 @@ function LeadsPageInner({ forceMine = false }: { forceMine?: boolean }) {
 
   const [form, setForm] = useState({
     companyName: '', clientName: '', clientPhone: '', clientEmail: '',
-    alternatePhone: '', link: '', address: '', city: '', state: '',
+    alternatePhone: '', link: '', address: '', area: '', city: '', state: '', pincode: '',
     source: 'WEBSITE', service: '', price: '',
     callbackDate: '',
     callbackTime: '',
@@ -154,7 +155,7 @@ function LeadsPageInner({ forceMine = false }: { forceMine?: boolean }) {
   const openAdd = () => {
     setForm({
       companyName: '', clientName: '', clientPhone: '', clientEmail: '',
-      alternatePhone: '', link: '', address: '', city: '', state: '',
+      alternatePhone: '', link: '', address: '', area: '', city: '', state: '', pincode: '',
       callbackDate: '',
       callbackTime: '',
       source: 'WEBSITE', service: '', price: '',
@@ -368,8 +369,7 @@ function LeadsPageInner({ forceMine = false }: { forceMine?: boolean }) {
           <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Due</span>
           {DUE_CHIPS.map(c => (
             <button key={c.key || 'all'} onClick={() => setF({ due: c.key })}
-              className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
-                filters.due === c.key
+              className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${filters.due === c.key
                   ? 'bg-brand-600 text-white border-brand-600'
                   : 'bg-white text-gray-600 border-gray-300 hover:border-brand-400 hover:text-brand-600'}`}>
               {c.label}
@@ -657,7 +657,17 @@ function LeadsPageInner({ forceMine = false }: { forceMine?: boolean }) {
             <Input label="Link / Website" value={form.link} onChange={e => setForm(p => ({ ...p, link: e.target.value }))} placeholder="https://..." />
           </div>
           <Textarea label="Address" value={form.address} onChange={e => setForm(p => ({ ...p, address: e.target.value }))} rows={2} />
-          <div className="grid grid-cols-2 gap-3">
+          <Input label="Area / Locality" value={form.area} onChange={e => setForm(p => ({ ...p, area: e.target.value }))} placeholder="e.g. Sector 14, MG Road" />
+          <div className="grid grid-cols-3 gap-3">
+
+            <Input label="Pincode" value={form.pincode} maxLength={6} onChange={async e => {
+              const val = e.target.value.replace(/\D/g, '')
+              setForm(p => ({ ...p, pincode: val }))
+              if (val.length === 6) {
+                const loc = await lookupPincode(val)
+                if (loc) setForm(p => ({ ...p, city: loc.city || p.city, state: loc.state || p.state }))
+              }
+            }} />
             <Input label="City" value={form.city} onChange={e => setForm(p => ({ ...p, city: e.target.value }))} />
             <Input label="State" value={form.state} onChange={e => setForm(p => ({ ...p, state: e.target.value }))} />
           </div>

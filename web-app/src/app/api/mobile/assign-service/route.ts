@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
 
   let body: any = {}
   try { body = await req.json() } catch { return fail('Invalid body') }
-  const { client_id, package_id, price, duration } = body
+  const { client_id, package_id, price, duration, billingCycle } = body
 
   if (!client_id) return fail('client_id required')
   if (!package_id) return fail('package_id required')
@@ -23,14 +23,17 @@ export async function POST(req: NextRequest) {
   const client = await prisma.client.findUnique({ where: { id: client_id } })
   if (!client) return fail('Client not found', 404)
 
-  // Compute expiry from billing cycle if a duration in months is given
+  // Compute expiry the same way the web app does: from an explicit billing
+  // cycle (MONTHLY/QUARTERLY/YEARLY/ONE_TIME), not by guessing a number of
+  // months out of a free-text "duration" string — that used to silently
+  // misinterpret things like "1 year" as 1 month via parseInt().
+  const cycle = billingCycle || pkg.billingCycle || 'ONE_TIME'
+  const CYCLE_MONTHS: Record<string, number> = { MONTHLY: 1, QUARTERLY: 3, HALF_YEARLY: 6, YEARLY: 12, ONE_TIME: 0 }
+  // `duration` kept only for backward-compat with old app builds still in the wild.
+  const months = CYCLE_MONTHS[cycle] ?? (duration ? parseInt(String(duration)) : 0)
+
   const start = new Date()
   let expiry: Date | null = null
-  const months = duration ? parseInt(String(duration)) : (
-    pkg.billingCycle === 'MONTHLY' ? 1 :
-    pkg.billingCycle === 'QUARTERLY' ? 3 :
-    pkg.billingCycle === 'YEARLY' ? 12 : 0
-  )
   if (months > 0) {
     expiry = new Date(start)
     expiry.setMonth(expiry.getMonth() + months)
@@ -45,6 +48,7 @@ export async function POST(req: NextRequest) {
       amount: price != null ? parseFloat(String(price)) : pkg.basePrice,
       startDate: start,
       expiryDate: expiry,
+      billingCycle: cycle,
     },
   })
 

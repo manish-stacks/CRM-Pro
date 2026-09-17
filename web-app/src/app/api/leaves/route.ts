@@ -9,6 +9,7 @@ import { getTeamScope } from '@/lib/teamScope'
 import { sendMail, wrapEmailHtml } from '@/lib/mailer'
 import { Settings } from '@/lib/settings'
 import { canSeeBeyondOwn, isCompanyWideRole } from '@/lib/permissions'
+import { computeLeaveDays } from '@/lib/leaveDays'
 
 const LEAVE_TYPES = ['PAID', 'UNPAID', 'SICK', 'CASUAL', 'MATERNITY', 'PATERNITY']
 const DURATIONS   = ['SINGLE_DAY', 'MULTIPLE_DAYS', 'SHORT_HOURLY']
@@ -114,32 +115,9 @@ export async function POST(req: NextRequest) {
     const employee = await prisma.employee.findFirst({ where: { userId: session.userId } })
     if (!employee) return errorResponse('Employee profile not found')
 
-    let start: Date, end: Date, days: number
-
-    if (duration === 'SINGLE_DAY') {
-      if (!startDate) return errorResponse('Start date required')
-      start = new Date(startDate)
-      end = new Date(startDate)
-      days = 1
-    } else if (duration === 'MULTIPLE_DAYS') {
-      if (!startDate || !endDate) return errorResponse('Start and end dates required')
-      start = new Date(startDate)
-      end = new Date(endDate)
-      days = Math.ceil((end.getTime() - start.getTime()) / 86400000) + 1
-      if (days <= 0) return errorResponse('Invalid date range')
-    } else {
-      // SHORT_HOURLY
-      if (!startDate || !hourlyStart || !hourlyEnd) return errorResponse('Date and start/end times required')
-      start = new Date(startDate)
-      end = new Date(startDate)
-      const hours = Number(hourlyHours) || (() => {
-        const [sh, sm] = hourlyStart.split(':').map(Number)
-        const [eh, em] = hourlyEnd.split(':').map(Number)
-        return ((eh * 60 + em) - (sh * 60 + sm)) / 60
-      })()
-      if (!hours || hours <= 0) return errorResponse('Invalid hourly time range')
-      days = hours / 8  // 8 hours = 1 day
-    }
+    const calc = computeLeaveDays({ duration, startDate, endDate, hourlyStart, hourlyEnd, hourlyHours })
+    if (calc.error) return errorResponse(calc.error)
+    const { start, end, days } = calc
 
     const leave = await prisma.leave.create({
       data: {

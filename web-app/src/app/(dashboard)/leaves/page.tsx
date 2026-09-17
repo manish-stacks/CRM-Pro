@@ -6,7 +6,7 @@ import { Button, Input, Select, Textarea, Modal, EmptyState, Pagination, Badge }
 import { formatDate, formatDateTime, getInitials } from '@/lib/utils'
 import {
   Plus, Calendar, Filter, X, Check, Ban, Clock, CalendarDays, Loader2, Search,
-  Eye
+  Eye, Pencil
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -21,6 +21,7 @@ const STATUSES = ['PENDING', 'APPROVED', 'REJECTED', 'CANCELLED']
 export default function LeavesPage() {
   const { user, isAtLeast } = useAuth()
   const canApprove = isAtLeast('MANAGER')
+  const canEdit = isAtLeast('ADMIN')
 
   const [leaves, setLeaves] = useState<any[]>([])
   const [total, setTotal] = useState(0)
@@ -34,7 +35,7 @@ export default function LeavesPage() {
   const [balance, setBalance] = useState<any>(null)
   const [reasonModal, setReasonModal] = useState<any>(null)
 
-  const [modal, setModal] = useState<'none' | 'apply' | 'reject'>('none')
+  const [modal, setModal] = useState<'none' | 'apply' | 'reject' | 'edit'>('none')
   const [target, setTarget] = useState<any>(null)
   const [saving, setSaving] = useState(false)
   const [rejectReason, setRejectReason] = useState('')
@@ -97,6 +98,42 @@ export default function LeavesPage() {
       fetchLeaves()
     } catch (e: any) {
       toast.error(e.response?.data?.error || 'Failed')
+    } finally { setSaving(false) }
+  }
+
+  const openEdit = (l: any) => {
+    setTarget(l)
+    setForm({
+      leaveType: l.leaveType,
+      duration: l.duration,
+      startDate: l.startDate ? String(l.startDate).slice(0, 10) : '',
+      endDate: l.endDate ? String(l.endDate).slice(0, 10) : '',
+      hourlyStart: l.hourlyStart || '',
+      hourlyEnd: l.hourlyEnd || '',
+      hourlyHours: l.hourlyHours || 0,
+      reason: l.reason || '',
+    })
+    setModal('edit')
+  }
+
+  const saveEdit = async () => {
+    if (!target) return
+    if (!form.reason.trim()) { toast.error('Reason required'); return }
+    if (form.duration === 'SINGLE_DAY' && !form.startDate) { toast.error('Date required'); return }
+    if (form.duration === 'MULTIPLE_DAYS' && (!form.startDate || !form.endDate)) { toast.error('Start & end dates required'); return }
+    if (form.duration === 'SHORT_HOURLY' && (!form.startDate || !form.hourlyStart || !form.hourlyEnd)) { toast.error('Date + start/end times required'); return }
+
+    setSaving(true)
+    try {
+      const payload: any = { action: 'edit', ...form }
+      if (form.duration === 'SINGLE_DAY') payload.endDate = form.startDate
+      await api.patch(`/leaves/${target.id}`, payload)
+      toast.success('Leave updated!')
+      setModal('none')
+      setTarget(null)
+      fetchLeaves()
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Failed to update')
     } finally { setSaving(false) }
   }
 
@@ -277,7 +314,7 @@ export default function LeavesPage() {
                     )}
                   </td>
                   <td className="text-sm font-semibold tabular-nums">
-                    {l.duration === 'SHORT_HOURLY' ? `${l.hourlyHours}h` : `${l.days}d`}
+                    {l.duration === 'SHORT_HOURLY' ? `${l.hourlyHours.toFixed(1)}h` : l.duration === 'SINGLE_DAY' ? `${l.days.toFixed(1)}h` : `${l.days.toFixed(1)}d`}
                   </td>
                   <td className="text-xs text-gray-700 max-w-xs">
                     <button onClick={() => setReasonModal(l)} className="text-left hover:text-brand-600 truncate block max-w-[220px] underline decoration-dotted">
@@ -307,10 +344,10 @@ export default function LeavesPage() {
                       <span className="text-gray-300">—</span>
                     )}
                   </td>
-                  {canApprove && (
+                  {(canApprove || canEdit) && (
                     <td className="text-right">
                       <div className="flex items-center justify-end">
-                        {l.status === 'PENDING' ?
+                        {canApprove && (l.status === 'PENDING' ?
                           (
                             <>
                               <button onClick={() => approve(l)} className="btn-ghost btn-sm text-green-600" title="Approve"><Check size={13} /></button>
@@ -318,7 +355,12 @@ export default function LeavesPage() {
                             </>
                           ) : (
                             <span className="text-xs text-gray-400">Done</span>
-                          )}
+                          ))}
+                        {canEdit && (
+                          <button onClick={() => openEdit(l)} className="btn-ghost btn-sm text-blue-600 ml-2" title="Edit leave">
+                            <Pencil size={13} />
+                          </button>
+                        )}
                         <button onClick={() => setReasonModal(l)} className="btn-ghost btn-sm text-gray-600 ml-2" title="View reason">
                           <Eye size={13} />
                         </button>
@@ -370,7 +412,7 @@ export default function LeavesPage() {
         )}
       </Modal>
 
-      <Modal open={modal === 'apply'} onClose={() => setModal('none')} title="Apply for Leave">
+      <Modal open={modal === 'apply' || modal === 'edit'} onClose={() => { setModal('none'); setTarget(null) }} title={modal === 'edit' ? 'Edit Leave Request' : 'Apply for Leave'}>
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <Select label="Leave Type" value={form.leaveType} onChange={e => setForm(p => ({ ...p, leaveType: e.target.value }))} options={LEAVE_TYPES.map(t => ({ value: t, label: t }))} />
@@ -413,8 +455,10 @@ export default function LeavesPage() {
             placeholder="Briefly explain why..." rows={3} />
 
           <div className="flex justify-end gap-2 pt-2">
-            <Button variant="secondary" onClick={() => setModal('none')}>Cancel</Button>
-            <Button onClick={apply} loading={saving}>Submit Application</Button>
+            <Button variant="secondary" onClick={() => { setModal('none'); setTarget(null) }}>Cancel</Button>
+            {modal === 'edit'
+              ? <Button onClick={saveEdit} loading={saving}>Save Changes</Button>
+              : <Button onClick={apply} loading={saving}>Submit Application</Button>}
           </div>
         </div>
       </Modal>

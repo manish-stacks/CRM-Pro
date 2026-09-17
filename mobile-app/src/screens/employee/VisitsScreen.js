@@ -30,6 +30,7 @@ const TABS = [
   { key: 'upcoming', label: 'Upcoming', params: { range: 'upcoming' } },
   { key: 'overdue', label: 'Overdue', params: { range: 'overdue' } },
   { key: 'completed', label: 'Completed', params: { status: 'completed' } },
+  { key: 'cancelled', label: 'Cancelled', params: { status: 'cancelled' } },
 ];
 
 function VisitCard({ visit, colors, onStart, onComplete, busyId }) {
@@ -263,6 +264,7 @@ export default function VisitsScreen({ navigation, route }) {
     if (key === 'upcoming') return counts.upcoming;
     if (key === 'overdue') return counts.overdue;
     if (key === 'completed') return counts.completed;
+    if (key === 'cancelled') return counts.cancelled;
     return undefined;
   };
 

@@ -13,6 +13,12 @@ import { dateOnly } from '@/lib/attendanceDate'
 import { getTeamScope } from '@/lib/teamScope'
 import { isCompanyWideRole } from '@/lib/permissions'
 
+import { canSeeBeyondOwn, isCompanyWideRole } from '@/lib/permissions'
+import { computeLeaveDays } from '@/lib/leaveDays'
+
+const LEAVE_TYPES = ['PAID', 'UNPAID', 'SICK', 'CASUAL', 'MATERNITY', 'PATERNITY']
+const DURATIONS   = ['SINGLE_DAY', 'MULTIPLE_DAYS', 'SHORT_HOURLY']
+
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const auth = await requireAuth(req, 'MANAGER')
@@ -20,7 +26,80 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const session = (auth as any).session
 
   try {
-    const { action, rejectionReason } = await req.json()
+    const body = await req.json()
+    const { action } = body
+
+    // ---- Admin-only: edit the leave's own details (type/dates/reason etc.) ----
+    // Separate from approve/reject — lets admin fix a mistaken request
+    // (wrong dates, wrong type, typo in reason) without forcing the
+    // employee to cancel and re-apply.
+    if (action === 'edit') {
+      if (!isCompanyWideRole(session.role)) return errorResponse('Only admins can edit a leave request', 403)
+
+      const existing = await prisma.leave.findUnique({ where: { id } })
+      if (!existing) return notFoundResponse('Leave')
+
+      const { leaveType, duration, startDate, endDate, hourlyStart, hourlyEnd, hourlyHours, reason } = body
+      if (!reason || !leaveType || !duration) return errorResponse('Leave type, duration and reason are required')
+      if (!LEAVE_TYPES.includes(leaveType)) return errorResponse('Invalid leave type')
+      if (!DURATIONS.includes(duration)) return errorResponse('Invalid duration')
+
+      const calc = computeLeaveDays({ duration, startDate, endDate, hourlyStart, hourlyEnd, hourlyHours })
+      if (calc.error) return errorResponse(calc.error)
+      const { start, end, days } = calc
+
+      const updated = await prisma.leave.update({
+        where: { id },
+        data: {
+          leaveType,
+          duration,
+          startDate: start,
+          endDate: end,
+          days,
+          hourlyStart: duration === 'SHORT_HOURLY' ? hourlyStart : null,
+          hourlyEnd: duration === 'SHORT_HOURLY' ? hourlyEnd : null,
+          hourlyHours: duration === 'SHORT_HOURLY' ? (Number(hourlyHours) || days * 8) : null,
+          reason,
+        },
+        include: {
+          employee: { include: { user: { select: { name: true, avatar: true } } } },
+          approver: { select: { id: true, name: true, role: true, avatar: true } },
+        },
+      })
+
+      // If it was already APPROVED and marked attendance, refresh the LEAVE
+      // attendance rows to match the new date range.
+      if (existing.status === 'APPROVED' && duration !== 'SHORT_HOURLY') {
+        const oldDay = dateOnly(existing.startDate)
+        const oldEnd = dateOnly(existing.endDate)
+        while (oldDay <= oldEnd) {
+          await prisma.attendance.deleteMany({ where: { employeeId: existing.employeeId, date: new Date(oldDay), status: 'LEAVE' } })
+          oldDay.setUTCDate(oldDay.getUTCDate() + 1)
+        }
+        const newDay = dateOnly(start)
+        const newEnd = dateOnly(end)
+        while (newDay <= newEnd) {
+          await prisma.attendance.upsert({
+            where: { employeeId_date: { employeeId: existing.employeeId, date: new Date(newDay) } },
+            update: { status: 'LEAVE' },
+            create: { employeeId: existing.employeeId, date: new Date(newDay), status: 'LEAVE' },
+          })
+          newDay.setUTCDate(newDay.getUTCDate() + 1)
+        }
+      }
+
+      await logFromRequest(req, {
+        userId: session.userId,
+        action: 'EDIT',
+        entityType: 'Leave',
+        entityId: id,
+        metadata: { leaveType, duration, days },
+      })
+
+      return successResponse(updated)
+    }
+
+    const { rejectionReason } = body
     if (!['approve', 'reject'].includes(action)) return errorResponse('Invalid action')
 
     const leave = await prisma.leave.findUnique({

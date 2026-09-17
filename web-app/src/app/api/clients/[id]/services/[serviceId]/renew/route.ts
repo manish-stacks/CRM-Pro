@@ -15,6 +15,7 @@ function addCycle(current: Date, cycle: string): Date {
   switch (cycle) {
     case 'MONTHLY':    d.setMonth(d.getMonth() + 1); break
     case 'QUARTERLY':  d.setMonth(d.getMonth() + 3); break
+    case 'HALF_YEARLY':d.setMonth(d.getMonth() + 6); break
     case 'YEARLY':     d.setFullYear(d.getFullYear() + 1); break
     default:           d.setFullYear(d.getFullYear() + 1)
   }

@@ -18,9 +18,10 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { openSeoReportPdf } from '@/lib/seoReportPdf'
+import { lookupPincode } from '@/lib/pincode'
 import { BRAND } from '@/lib/branding'
 
-const BILLING_CYCLES = ['ONE_TIME', 'MONTHLY', 'QUARTERLY', 'YEARLY']
+const BILLING_CYCLES = ['ONE_TIME', 'MONTHLY', 'QUARTERLY', 'HALF_YEARLY', 'YEARLY']
 
 // Only these roles can add/edit services, see pricing, and view
 // Proposals / Invoices / Payments.
@@ -621,7 +622,14 @@ export default function ClientDetailPage() {
             <div className="grid grid-cols-3 gap-3">
               <Input label="City" value={editForm.city || ''} onChange={e => setEditForm((p: any) => ({ ...p, city: e.target.value }))} />
               <Input label="State" value={editForm.state || ''} onChange={e => setEditForm((p: any) => ({ ...p, state: e.target.value }))} />
-              <Input label="Pincode" value={editForm.pincode || ''} onChange={e => setEditForm((p: any) => ({ ...p, pincode: e.target.value }))} />
+              <Input label="Pincode" value={editForm.pincode || ''} maxLength={6} onChange={async e => {
+                const val = e.target.value.replace(/\D/g, '')
+                setEditForm((p: any) => ({ ...p, pincode: val }))
+                if (val.length === 6) {
+                  const loc = await lookupPincode(val)
+                  if (loc) setEditForm((p: any) => ({ ...p, city: loc.city || p.city, state: loc.state || p.state }))
+                }
+              }} />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <Select label="Status" value={editForm.status || 'ACTIVE'} onChange={e => setEditForm((p: any) => ({ ...p, status: e.target.value }))}
@@ -667,11 +675,11 @@ export default function ClientDetailPage() {
               const head = departments.find((d: any) => d.id === svcForm.departmentId)?.manager?.user?.name
               return head
                 ? <p className="-mt-2 text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-2 py-1">
-                    {head} (team lead) will be auto-assigned as project head. Admin can change this later from Projects.
-                  </p>
+                  {head} (team lead) will be auto-assigned as project head. Admin can change this later from Projects.
+                </p>
                 : <p className="-mt-2 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
-                    This department has no head set — assign one in Departments, or assign the project manually.
-                  </p>
+                  This department has no head set — assign one in Departments, or assign the project manually.
+                </p>
             })()}
             <Textarea label="Description" value={svcForm.description} onChange={e => setSvcForm(p => ({ ...p, description: e.target.value }))} rows={2} />
             <div className="grid grid-cols-3 gap-3">

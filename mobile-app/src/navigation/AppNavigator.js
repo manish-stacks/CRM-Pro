@@ -3,6 +3,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 
@@ -56,6 +57,13 @@ const HIDDEN_TAB = {
 // ─── Client Bottom Tabs ───────────────────────────────────────────────────────
 function ClientTabs() {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
+  // On devices with a gesture nav bar (no physical/software back button),
+  // the bottom inset can be 20–48px. A fixed paddingBottom:10 isn't enough
+  // there, so the last row of tab icons/labels ends up clipped by the
+  // system gesture area and looks "hidden". Add the real inset on top of
+  // our own breathing room instead of a fixed number.
+  const tabBarBottomPad = Math.max(insets.bottom, 10);
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -64,8 +72,8 @@ function ClientTabs() {
           backgroundColor: colors.card,
           borderTopColor: colors.border,
           borderTopWidth: 1.5,
-          height: 70,
-          paddingBottom: 10,
+          height: 60 + tabBarBottomPad,
+          paddingBottom: tabBarBottomPad,
         },
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.text3,
@@ -105,6 +113,8 @@ function ClientTabs() {
 // ─── Employee Bottom Tabs ─────────────────────────────────────────────────────
 function EmployeeTabs() {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
+  const tabBarBottomPad = Math.max(insets.bottom, 10);
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -113,8 +123,8 @@ function EmployeeTabs() {
           backgroundColor: colors.card,
           borderTopColor: colors.border,
           borderTopWidth: 1.5,
-          height: 70,
-          paddingBottom: 10,
+          height: 60 + tabBarBottomPad,
+          paddingBottom: tabBarBottomPad,
         },
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.text3,

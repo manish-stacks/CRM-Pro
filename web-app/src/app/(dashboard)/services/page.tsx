@@ -187,7 +187,7 @@ export default function ServicesPage() {
           <div className="grid grid-cols-2 gap-3">
             <Input label="Base Price (₹)" type="number" value={form.basePrice} onChange={e => setForm(p => ({ ...p, basePrice: e.target.value }))} placeholder="0" />
             <Select label="Billing Cycle" value={form.billingCycle} onChange={e => setForm(p => ({ ...p, billingCycle: e.target.value }))}
-              options={['ONE_TIME', 'MONTHLY', 'QUARTERLY', 'YEARLY'].map(c => ({ value: c, label: c }))} />
+              options={['ONE_TIME', 'MONTHLY', 'QUARTERLY', 'HALF_YEARLY', 'YEARLY'].map(c => ({ value: c, label: c }))} />
           </div>
           <Textarea label="Description" value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} placeholder="Brief description..." rows={3} />
           <div className="flex justify-end gap-3">

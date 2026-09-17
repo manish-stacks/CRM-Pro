@@ -22,7 +22,7 @@ export default function ClientDetailScreen({ route, navigation }) {
   const { client: clientParam } = route.params;
   const [client, setClient] = useState(clientParam);
   const [showAssign, setShowAssign] = useState(false);
-  const [service, setService] = useState({ service_name: '', price: '', duration: '' });
+  const [service, setService] = useState({ service_name: '', price: '', billingCycle: '' });
   const [assigning, setAssigning] = useState(false);
   const [packages, setPackages] = useState([]);
   const [selectedPackage, setSelectedPackage] = useState(null);
@@ -148,11 +148,11 @@ export default function ClientDetailScreen({ route, navigation }) {
         client_id: client.id,
         package_id: selectedPackage,
         price: parseFloat(service.price),
-        duration: service.duration,
+        billingCycle: service.billingCycle || 'ONE_TIME',
       });
       Alert.alert('Success', 'Service assigned!');
       setShowAssign(false);
-      setService({ service_name: '', price: '', duration: '' });
+      setService({ service_name: '', price: '', billingCycle: '' });
       setSelectedPackage(null);
       fetchDetail();
     } catch (e) {
@@ -451,7 +451,8 @@ export default function ClientDetailScreen({ route, navigation }) {
                         if (pkg) {
                           setService(prev => ({
                             ...prev,
-                            price: pkg.price?.toString() || ''
+                            price: pkg.price?.toString() || '',
+                            billingCycle: pkg.billing_cycle || 'ONE_TIME'
                           }));
                         }
                       }}
@@ -476,7 +477,6 @@ export default function ClientDetailScreen({ route, navigation }) {
 
                 {[
                   { key: 'price', label: 'Price (₹)', placeholder: '5000', icon: 'cash-outline', keyboardType: 'decimal-pad' },
-                  { key: 'duration', label: 'Duration', placeholder: '6 months', icon: 'calendar-outline' },
                 ].map((f, i) => (
                   <View key={i} style={{ marginBottom: 10 }}>
                     <Text style={{ fontSize: 11, fontWeight: '700', color: colors.text2, marginBottom: 6 }}>{f.label.toUpperCase()}</Text>
@@ -493,6 +493,22 @@ export default function ClientDetailScreen({ route, navigation }) {
                     </View>
                   </View>
                 ))}
+                <View style={{ marginBottom: 10 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: colors.text2, marginBottom: 6 }}>BILLING CYCLE (SETS EXPIRY DATE)</Text>
+                  <View style={[s.fieldWrap, { backgroundColor: colors.card, borderColor: colors.border, paddingVertical: 0 }]}>
+                    <Picker
+                      selectedValue={service.billingCycle || 'ONE_TIME'}
+                      style={{ flex: 1, color: colors.text }}
+                      onValueChange={(value) => setService(prev => ({ ...prev, billingCycle: value }))}
+                    >
+                      <Picker.Item label="One Time (no expiry)" value="ONE_TIME" />
+                      <Picker.Item label="Monthly (expires in 1 month)" value="MONTHLY" />
+                      <Picker.Item label="Quarterly (expires in 3 months)" value="QUARTERLY" />
+                      <Picker.Item label="Half-Yearly (expires in 6 months)" value="HALF_YEARLY" />
+                      <Picker.Item label="Yearly (expires in 12 months)" value="YEARLY" />
+                    </Picker>
+                  </View>
+                </View>
                 <TouchableOpacity onPress={handleAssignService} disabled={assigning}>
                   <LinearGradient colors={[colors.gradStart, colors.gradEnd]} style={s.assignBtn} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
                     {assigning ? <ActivityIndicator color="#fff" size="small" /> : <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>Assign Service</Text>}

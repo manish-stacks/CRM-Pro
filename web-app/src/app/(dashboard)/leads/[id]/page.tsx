@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Swal from "sweetalert2";
+import { lookupPincode } from '@/lib/pincode'
 
 const STATUS_COLORS: Record<string, string> = {
   NEW: 'bg-brand-100 text-brand-700',
@@ -85,7 +86,7 @@ export default function LeadDetailPage() {
   const [reassignForm, setReassignForm] = useState({ toUserId: '', reason: '' })
   const [editForm, setEditForm] = useState({
     companyName: '', clientName: '', clientPhone: '', clientEmail: '', alternatePhone: '',
-    link: '', address: '', city: '', state: '', source: '', service: '', productPitched: '',
+    link: '', address: '', area: '', city: '', state: '', pincode: '', source: '', service: '', productPitched: '',
     price: '', remark: '', notes: '',
   })
   // Close forms
@@ -154,7 +155,7 @@ export default function LeadDetailPage() {
     setEditForm({
       companyName: lead.companyName || '', clientName: lead.clientName || '', clientPhone: lead.clientPhone || '',
       clientEmail: lead.clientEmail || '', alternatePhone: lead.alternatePhone || '', link: lead.link || '',
-      address: lead.address || '', city: lead.city || '', state: lead.state || '', source: lead.source || '',
+      address: lead.address || '', area: lead.area || '', city: lead.city || '', state: lead.state || '', pincode: lead.pincode || '', source: lead.source || '',
       service: lead.service || '', productPitched: lead.productPitched || '',
       price: lead.price != null ? String(lead.price) : '', remark: lead.remark || '', notes: lead.notes || '',
     })
@@ -419,7 +420,7 @@ export default function LeadDetailPage() {
               <a href={`tel:${lead.clientPhone}`} className="flex items-center gap-1 hover:text-brand-600"><Phone size={12} /> {lead.clientPhone}</a>
               {lead.clientEmail && <a href={`mailto:${lead.clientEmail}`} className="flex items-center gap-1 hover:text-brand-600"><Mail size={12} /> {lead.clientEmail}</a>}
               {lead.link && <a href={lead.link} target="_blank" className="flex items-center gap-1 hover:text-brand-600"><Globe size={12} /> {lead.link.replace(/^https?:\/\//, '')} <ExternalLink size={9} /></a>}
-              {lead.city && <span className="flex items-center gap-1"><MapPin size={12} /> {lead.city}{lead.state ? `, ${lead.state}` : ''}</span>}
+              {lead.city && <span className="flex items-center gap-1"><MapPin size={12} /> {lead.area ? `${lead.area}, ` : ''}{lead.city}{lead.state ? `, ${lead.state}` : ''}</span>}
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
@@ -955,9 +956,18 @@ export default function LeadDetailPage() {
             <Input label="Website / Link" value={editForm.link} onChange={e => setEditForm(p => ({ ...p, link: e.target.value }))} />
           </div>
           <Textarea label="Address" value={editForm.address} onChange={e => setEditForm(p => ({ ...p, address: e.target.value }))} rows={2} />
-          <div className="grid grid-cols-2 gap-3">
+          <Input label="Area / Locality" value={editForm.area} onChange={e => setEditForm(p => ({ ...p, area: e.target.value }))} placeholder="e.g. Sector 14, MG Road" />
+          <div className="grid grid-cols-3 gap-3">
             <Input label="City" value={editForm.city} onChange={e => setEditForm(p => ({ ...p, city: e.target.value }))} />
             <Input label="State" value={editForm.state} onChange={e => setEditForm(p => ({ ...p, state: e.target.value }))} />
+            <Input label="Pincode" value={editForm.pincode} maxLength={6} onChange={async e => {
+              const val = e.target.value.replace(/\D/g, '')
+              setEditForm(p => ({ ...p, pincode: val }))
+              if (val.length === 6) {
+                const loc = await lookupPincode(val)
+                if (loc) setEditForm(p => ({ ...p, city: loc.city || p.city, state: loc.state || p.state }))
+              }
+            }} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <Select label="Source" value={editForm.source} onChange={e => setEditForm(p => ({ ...p, source: e.target.value }))}

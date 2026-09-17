@@ -313,9 +313,7 @@ export default function EmployeesPage() {
                 <tr><td colSpan={7}><EmptyState icon={<Users size={40} />} title="No employees" description="No employees match your filters" /></td></tr>
               ) : employees.map(e => (
                 <tr key={e.id} className={!e.user.isActive ? 'opacity-60' : ''}>
-                  {
-                    e.id !== "cmrdig05d000mb9bowablexw9" &&
-                    <>
+                  
                       <td>
                         <div className="flex items-center gap-3">
                           <div className="w-9 h-9 rounded-full bg-brand-600 flex items-center justify-center text-white text-xs font-bold overflow-hidden">
@@ -360,8 +358,7 @@ export default function EmployeesPage() {
                           )}
                         </div>
                       </td>
-                    </>
-                  }
+                  
                 </tr>
               ))}
             </tbody>

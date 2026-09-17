@@ -273,7 +273,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json()
   const {
     companyName, clientName, clientPhone, clientEmail, alternatePhone,
-    link, address, city, state, source, service, productPitched, price,
+    link, address, area, city, state, pincode, source, service, productPitched, price,
     status, remark, notes, followUpDate, followUpTime,
     callbackDate, callbackTime,
     assignedToId,
@@ -326,8 +326,10 @@ export async function POST(req: NextRequest) {
             alternatePhone: alternatePhone || null,
             link: link || null,
             address: address || null,
+            area: area || null,
             city: city || null,
             state: state || null,
+            pincode: pincode || null,
             source: source || 'WEBSITE',
             service: service || null,
             productPitched: productPitched || null,

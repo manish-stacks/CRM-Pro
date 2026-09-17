@@ -92,7 +92,7 @@ export async function GET(req: NextRequest) {
     },
     select: {
       id: true, leadNumber: true, clientName: true, companyName: true,
-      clientPhone: true, city: true, service: true, price: true,
+      clientPhone: true, city: true, area: true, service: true, price: true,
       meetingSlot: true, meetingTime: true, meetingLocation: true,
       meetingAssignedToId: true,
       assignedTo: { select: { id: true, name: true } },
@@ -139,6 +139,7 @@ export async function GET(req: NextRequest) {
           companyName: lead.companyName,
           clientPhone: lead.clientPhone,
           city: lead.city,
+          area: lead.area,
           service: lead.service,
           price: lead.price,
           meetingTime: lead.meetingTime,

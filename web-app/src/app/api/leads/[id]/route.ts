@@ -14,7 +14,7 @@ const VALID_STATUSES = ['NEW', 'NOT_INTERESTED', 'FOLLOW_UP', 'RINGING', 'MEETIN
 // Fields that can be updated on the lead (non-status)
 const UPDATABLE = new Set([
   'companyName', 'clientName', 'clientPhone', 'clientEmail', 'alternatePhone',
-  'link', 'address', 'city', 'state', 'source', 'service', 'productPitched',
+  'link', 'address', 'area', 'city', 'state', 'pincode', 'source', 'service', 'productPitched',
   'price', 'remark', 'notes',
   'followUpDate', 'followUpTime',
 ])
