@@ -24,8 +24,8 @@ const SOURCE_LABEL = { MANUAL: 'Manual', MEETING_ASSIGNED: 'Meeting', DEAL_DONE:
 
 // Filter tabs: server-side ranges so date-wise filtering is accurate
 const TABS = [
-  { key: 'all', label: 'All', params: {} },
   { key: 'today', label: 'Today', params: { range: 'today' } },
+  { key: 'all', label: 'All', params: {} },
   { key: 'pending', label: 'Pending', params: { status: 'pending' } },
   { key: 'upcoming', label: 'Upcoming', params: { range: 'upcoming' } },
   { key: 'overdue', label: 'Overdue', params: { range: 'overdue' } },
@@ -155,7 +155,7 @@ export default function VisitsScreen({ navigation, route }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const [tab, setTab] = useState(route?.params?.tab || 'all');
+  const [tab, setTab] = useState(route?.params?.tab || 'today');
   const [pickedDate, setPickedDate] = useState('');   // exact date filter
   const [dateModal, setDateModal] = useState(false);
   const [search, setSearch] = useState('');
@@ -327,7 +327,7 @@ export default function VisitsScreen({ navigation, route }) {
           return (
             <TouchableOpacity
               key={t.key}
-              style={[s.tabBtn, active && { backgroundColor: colors.primary, borderColor: colors.primary }]}
+              style={[s.tabBtn, { height: 34, borderColor: colors.border }, active && { backgroundColor: colors.primary, borderColor: colors.primary }]}
               onPress={() => { setPickedDate(''); setTab(t.key); }}
             >
               <Text style={[s.tabTxt, { color: active ? '#fff' : colors.text2 }]}>{t.label}</Text>

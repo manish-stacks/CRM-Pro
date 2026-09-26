@@ -238,6 +238,7 @@ export default function ClientDetailScreen({ route, navigation }) {
   const [invDiscount, setInvDiscount] = useState('0');
   const [invGst, setInvGst] = useState(false);
   const [invDueDate, setInvDueDate] = useState('');
+  const [invDocType, setInvDocType] = useState('INVOICE'); // 'INVOICE' | 'RECEIPT' — for clients who don't want a formal tax invoice
   const [savingInvoice, setSavingInvoice] = useState(false);
 
   const openInvoiceModal = () => {
@@ -246,6 +247,7 @@ export default function ClientDetailScreen({ route, navigation }) {
     setInvDiscount('0');
     setInvGst(false);
     setInvDueDate('');
+    setInvDocType('INVOICE');
     setShowInvoice(true);
   };
 
@@ -261,6 +263,7 @@ export default function ClientDetailScreen({ route, navigation }) {
         gstApplicable: invGst,
         gstRate: 18,
         dueDate: invDueDate || undefined,
+        docType: invDocType,
         items: chosen.map(it => ({
           serviceName: it.service_name,
           description: it.service_name,
@@ -269,7 +272,7 @@ export default function ClientDetailScreen({ route, navigation }) {
         })),
       });
       setShowInvoice(false);
-      Alert.alert('Invoice Generated', `${res.data?.data?.invoice_number || ''} — ₹${res.data?.data?.total_amount || ''}`);
+      Alert.alert(invDocType === 'RECEIPT' ? 'Receipt Generated' : 'Invoice Generated', `${res.data?.data?.invoice_number || ''} — ₹${res.data?.data?.total_amount || ''}`);
       fetchInvoices();
     } catch (e) {
       Alert.alert('Error', e.message || 'Failed to generate invoice');
@@ -600,7 +603,9 @@ export default function ClientDetailScreen({ route, navigation }) {
             ) : invoices.map((inv) => (
               <View key={inv.id} style={[s.docRow, { borderColor: colors.border }]}>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontWeight: '700', fontSize: 13, color: colors.text }}>{inv.invoice_number}</Text>
+                  <Text style={{ fontWeight: '700', fontSize: 13, color: colors.text }}>
+                    {inv.invoice_number}{inv.doc_type === 'RECEIPT' ? '  •  Receipt' : ''}
+                  </Text>
                   {inv.due_amount > 0 ? (
                     <Text style={{ fontSize: 11, color: colors.text3, marginTop: 2 }}>Due: ₹{inv.due_amount}</Text>
                   ) : (
@@ -729,12 +734,28 @@ export default function ClientDetailScreen({ route, navigation }) {
       <Modal visible={showInvoice} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowInvoice(false)}>
         <View style={[s.modal, { backgroundColor: colors.bg, paddingTop: 40 }]}>
           <View style={s.modalHeader}>
-            <Text style={[s.modalTitle, { color: colors.text }]}>Generate Invoice</Text>
+            <Text style={[s.modalTitle, { color: colors.text }]}>{invDocType === 'RECEIPT' ? 'Generate Receipt' : 'Generate Invoice'}</Text>
             <TouchableOpacity onPress={() => setShowInvoice(false)}>
               <Ionicons name="close" size={24} color={colors.text2} />
             </TouchableOpacity>
           </View>
           <ScrollView style={{ padding: 20 }} keyboardShouldPersistTaps="handled">
+            <Text style={s.fieldLabel}>DOCUMENT TYPE</Text>
+            <View style={{ flexDirection: 'row', backgroundColor: colors.bg2, borderRadius: 10, padding: 3, marginBottom: 16, borderWidth: 1, borderColor: colors.border }}>
+              {['INVOICE', 'RECEIPT'].map(t => (
+                <TouchableOpacity key={t} onPress={() => setInvDocType(t)}
+                  style={{ flex: 1, paddingVertical: 9, borderRadius: 8, alignItems: 'center', backgroundColor: invDocType === t ? colors.primary : 'transparent' }}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: invDocType === t ? '#fff' : colors.text2 }}>
+                    {t === 'RECEIPT' ? 'Receipt only' : 'Invoice'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            {invDocType === 'RECEIPT' && (
+              <Text style={{ fontSize: 11, color: colors.text3, marginTop: -10, marginBottom: 16 }}>
+                For clients who don't need a formal tax invoice — issued as a Receipt instead.
+              </Text>
+            )}
             {renderItemPicker(invItems, setInvItems)}
 
             <Text style={s.fieldLabel}>DISCOUNT (₹)</Text>
@@ -760,7 +781,7 @@ export default function ClientDetailScreen({ route, navigation }) {
             </View>
 
             <TouchableOpacity onPress={submitInvoice} disabled={savingInvoice} style={{ marginTop: 20, backgroundColor: colors.primary, borderRadius: 12, paddingVertical: 14, alignItems: 'center' }}>
-              {savingInvoice ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 }}>Generate Invoice</Text>}
+              {savingInvoice ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 }}>{invDocType === 'RECEIPT' ? 'Generate Receipt' : 'Generate Invoice'}</Text>}
             </TouchableOpacity>
           </ScrollView>
         </View>

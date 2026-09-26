@@ -122,19 +122,26 @@ export default function PaymentsScreen() {
     }
   };
 
-  // Web downloads a PDF generated client-side from full invoice + company info
-  // (see src/lib/invoicePdf.ts). There's no server-side invoice file, so we
-  // build an equivalent receipt here and let the user save/share it.
-  // Server-side PDF (the same one the web downloads). Like Payment Receipts,
-  // we open the link directly — no local file generation.
+  // Fetches the client's own share link for this invoice/receipt (generated
+  // on first request) and opens it — same server-rendered PDF the web
+  // client portal now uses, works correctly for RECEIPT docType too.
+  // Previously this checked `inv.pdf_url`, a field the API never actually
+  // returns, so it always fell through to the fragile local-HTML fallback
+  // below — that was the "receipt won't open" bug.
   const downloadReceipt = async (inv) => {
-    if (inv.pdf_url) {
-      try {
-        await Linking.openURL(inv.pdf_url);
-      } catch {
-        Alert.alert('Error', 'Could not open invoice PDF');
+    setDownloadingId(inv.id);
+    try {
+      const res = await ClientAPI.getInvoiceShareLink(inv.id);
+      const url = res?.data?.data?.url;
+      if (url) {
+        await Linking.openURL(url);
+        return;
       }
-      return;
+      throw new Error('No link returned');
+    } catch (e) {
+      console.log('Share-link open failed, falling back to local HTML:', e?.message);
+    } finally {
+      setDownloadingId(null);
     }
 
     // Fallback: purana local HTML. NOTE: Expo SDK 54+ me expo-file-system ka

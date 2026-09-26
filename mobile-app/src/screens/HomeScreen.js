@@ -3,6 +3,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import ScreenWrapper from '../components/ScreenWrapper';
+import { shadow } from '../constants/shadows';
 import { useEffect, useState } from 'react';
 import { AxiosInstance } from '../lib/Axios.instance';
 import { shapeService, fmtMoney } from '../lib/shape';
@@ -346,32 +347,32 @@ export default function HomeScreen({ navigation }) {
 }
 
 const styles = (c) => StyleSheet.create({
-  container: { flex: 1, backgroundColor: c.bg },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 0, paddingBottom: 12, backgroundColor: c.bg },
+  container: { flex: 1, backgroundColor: c.bg2 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 4, paddingBottom: 14, backgroundColor: c.bg2 },
   greeting: { fontSize: 22, fontWeight: '800', color: c.text },
   headerSub: { fontSize: 13, color: c.text2, marginTop: 2 },
-  iconBtn: { width: 40, height: 40, backgroundColor: c.card2, borderWidth: 1.5, borderColor: c.border, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  iconBtn: { width: 42, height: 42, backgroundColor: c.card, borderWidth: 1, borderColor: c.borderSoft, borderRadius: 13, alignItems: 'center', justifyContent: 'center', ...shadow.xs },
   badge: { position: 'absolute', top: -4, right: -4, width: 16, height: 16, backgroundColor: c.primary, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  scroll: { padding: 20, paddingBottom: 20 },
+  scroll: { padding: 20, paddingTop: 4, paddingBottom: 20 },
   quickRow: { flexDirection: 'row', gap: 10, marginTop: 4, marginBottom: 4 },
-  quickCard: { flex: 1, backgroundColor: c.card, borderWidth: 1.5, borderColor: c.border, borderRadius: 14, paddingVertical: 14, alignItems: 'center', gap: 6 },
+  quickCard: { flex: 1, backgroundColor: c.card, borderWidth: 1, borderColor: c.borderSoft, borderRadius: 16, paddingVertical: 16, alignItems: 'center', gap: 6, ...shadow.xs },
   quickLabel: { fontSize: 12, fontWeight: '700', color: c.text },
-  greetCard: { borderRadius: 20, padding: 20, marginBottom: 20 },
+  greetCard: { borderRadius: 22, padding: 22, marginBottom: 20, ...shadow.md },
   statsRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
-  statCard: { flex: 1, backgroundColor: c.card2, borderWidth: 1.5, borderColor: c.border, borderRadius: 12, padding: 12, alignItems: 'center' },
-  statIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
+  statCard: { flex: 1, backgroundColor: c.card, borderWidth: 1, borderColor: c.borderSoft, borderRadius: 16, padding: 14, alignItems: 'center', ...shadow.xs },
+  statIcon: { width: 38, height: 38, borderRadius: 11, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
   statValue: { fontSize: 20, fontWeight: '800', color: c.text },
   statLabel: { fontSize: 10, color: c.text2, fontWeight: '500', marginTop: 2, textAlign: 'center' },
-  managerCard: { backgroundColor: c.card, borderWidth: 1.5, borderColor: c.border, borderRadius: 16, padding: 16, marginBottom: 20 },
+  managerCard: { backgroundColor: c.card, borderWidth: 1, borderColor: c.borderSoft, borderRadius: 18, padding: 16, marginBottom: 20, ...shadow.sm },
   managerAvatar: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   managerLabel: { fontSize: 10, fontWeight: '800', color: c.text3, letterSpacing: 0.6 },
   managerBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 9, borderRadius: 10 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
   sectionTitle: { fontSize: 16, fontWeight: '700', color: c.text },
-  alertCard: { borderRadius: 12, padding: 16, marginBottom: 10, borderWidth: 1.5 },
-  alertWarning: { backgroundColor: 'rgba(245,158,11,0.04)', borderColor: 'rgba(245,158,11,0.3)' },
-  alertDanger: { backgroundColor: 'rgba(229,9,20,0.04)', borderColor: 'rgba(229,9,20,0.25)' },
-  serviceCard: { backgroundColor: c.card, borderWidth: 1.5, borderColor: c.border, borderRadius: 16, padding: 16, marginBottom: 12 },
+  alertCard: { borderRadius: 16, padding: 16, marginBottom: 10, borderWidth: 1, ...shadow.xs },
+  alertWarning: { backgroundColor: c.yellowSoft, borderColor: 'rgba(245,158,11,0.22)' },
+  alertDanger: { backgroundColor: c.redSoft, borderColor: 'rgba(229,9,20,0.18)' },
+  serviceCard: { backgroundColor: c.card, borderWidth: 1, borderColor: c.borderSoft, borderRadius: 18, padding: 16, marginBottom: 12, ...shadow.sm },
   serviceIcon: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   chevron: { width: 32, height: 32, backgroundColor: c.bg3, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginLeft: 'auto' },
   avatarImg: {

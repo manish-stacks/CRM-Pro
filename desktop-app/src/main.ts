@@ -8,7 +8,7 @@ import log from 'electron-log'
 // any machine without needing a .env file shipped alongside it. Setting the
 // API_BASE_URL environment variable before launch (e.g. for local dev) will
 // still override this.
-const API_BASE = 'https://web-crm.hoverbusinessservices.com/' //"http://localhost:3000/"
+const API_BASE = 'https://web-crm.hoverbusinessservices.com/' //"http://localhost:3008/"
 const PARTITION = 'persist:hbs-crm' // keeps the login session across app restarts, like a browser profile
 const SYNC_INTERVAL_MS = 60_000
 // Admin "View Screen" requests need to feel near-instant, so this polls a lot

@@ -31,7 +31,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const recipientEmail = letter.employee.user.email
   if (!recipientEmail) return errorResponse('This employee has no email on file')
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3008'
   const viewUrl = `${baseUrl}/api/letters/${id}/pdf`
   const label = TYPE_LABEL[letter.type] || 'Letter'
 

@@ -1,5 +1,5 @@
 // src/app/api/tracking/live/route.ts
-// Admin/Manager: latest known location of all currently checked-in field staff.
+// Admin only: latest known location of all currently checked-in field staff.
 import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/auth'
@@ -7,7 +7,7 @@ import { successResponse } from '@/lib/api'
 import { todayDateOnly } from '@/lib/attendanceDate'
 
 export async function GET(req: NextRequest) {
-  const auth = await requireAuth(req, 'MANAGER')
+  const auth = await requireAuth(req, 'ADMIN')
   if (auth instanceof Response) return auth
 
   const today = todayDateOnly()

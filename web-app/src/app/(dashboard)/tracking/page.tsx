@@ -342,8 +342,8 @@ export default function TrackingPage() {
     finally { setRouteLoading(false) }
   }
 
-  if (!isAtLeast('MANAGER')) {
-    return <div className="p-8"><EmptyState icon={<MapPin size={50} />} title="Access denied" description="Only managers and admins can view tracking" /></div>
+  if (!isAtLeast('ADMIN')) {
+    return <div className="p-8"><EmptyState icon={<MapPin size={50} />} title="Access denied" description="Only admins can view tracking" /></div>
   }
 
   return (

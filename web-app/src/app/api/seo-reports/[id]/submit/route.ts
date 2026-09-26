@@ -62,7 +62,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const finalPdfUrl = pdfUrl || report.pdfUrl || `${base}/seo-report/view/${shareToken}`
 
   const client = report.client
-  const portalUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/client-portal/reports`
+  const portalUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3008'}/client-portal/reports`
 
   // ---- 2. mirror into the client portal reports feed ----
   const mirrored = await prisma.clientReport.create({

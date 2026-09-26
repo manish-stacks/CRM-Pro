@@ -25,7 +25,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   })
   if (!invoice) return notFoundResponse('Invoice')
 
-  const portalUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/client-portal`
+  const portalUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3008'}/client-portal`
   let emailSent = false, whatsappSent = false
 
   if (viaEmail && invoice.client.email) {

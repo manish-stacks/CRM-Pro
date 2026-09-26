@@ -43,6 +43,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const bodyHtml = buildInvoiceBody({
     invoiceNumber: invoice.invoiceNumber,
+    docType: invoice.docType,
     status: invoice.status,
     createdAt: invoice.createdAt,
     dueDate: invoice.dueDate,
@@ -71,13 +72,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   let pdfBuffer: Buffer
   try {
-    pdfBuffer = await renderBusinessPdf(bodyHtml, `Invoice ${invoice.invoiceNumber}`)
+    pdfBuffer = await renderBusinessPdf(bodyHtml, `${invoice.docType === 'RECEIPT' ? 'Receipt' : 'Invoice'} ${invoice.invoiceNumber}`)
   } catch (err) {
     console.error('Invoice PDF render failed:', err)
     return NextResponse.json({ error: 'Failed to generate PDF' }, { status: 500 })
   }
 
-  const fileName = `Invoice-${invoice.invoiceNumber}.pdf`
+  const fileName = `${invoice.docType === 'RECEIPT' ? 'Receipt' : 'Invoice'}-${invoice.invoiceNumber}.pdf`
 
   return new NextResponse(pdfBuffer as unknown as BodyInit, {
     headers: {

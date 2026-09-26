@@ -30,6 +30,7 @@ function InvoiceBuilderInner() {
     discountType: 'FIXED' as 'FIXED' | 'PERCENT',
     gstApplicable: false,
     gstRate: 18,
+    docType: 'INVOICE' as 'INVOICE' | 'RECEIPT',
   })
 
   const [items, setItems] = useState<Item[]>([{
@@ -156,10 +157,11 @@ function InvoiceBuilderInner() {
         discountType: form.discountType,
         gstApplicable: form.gstApplicable,
         gstRate: form.gstRate,
+        docType: form.docType,
         items: items.map(i => ({ serviceName: i.serviceName, description: i.description, quantity: i.quantity, unitPrice: i.unitPrice })),
       })
       const invId = r.data.data.id
-      toast.success('Invoice created!')
+      toast.success(form.docType === 'RECEIPT' ? 'Receipt created!' : 'Invoice created!')
       if (sendAfter) {
         try { await api.post(`/invoices/${invId}/send`, { viaEmail: true, viaWhatsapp: true }); toast.success('Sent') } catch { }
       }
@@ -177,7 +179,7 @@ function InvoiceBuilderInner() {
 
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">New Invoice</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{form.docType === 'RECEIPT' ? 'New Receipt' : 'New Invoice'}</h1>
           <p className="text-sm text-gray-500 mt-1">Live totals with GST + discount calculation</p>
         </div>
         <div className="flex items-center gap-2">
@@ -186,10 +188,29 @@ function InvoiceBuilderInner() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+     <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 overflow-visible">
         <div className="lg:col-span-2 space-y-5">
-          <div className="card p-5">
+          <div className="card p-5 relative z-30 overflow-visible">
             <h3 className="font-semibold text-gray-900 mb-3">Basic Info</h3>
+
+            <div className="mb-3">
+              <label className="label">Document Type</label>
+              <div className="inline-flex rounded-lg border border-gray-200 p-0.5 bg-gray-50">
+                <button type="button"
+                  onClick={() => setForm(p => ({ ...p, docType: 'INVOICE' }))}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-md ${form.docType === 'INVOICE' ? 'bg-white shadow text-gray-900' : 'text-gray-500'}`}>
+                  Invoice
+                </button>
+                <button type="button"
+                  onClick={() => setForm(p => ({ ...p, docType: 'RECEIPT' }))}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-md ${form.docType === 'RECEIPT' ? 'bg-white shadow text-gray-900' : 'text-gray-500'}`}>
+                  Receipt only
+                </button>
+              </div>
+              {form.docType === 'RECEIPT' && (
+                <p className="text-[11px] text-gray-500 mt-1">For clients who don't need a formal tax invoice — same items/totals, just issued as a Receipt (RCPT-…) instead of a Tax Invoice.</p>
+              )}
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <SearchSelect
                 label="Client *"
@@ -207,12 +228,13 @@ function InvoiceBuilderInner() {
             </div>
           </div>
 
-          <div className="card p-5">
+          <div className="card p-5 relative z-10">
             <div className="flex items-center justify-between mb-3">
+
               <h3 className="font-semibold text-gray-900">Line Items</h3>
               <button onClick={addItem} className="btn-secondary btn-sm"><Plus size={13} /> Add Item</button>
             </div>
-            <div className="space-y-3">
+            <div className="space-y-3 ">
               {items.map(item => (
                 <div
                   key={item.id}
@@ -222,7 +244,7 @@ function InvoiceBuilderInner() {
                   <button
                     onClick={() => removeItem(item.id)}
                     disabled={items.length === 1}
-                    className="absolute -top-2 -right-2 h-8 w-8 flex items-center justify-center rounded-full bg-white border border-red-100 shadow-sm text-red-500 hover:bg-red-50 hover:shadow transition disabled:opacity-30"
+                    className="absolute -top-2 -right-2 h-8 w-8 flex items-center justify-center rounded-full bg-white border border-red-100 shadow-sm text-red-500 hover:bg-red-50 hover:shadow"
                     title="Remove Item"
                   >
                     <Trash2 size={16} />

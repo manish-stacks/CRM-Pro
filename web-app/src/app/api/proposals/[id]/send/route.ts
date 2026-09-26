@@ -29,7 +29,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const recipientEmail = proposal.client?.email || proposal.lead?.clientEmail
   const recipientPhone = proposal.client?.phone || proposal.lead?.clientPhone
 
-  const shareUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/proposals/view/${proposal.shareToken}/pdf`
+  const shareUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3008'}/api/proposals/view/${proposal.shareToken}/pdf`
 
   let emailSent = false, whatsappSent = false
 

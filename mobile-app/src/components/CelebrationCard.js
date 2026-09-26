@@ -153,12 +153,7 @@ export default function CelebrationCard() {
               ))}
             </View>
 
-            <TouchableOpacity
-              style={[modal.doneBtn, { backgroundColor: colors.primary }]}
-              onPress={close}
-            >
-              <Text style={modal.doneText}>Sent Wishes! 💌</Text>
-            </TouchableOpacity>
+            
           </Animated.View>
         </View>
       </Modal>

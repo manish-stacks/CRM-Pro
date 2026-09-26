@@ -94,6 +94,7 @@ export interface InvoiceDocItem {
 }
 export interface InvoiceDocData {
   invoiceNumber: string
+  docType?: string // 'INVOICE' | 'RECEIPT' — controls the title only; same layout/fields either way.
   status: string
   createdAt: string | Date
   dueDate?: string | Date | null
@@ -122,10 +123,11 @@ export interface InvoiceDocData {
 
 export function buildInvoiceBody(d: InvoiceDocData): string {
   const discountAmount = d.discountType === 'PERCENT' ? d.subtotal * ((d.discount || 0) / 100) : (d.discount || 0)
+  const isReceipt = d.docType === 'RECEIPT'
 
   return `
   
-  <div class="doc-title">TAX INVOICE</div>
+  <div class="doc-title">${isReceipt ? 'RECEIPT' : 'TAX INVOICE'}</div>
   <div class="doc-header">
     <div class="doc-header-left">
       ${logoImg(d.company)}
@@ -134,11 +136,7 @@ export function buildInvoiceBody(d: InvoiceDocData): string {
       <div style="font-size:11px;color:#64748b;margin-top:4px;">
         ${d.company.companyPhone ? `<div>Contact: ${esc(d.company.companyPhone)}</div>` : ''}
         ${d.company.companyEmail ? `<div>Email: ${esc(d.company.companyEmail)}</div>` : ''}
-        ${d.company.companyGst ? `<div>GSTIN: ${esc(d.company.companyGst)}</div>` : ''}
-      </div>
-    </div>
-    <div class="doc-meta">
-      <div class="doc-number">${esc(d.invoiceNumber)}</div>
+        ${d.gstApplicable && d.company.companyGst ? `<div>GSTIN: ${esc(d.company.companyGst)}</div>` : ''}
       <div>Date: ${fmtDate(d.createdAt)}</div>
       ${d.dueDate ? `<div>Due: ${fmtDate(d.dueDate)}</div>` : ''}
       <div><span class="badge ${statusBadgeClass(d.status)}">${esc(d.status)}</span></div>
@@ -153,7 +151,7 @@ export function buildInvoiceBody(d: InvoiceDocData): string {
       ${d.client.phone ? `<div>${esc(d.client.phone)}</div>` : ''}
       ${d.client.email ? `<div>${esc(d.client.email)}</div>` : ''}
       ${d.client.address ? `<div>${esc(d.client.address)}</div>` : ''}
-      ${d.client.gstNo ? `<div>GSTIN: ${esc(d.client.gstNo)}</div>` : ''}
+      ${d.gstApplicable && d.client.gstNo ? `<div>GSTIN: ${esc(d.client.gstNo)}</div>` : ''}
     </div>
   </div>
 

@@ -41,6 +41,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const bodyHtml = buildInvoiceBody({
     invoiceNumber: invoice.invoiceNumber,
+    docType: invoice.docType,
     status: invoice.status,
     createdAt: invoice.createdAt,
     dueDate: invoice.dueDate,

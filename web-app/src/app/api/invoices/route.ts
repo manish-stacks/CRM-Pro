@@ -28,6 +28,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const { skip, limit } = getPaginationParams(searchParams)
   const status = searchParams.get('status')
+  const docType = searchParams.get('docType')
   const clientId = searchParams.get('clientId')
   const search = searchParams.get('search')
   const dateFrom = searchParams.get('dateFrom')
@@ -35,6 +36,7 @@ export async function GET(req: NextRequest) {
 
   const where: any = {}
   if (status) where.status = status
+  if (docType) where.docType = docType
   if (clientId) where.clientId = clientId
   if (search) {
     where.OR = [
@@ -84,18 +86,21 @@ export async function POST(req: NextRequest) {
     clientId, proposalId, notes, terms, dueDate,
     discount = 0, discountType = 'FIXED',
     gstApplicable = false, gstRate = 18,
+    docType = 'INVOICE',
     items = [],
   } = body
 
   if (!clientId) return errorResponse('clientId required')
   if (!items.length) return errorResponse('At least one line item required')
 
+  const resolvedDocType = docType === 'RECEIPT' ? 'RECEIPT' : 'INVOICE'
   const totals = calculate(items, Number(discount), discountType, !!gstApplicable, Number(gstRate))
 
   try {
     const invoice = await prisma.invoice.create({
       data: {
-        invoiceNumber: await generateInvoiceNumber(),
+        invoiceNumber: await generateInvoiceNumber(resolvedDocType),
+        docType: resolvedDocType,
         clientId,
         proposalId: proposalId || null,
         subtotal: totals.subtotal,

@@ -80,8 +80,11 @@ const NAV: NavItem[] = [
   {
     label: 'Tracking', icon: MapPinned, children: [
       { label: 'Visit Sheet', href: '/visits', icon: MapPinned, permission: 'visits.view' },
-      { label: 'Field Tracking', href: '/tracking', icon: MapPin, permission: 'tracking.view' },
-    ]
+      // Live field-staff location tracking — intentionally hardcoded to
+      // Admin/Super Admin only (not permission-gated), so it can never be
+      // opened up to other roles via Roles & Permissions settings.
+      { label: 'Field Tracking', href: '/tracking', icon: MapPin, roles: ['SUPER_ADMIN', 'ADMIN'] },
+    ], roles: ['SUPER_ADMIN', 'ADMIN']
   },
 
   { label: 'Announcements', href: '/announcements', icon: PartyPopper, permission: 'announcements.view' },

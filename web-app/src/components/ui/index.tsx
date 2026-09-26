@@ -287,7 +287,7 @@ export function StatCard({ label, value, icon: Icon, color, change, sub }: {
           <p className={`text-2xl font-bold mt-1 count-up ${color}`}>{value}</p>
           {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
         </div>
-        <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-transform duration-300 hover:scale-110 hover:rotate-6 ${color.replace('text-', 'bg-').replace('-600', '-50').replace('-700', '-50').replace('-500', '-50')}`}>
+        <div className={`w-10 h-10 rounded-xl flex items-center justify-center hover:scale-110 hover:rotate-6 ${color.replace('text-', 'bg-').replace('-600', '-50').replace('-700', '-50').replace('-500', '-50')}`}>
           <Icon size={19} className={color} />
         </div>
       </div>

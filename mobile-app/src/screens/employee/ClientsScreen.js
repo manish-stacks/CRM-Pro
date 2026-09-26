@@ -12,8 +12,8 @@ import { CalendarModal, toISO, prettyDate } from '../../components/DatePickerFie
 
 // Server-side filters — date-wise view is now accurate (not just on the loaded page)
 const TABS = [
-  { key: 'all', label: 'All', params: {} },
   { key: 'today', label: 'Today', params: { range: 'today' } },
+  { key: 'all', label: 'All', params: {} },
   { key: 'week', label: 'This week', params: { range: 'week' } },
   { key: 'month', label: 'This month', params: { range: 'month' } },
   { key: 'expiring', label: 'Expiring 30d', params: { expiry: '30' } },
@@ -98,7 +98,7 @@ export default function ClientsScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const [tab, setTab] = useState('all');
+  const [tab, setTab] = useState('today');
   const [pickedDate, setPickedDate] = useState('');
   const [dateModal, setDateModal] = useState(false);
 
@@ -183,7 +183,7 @@ export default function ClientsScreen({ navigation }) {
           return (
             <TouchableOpacity
               key={t.key}
-              style={[s.tabBtn, { backgroundColor: colors.bg2, borderColor: colors.border }, active && { backgroundColor: colors.primary, borderColor: colors.primary }]}
+              style={[s.tabBtn, { backgroundColor: colors.bg2, height: 32,borderColor: colors.border }, active && { backgroundColor: colors.primary, borderColor: colors.primary }]}
               onPress={() => { setPickedDate(''); setTab(t.key); }}
             >
               <Text style={[s.tabTxt, { color: active ? '#fff' : colors.text2 }]}>{t.label}</Text>

@@ -9,6 +9,9 @@ export const ClientAPI = {
 
   getInvoices: () => AxiosInstance.get('/client-portal/invoices'),
   getInvoiceById: (id) => AxiosInstance.get(`/client-portal/invoices/${id}`),
+  // Public no-login PDF link for one of the client's own invoices/receipts —
+  // safe to hand to Linking.openURL (opens the device's external browser).
+  getInvoiceShareLink: (id) => AxiosInstance.get(`/client-portal/invoices/${id}/share-link`),
 
   getProfile: () => AxiosInstance.get('/client-portal/profile'),
   updateProfile: (data) => AxiosInstance.put('/client-portal/profile', data),

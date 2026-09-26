@@ -1,5 +1,5 @@
 // src/app/api/tracking/route-history/route.ts
-// Admin/Manager: full location breadcrumb trail for one user on one date.
+// Admin only: full location breadcrumb trail for one user on one date.
 import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/auth'
@@ -8,7 +8,7 @@ import { successResponse, errorResponse } from '@/lib/api'
 import { istDayRange } from '@/lib/attendanceDate'
 
 export async function GET(req: NextRequest) {
-  const auth = await requireAuth(req, 'MANAGER')
+  const auth = await requireAuth(req, 'ADMIN')
   if (auth instanceof Response) return auth
 
   const { searchParams } = new URL(req.url)

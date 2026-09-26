@@ -16,6 +16,7 @@ import {
 } from '../../services/LocationTracker';
 import LocationDisclosureModal from '../../components/LocationDisclosureModal';
 import PunchOutConfirmModal from '../../components/PunchOutConfirmModal';
+import { shadow } from '../../constants/shadows';
 
 // Every stat card is tappable — it drops you straight into the matching
 // filtered list instead of leaving you to find it yourself.
@@ -44,7 +45,7 @@ const StatCard = ({ icon, label, value, color, bg, onPress }) => {
 const statStyles = StyleSheet.create({
   card: {
     flex: 1, borderRadius: 16, padding: 14, alignItems: 'center',
-    borderWidth: 1.5, minWidth: '46%', gap: 6,
+    borderWidth: 1, minWidth: '46%', gap: 6, ...shadow.xs,
   },
   iconWrap: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   value: { fontSize: 24, fontWeight: '800' },
@@ -459,7 +460,8 @@ const styles = (c) => StyleSheet.create({
     padding: 14,
     alignItems: 'center',
     gap: 8,
-    borderWidth: 1.5
+    borderWidth: 1,
+    ...shadow.xs,
   },
   actionIcon: {
     width: 44,
@@ -473,8 +475,9 @@ const styles = (c) => StyleSheet.create({
     backgroundColor: c.card,
     borderRadius: 16,
     padding: 16,
-    borderWidth: 1.5,
-    marginBottom: 16
+    borderWidth: 1,
+    marginBottom: 16,
+    ...shadow.sm,
   },
   activityRow: {
     flexDirection: 'row',
@@ -503,9 +506,9 @@ const styles = (c) => StyleSheet.create({
     marginTop: -20,
     marginBottom: 10,
     padding: 16,
-    borderRadius: 18,
-    borderWidth: 1.5,
-    elevation: 4,
+    borderRadius: 20,
+    borderWidth: 1,
+    ...shadow.lg,
   },
 
   checkHeader: {

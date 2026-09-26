@@ -46,7 +46,7 @@ export async function activateClientPortal(clientId: string, options: {
     },
   })
 
-  const portalUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/client-portal`
+  const portalUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3008'}/client-portal`
   const companyName = client.companyName || client.clientName
 
   // ============ Email ============
@@ -108,7 +108,7 @@ export async function sendEmployeeWelcome(userId: string, plainPassword: string)
   })
   if (!user) throw new Error('User not found')
 
-  const loginUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/login`
+  const loginUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3008'}/login`
   const companyName = BRAND.name
 
   // ============ Email ============

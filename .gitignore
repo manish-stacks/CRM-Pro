@@ -44,4 +44,4 @@ Thumbs.db
 /public/uploads
 /uploads
 /credential
-web-app/credential/firebase-service-account.json
+web-app/public/credential/firebase-service-account.json

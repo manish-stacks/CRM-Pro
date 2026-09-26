@@ -39,6 +39,7 @@ export async function GET(req: NextRequest) {
   return ok(invoices.map(inv => ({
     id: inv.id,
     invoice_number: inv.invoiceNumber,
+    doc_type: inv.docType,
     status: inv.status,
     total_amount: inv.totalAmount,
     paid_amount: inv.paidAmount,
@@ -63,12 +64,14 @@ export async function POST(req: NextRequest) {
     clientId, proposalId, notes, dueDate,
     discount = 0, discountType = 'FIXED',
     gstApplicable = false, gstRate = 18,
+    docType = 'INVOICE',
     items = [],
   } = body
 
   if (!clientId) return fail('clientId required')
   if (!items.length) return fail('At least one line item required')
 
+  const resolvedDocType = docType === 'RECEIPT' ? 'RECEIPT' : 'INVOICE'
   const client = await prisma.client.findUnique({ where: { id: clientId } })
   if (!client) return fail('Client not found', 404)
 
@@ -77,7 +80,8 @@ export async function POST(req: NextRequest) {
   try {
     const invoice = await prisma.invoice.create({
       data: {
-        invoiceNumber: await generateInvoiceNumber(),
+        invoiceNumber: await generateInvoiceNumber(resolvedDocType),
+        docType: resolvedDocType,
         clientId,
         proposalId: proposalId || null,
         subtotal: totals.subtotal,

@@ -159,13 +159,25 @@ function KeywordRows({ label, rows, onChange, disabled }: {
   const set = (i: number, key: string, v: string) => {
     const next = [...rows]; next[i] = { ...next[i], [key]: v }; onChange(next)
   }
+  const bulk = () => {
+    const text = prompt(`Paste multiple ${label} (one per line — "keyword, position" or just "keyword")`)
+    if (!text) return
+    const added = text.split(/\r?\n/).map(t => t.trim()).filter(Boolean).map(line => {
+      const [keyword, position] = line.split(/,|\t/).map(s => s?.trim())
+      return { keyword: keyword || '', position: position || '' }
+    })
+    onChange([...rows, ...added])
+  }
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium text-gray-700">{label} <span className="text-gray-400">({rows.length})</span></span>
         {!disabled && (
-          <button type="button" onClick={() => onChange([...rows, { keyword: '', position: '' }])}
-            className="text-[11px] text-brand-600 hover:underline flex items-center gap-0.5"><Plus size={11} /> Add</button>
+          <div className="flex gap-1.5">
+            <button type="button" onClick={bulk} className="text-[11px] text-brand-600 hover:underline">Bulk paste</button>
+            <button type="button" onClick={() => onChange([...rows, { keyword: '', position: '' }])}
+              className="text-[11px] text-brand-600 hover:underline flex items-center gap-0.5"><Plus size={11} /> Add</button>
+          </div>
         )}
       </div>
       {rows.length === 0 && <p className="text-[11px] text-gray-400">No keywords.</p>}
@@ -387,8 +399,16 @@ export default function SeoReportBuilderPage() {
               </div>
             ))}
             {!locked && (
-              <button type="button" onClick={() => set('technicalWork', [...(d.technicalWork || []), ''])}
-                className="text-[11px] text-brand-600 hover:underline flex items-center gap-0.5"><Plus size={11} /> Add point</button>
+              <div className="flex gap-1.5">
+                <button type="button" onClick={() => set('technicalWork', [...(d.technicalWork || []), ''])}
+                  className="text-[11px] text-brand-600 hover:underline flex items-center gap-0.5"><Plus size={11} /> Add point</button>
+                <button type="button" onClick={() => {
+                  const text = prompt('Paste multiple points (one per line)')
+                  if (!text) return
+                  const added = text.split(/\r?\n/).map(t => t.trim()).filter(Boolean)
+                  set('technicalWork', [...(d.technicalWork || []), ...added])
+                }} className="text-[11px] text-brand-600 hover:underline">Bulk paste</button>
+              </div>
             )}
           </div>
         </Card>
@@ -427,8 +447,19 @@ export default function SeoReportBuilderPage() {
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-gray-700">Web 2.0 <span className="text-gray-400">({(d.web20 || []).length})</span></span>
               {!locked && (
-                <button type="button" onClick={() => set('web20', [...(d.web20 || []), { website: '', url: '', status: 'Live' }])}
-                  className="text-[11px] text-brand-600 hover:underline flex items-center gap-0.5"><Plus size={11} /> Add</button>
+                <div className="flex gap-1.5">
+                  <button type="button" onClick={() => {
+                    const text = prompt('Paste multiple Web 2.0 entries (one per line — "website, url, status")')
+                    if (!text) return
+                    const added = text.split(/\r?\n/).map(t => t.trim()).filter(Boolean).map(line => {
+                      const [website, url, status] = line.split(',').map(s => s?.trim())
+                      return { website: website || '', url: url || '', status: status || 'Live' }
+                    })
+                    set('web20', [...(d.web20 || []), ...added])
+                  }} className="text-[11px] text-brand-600 hover:underline">Bulk paste</button>
+                  <button type="button" onClick={() => set('web20', [...(d.web20 || []), { website: '', url: '', status: 'Live' }])}
+                    className="text-[11px] text-brand-600 hover:underline flex items-center gap-0.5"><Plus size={11} /> Add</button>
+                </div>
               )}
             </div>
             {(d.web20 || []).map((r, i) => (

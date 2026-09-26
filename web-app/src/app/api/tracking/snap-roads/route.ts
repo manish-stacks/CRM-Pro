@@ -135,7 +135,7 @@ async function routeViaDirections(path: Pt[]): Promise<Pt[] | null> {
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await requireAuth(req, 'MANAGER')
+  const auth = await requireAuth(req, 'ADMIN')
   if (auth instanceof Response) return auth
 
   if (!KEY) return errorResponse('Google Maps server key not configured', 500)

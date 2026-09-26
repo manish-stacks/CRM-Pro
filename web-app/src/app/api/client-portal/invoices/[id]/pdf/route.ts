@@ -1,38 +1,47 @@
-// src/app/api/invoices/view/[token]/pdf/route.ts
-// Public "view invoice PDF" endpoint — mirrors /api/proposals/view/[token]/pdf.
-// No session required; the unguessable shareToken IS the access control,
-// same as the existing /api/invoices/view/[token] JSON endpoint. This is
-// what the "Share Link" button now points to (replacing the old
-// /invoice/view/[token] HTML page, which just duplicated this PDF's design).
+// src/app/api/client-portal/invoices/[id]/pdf/route.ts
+// Server-rendered "view invoice/receipt PDF" for the client portal — same
+// buildInvoiceBody + renderBusinessPdf pipeline already used by the admin
+// download and the public share-link, opened directly in a new tab (like
+// admin's "PDF" button) instead of relying on client-side jsPDF generation,
+// which is more fragile (popup blockers, blob download quirks) and was
+// reported as "invoice/receipt won't open" from the client dashboard.
 import { NextRequest, NextResponse } from 'next/server'
 import { BRAND } from '@/lib/branding'
 import { prisma } from '@/lib/prisma'
+import { getClientSession } from '@/lib/clientAuth'
+import { Settings } from '@/lib/settings'
 import { buildInvoiceBody, CompanyInfo } from '@/lib/businessPdf'
 import { renderBusinessPdf } from '@/lib/pdfRenderer'
 
-export async function GET(req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
-  const { token } = await params
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  const session = await getClientSession(req)
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const invoice = await prisma.invoice.findFirst({
-    where: { shareToken: token },
+    where: { id, clientId: session.clientId },
     include: { client: true, items: true, payments: { orderBy: { paidAt: 'desc' } } },
   })
-  if (!invoice) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (!invoice) return NextResponse.json({ error: 'Invoice not found' }, { status: 404 })
 
-  const settings = await prisma.setting.findMany({
-    where: { key: { in: ['company_name', 'company_email', 'company_phone', 'company_address', 'company_gst', 'company_logo_url', 'company_signature_url'] } },
-  })
-  const settingsMap: Record<string, string> = {}
-  settings.forEach((s: { key: string; value: string }) => { settingsMap[s.key] = s.value })
+  const [companyName, companyAddress, companyPhone, companyEmail, companyGst, companyLogoUrl, companySignatureUrl] = await Promise.all([
+    Settings.companyName(),
+    Settings.companyAddress(),
+    Settings.companyPhone(),
+    Settings.companyEmail(),
+    Settings.companyGst(),
+    Settings.companyLogo(),
+    Settings.companySignature(),
+  ])
 
   const company: CompanyInfo = {
-    companyName: settingsMap.company_name || BRAND.name,
-    companyAddress: settingsMap.company_address || undefined,
-    companyPhone: settingsMap.company_phone || undefined,
-    companyEmail: settingsMap.company_email || undefined,
-    companyGst: settingsMap.company_gst || undefined,
-    companyLogoUrl: settingsMap.company_logo_url || undefined,
-    companySignatureUrl: settingsMap.company_signature_url || undefined,
+    companyName: companyName || BRAND.name,
+    companyAddress: companyAddress || undefined,
+    companyPhone: companyPhone || undefined,
+    companyEmail: companyEmail || undefined,
+    companyGst: companyGst || undefined,
+    companyLogoUrl: companyLogoUrl || undefined,
+    companySignatureUrl: companySignatureUrl || undefined,
   }
 
   const bodyHtml = buildInvoiceBody({
@@ -68,7 +77,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
   try {
     pdfBuffer = await renderBusinessPdf(bodyHtml, `${invoice.docType === 'RECEIPT' ? 'Receipt' : 'Invoice'} ${invoice.invoiceNumber}`)
   } catch (err) {
-    console.error('Invoice PDF render failed:', err)
+    console.error('Client-portal invoice PDF render failed:', err)
     return NextResponse.json({ error: 'Failed to generate PDF' }, { status: 500 })
   }
 

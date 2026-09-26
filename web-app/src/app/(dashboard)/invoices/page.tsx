@@ -5,21 +5,28 @@ import { useAuth } from '@/hooks/useAuth'
 import api from '@/lib/axios'
 import { Input, Select, EmptyState, Pagination, Badge } from '@/components/ui'
 import { formatDate, formatCurrency } from '@/lib/utils'
-import { FileText, Plus, Search, Eye, Loader2, AlertCircle } from 'lucide-react'
+import { FileText, Plus, Search, Eye, Loader2, AlertCircle, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { isNotOwnScopeRole } from '@/lib/permissions'
 
 const STATUSES = ['DRAFT', 'PENDING', 'PARTIAL', 'PAID', 'OVERDUE', 'CANCELLED']
+const DOC_TYPES = [
+  { value: '', label: 'All documents' },
+  { value: 'INVOICE', label: 'Invoices only' },
+  { value: 'RECEIPT', label: 'Receipts only' },
+]
 
 export default function InvoicesPage() {
-  const { user } = useAuth()
+  const { user, isAtLeast } = useAuth()
   const canCreate = isNotOwnScopeRole(user?.role || '')
+  const canDelete = isAtLeast('ADMIN')
 
   const [invoices, setInvoices] = useState<any[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
-  const [filters, setFilters] = useState({ search: '', status: '', dateFrom: '', dateTo: '' })
+  const [deletingId, setDeletingId] = useState('')
+  const [filters, setFilters] = useState({ search: '', status: '', docType: '', dateFrom: '', dateTo: '' })
 
   const fetch_ = useCallback(async () => {
     setLoading(true)
@@ -34,6 +41,19 @@ export default function InvoicesPage() {
   }, [page, filters])
 
   useEffect(() => { fetch_() }, [fetch_])
+
+  const deleteInvoice = async (inv: any) => {
+    const kind = inv.docType === 'RECEIPT' ? 'receipt' : 'invoice'
+    if (!confirm(`Delete ${kind} ${inv.invoiceNumber}? This cannot be undone.`)) return
+    setDeletingId(inv.id)
+    try {
+      await api.delete(`/invoices/${inv.id}`)
+      toast.success(`${kind === 'receipt' ? 'Receipt' : 'Invoice'} deleted`)
+      fetch_()
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Delete failed')
+    } finally { setDeletingId('') }
+  }
 
   return (
     <div className="space-y-4">
@@ -56,6 +76,9 @@ export default function InvoicesPage() {
           <select value={filters.status} onChange={e => { setFilters(p => ({...p, status: e.target.value})); setPage(1) }} className="max-w-xs input">
             <option value="">All statuses</option>
             {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <select value={filters.docType} onChange={e => { setFilters(p => ({...p, docType: e.target.value})); setPage(1) }} className="max-w-xs input">
+            {DOC_TYPES.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
           </select>
           <input type="date" className="input text-xs" placeholder="From"
             value={filters.dateFrom} onChange={e => { setFilters(p => ({...p, dateFrom: e.target.value})); setPage(1) }} />
@@ -87,7 +110,10 @@ export default function InvoicesPage() {
                 const isOverdue = inv.dueDate && new Date(inv.dueDate) < new Date() && inv.status !== 'PAID' && inv.status !== 'CANCELLED'
                 return (
                   <tr key={inv.id} className="hover:bg-slate-50">
-                    <td className="font-mono text-xs">{inv.invoiceNumber}</td>
+                    <td className="font-mono text-xs">
+                      {inv.invoiceNumber}
+                      {inv.docType === 'RECEIPT' && <span className="badge bg-purple-100 text-purple-700 ml-1.5">Receipt</span>}
+                    </td>
                     <td>
                       <p className="font-medium text-sm">{inv.client?.clientName}</p>
                       <p className="text-xs text-gray-500">{inv.client?.companyName}</p>
@@ -102,6 +128,12 @@ export default function InvoicesPage() {
                     <td className="text-xs text-gray-500">{inv.dueDate ? formatDate(inv.dueDate) : '—'}</td>
                     <td className="text-right">
                       <Link href={`/invoices/${inv.id}`} className="btn-ghost btn-sm !p-1.5"><Eye size={13} /></Link>
+                      {canDelete && (
+                        <button onClick={() => deleteInvoice(inv)} disabled={deletingId === inv.id}
+                          className="btn-ghost btn-sm !p-1.5 text-red-500 hover:bg-red-50">
+                          {deletingId === inv.id ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                        </button>
+                      )}
                     </td>
                   </tr>
                 )

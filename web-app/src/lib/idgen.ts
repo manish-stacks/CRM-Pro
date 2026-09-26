@@ -60,14 +60,17 @@ export async function generateProposalNumber(): Promise<string> {
   return `PROP-${y}${m}-${String(count + 1).padStart(4, '0')}`
 }
 
-export async function generateInvoiceNumber(): Promise<string> {
+export async function generateInvoiceNumber(docType: 'INVOICE' | 'RECEIPT' = 'INVOICE'): Promise<string> {
   const now = new Date()
   const y = String(now.getFullYear()).slice(2)
   const m = String(now.getMonth() + 1).padStart(2, '0')
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
   const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+  // Counted together (not per-prefix) so switching a draft between Invoice/Receipt
+  // before saving can never collide with a number already issued that month.
   const count = await prisma.invoice.count({ where: { createdAt: { gte: monthStart, lt: nextMonth } } })
-  return `INV-${y}${m}-${String(count + 1).padStart(4, '0')}`
+  const prefix = docType === 'RECEIPT' ? 'RCPT' : 'INV'
+  return `${prefix}-${y}${m}-${String(count + 1).padStart(4, '0')}`
 }
 
 export async function generateSupportTicketNumber(): Promise<string> {

@@ -15,6 +15,7 @@ interface InvoiceItem {
 
 interface InvoiceData {
   invoiceNumber: string
+  docType?: string // 'INVOICE' | 'RECEIPT' — controls the title only.
   createdAt: string | Date
   dueDate?: string | Date | null
   status: string
@@ -102,11 +103,12 @@ export function generateInvoicePdf(invoice: InvoiceData, company: CompanyInfo = 
   const doc = new jsPDF({ unit: 'mm', format: 'a4' })
   const W = doc.internal.pageSize.getWidth()
   const M = 15
+  const isReceipt = invoice.docType === 'RECEIPT'
 
   // ============ TITLE ============
   doc.setTextColor(0)
   doc.setFontSize(20).setFont('helvetica', 'bold')
-  doc.text('INVOICE', W / 2, 18, { align: 'center' })
+  doc.text(isReceipt ? 'RECEIPT' : 'INVOICE', W / 2, 18, { align: 'center' })
 
   // ============ COMPANY (LEFT) + META (RIGHT) ============
   let y = 28
@@ -126,7 +128,7 @@ export function generateInvoicePdf(invoice: InvoiceData, company: CompanyInfo = 
 
   doc.setFontSize(9).setFont('helvetica', 'normal').setTextColor(0)
   const metaX = W - M
-  doc.text(`Invoice No: ${invoice.invoiceNumber}`, metaX, y, { align: 'right' })
+  doc.text(`${isReceipt ? 'Receipt No' : 'Invoice No'}: ${invoice.invoiceNumber}`, metaX, y, { align: 'right' })
   doc.text(`Date: ${fmtDate(invoice.createdAt)}`, metaX, y + 5, { align: 'right' })
   if (company.state) doc.text(`State: ${company.state}`, metaX, y + 10, { align: 'right' })
   if (invoice.dueDate) doc.text(`Due Date: ${fmtDate(invoice.dueDate)}`, metaX, y + 15, { align: 'right' })
@@ -166,7 +168,7 @@ export function generateInvoicePdf(invoice: InvoiceData, company: CompanyInfo = 
     doc.setFont('helvetica', 'normal').text(addr, M + 26, gy, { maxWidth: W - M - 26 })
     gy += 5
   }
-  if (invoice.client.gstNo) {
+  if (invoice.gstApplicable && invoice.client.gstNo) {
     doc.setFont('helvetica', 'bold').text('GST No:', M, gy)
     doc.setFont('helvetica', 'normal').text(invoice.client.gstNo, M + 26, gy)
     gy += 5
@@ -225,7 +227,7 @@ export function generateInvoicePdf(invoice: InvoiceData, company: CompanyInfo = 
 
   let leftY = boxY + 14
   doc.setFontSize(8.5).setFont('helvetica', 'bold')
-  doc.text('Total invoice value (in words):', M, leftY)
+  doc.text(`Total ${isReceipt ? 'receipt' : 'invoice'} value (in words):`, M, leftY)
   doc.setFont('helvetica', 'normal')
   leftY += 4
   doc.text(`${numberToWordsIndian(invoice.totalAmount)} Only`, M, leftY, { maxWidth: totalsBoxX - M - 5 })
@@ -327,12 +329,12 @@ export function generateInvoicePdf(invoice: InvoiceData, company: CompanyInfo = 
   doc.setDrawColor(220)
   doc.line(M, footerY - 3, W - M, footerY - 3)
   doc.setFontSize(7.5).setTextColor(140).setFont('helvetica', 'italic')
-  doc.text('This is a computer-generated invoice and does not require a physical signature.', W / 2, footerY, { align: 'center' })
+  doc.text(`This is a computer-generated ${isReceipt ? 'receipt' : 'invoice'} and does not require a physical signature.`, W / 2, footerY, { align: 'center' })
 
   return doc
 }
 
 export function downloadInvoicePdf(invoice: InvoiceData, company: CompanyInfo = {}) {
   const doc = generateInvoicePdf(invoice, company)
-  doc.save(`${invoice.invoiceNumber}.pdf`)
+  doc.save(`${invoice.docType === 'RECEIPT' ? 'Receipt' : 'Invoice'}-${invoice.invoiceNumber}.pdf`)
 }

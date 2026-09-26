@@ -3,7 +3,7 @@ import { FileText, Download } from 'lucide-react'
 import { useClientPortal } from '../context'
 
 export default function InvoicesPage() {
-  const { invoices, fmt, statusPill, openPay, downloadClientPdf } = useClientPortal()
+  const { invoices, fmt, statusPill, openPay } = useClientPortal()
 
   return (
     <div>
@@ -16,7 +16,10 @@ export default function InvoicesPage() {
             <div key={inv.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center gap-4 flex-wrap">
               <div className="w-10 h-10 rounded-xl bg-brand-50 flex items-center justify-center text-brand-500"><FileText size={17} /></div>
               <div className="flex-1 min-w-0">
-                <p className="font-semibold text-gray-900">{inv.invoiceNumber}</p>
+                <p className="font-semibold text-gray-900">
+                  {inv.invoiceNumber}
+                  {inv.docType === 'RECEIPT' && <span className="ml-1.5 text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded font-medium align-middle">Receipt</span>}
+                </p>
                 <p className="text-xs text-gray-500">Total {fmt(inv.totalAmount)}{inv.paidAmount > 0 && <> · Paid {fmt(inv.paidAmount)}</>}{inv.dueDate && <> · Due date {new Date(inv.dueDate).toLocaleDateString('en-IN')}</>}</p>
               </div>
               <div className="text-right">
@@ -25,7 +28,13 @@ export default function InvoicesPage() {
                 <span className={`inline-block mt-0.5 text-[10px] px-1.5 py-0.5 rounded font-medium ${statusPill(inv.status)}`}>{inv.status}</span>
               </div>
               <div className="flex gap-2">
-                <button onClick={() => downloadClientPdf(inv)} className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-lg flex items-center gap-1 font-medium"><Download size={13} /> PDF</button>
+                {/* Server-rendered PDF, opened directly in a new tab — same proven
+                    pipeline as the admin/share-link PDFs, more reliable than a
+                    client-side download. */}
+                <button onClick={() => window.open(`/api/client-portal/invoices/${inv.id}/pdf`, '_blank')}
+                  className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-lg flex items-center gap-1 font-medium">
+                  <Download size={13} /> {inv.docType === 'RECEIPT' ? 'View Receipt' : 'View Invoice'}
+                </button>
                 {inv.dueAmount > 0 && <button onClick={() => openPay(inv)} className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium">Pay</button>}
               </div>
 

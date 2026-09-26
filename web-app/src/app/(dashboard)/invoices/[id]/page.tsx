@@ -3,10 +3,12 @@ import { useState, useEffect, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import api from '@/lib/axios'
+import { useAuth } from '@/hooks/useAuth'
 import { Button, Input, Select, Textarea, Modal, Badge } from '@/components/ui'
 import { formatDate, formatCurrency } from '@/lib/utils'
 import {
-  ArrowLeft, Send, Loader2, DollarSign, Plus, CreditCard, Building2, Check, AlertCircle, Download
+  ArrowLeft, Send, Loader2, DollarSign, Plus, CreditCard, Building2, Check, AlertCircle, Download,
+  Link2, Copy, MessageCircle, Mail, Trash2,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -16,11 +18,16 @@ export default function InvoiceDetailPage() {
   const params = useParams()
   const router = useRouter()
   const id = params.id as string
+  const { isAtLeast } = useAuth()
 
   const [invoice, setInvoice] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [modal, setModal] = useState<'none' | 'send' | 'pay'>('none')
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [shareUrl, setShareUrl] = useState('')
+  const [linkLoading, setLinkLoading] = useState(false)
+  const [lastSendResult, setLastSendResult] = useState<{ emailSent: boolean; whatsappSent: boolean } | null>(null)
 
   const [payForm, setPayForm] = useState({
     amount: '', method: 'UPI', reference: '', notes: '',
@@ -43,13 +50,77 @@ export default function InvoiceDetailPage() {
   const send = async () => {
     setSaving(true)
     try {
-      await api.post(`/invoices/${id}/send`, { viaEmail: true, viaWhatsapp: true })
-      toast.success('Sent via email + WhatsApp')
-      setModal('none')
+      const r = await api.post(`/invoices/${id}/send`, { viaEmail: true, viaWhatsapp: true })
+      const { emailSent, whatsappSent } = r.data.data || {}
+      setLastSendResult({ emailSent, whatsappSent })
+      if (emailSent && whatsappSent) toast.success('Sent via email + WhatsApp')
+      else if (emailSent) toast.success('Sent via email — WhatsApp did not go through')
+      else if (whatsappSent) toast.success('Sent via WhatsApp — email did not go through')
+      else toast.error('Could not send via email or WhatsApp. Use the links below to send manually.')
       fetch_()
     } catch (e: any) {
-      toast.error(e.response?.data?.error || 'Failed')
+      setLastSendResult({ emailSent: false, whatsappSent: false })
+      toast.error(e.response?.data?.error || 'Failed to send — use the links below to send manually.')
     } finally { setSaving(false) }
+  }
+
+  // Fetches (and caches) the public no-login share link for this document —
+  // same link used for the "PDF" preview, WhatsApp/email fallback, and Copy Link.
+  const getShareLink = async (): Promise<string> => {
+    if (shareUrl) return shareUrl
+    setLinkLoading(true)
+    try {
+      const r = await api.get(`/invoices/${id}/share-link`)
+      const url = r.data.data.url as string
+      setShareUrl(url)
+      return url
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Could not generate link')
+      return ''
+    } finally { setLinkLoading(false) }
+  }
+
+  const copyLink = async () => {
+    const url = await getShareLink()
+    if (!url) return
+    try {
+      await navigator.clipboard.writeText(url)
+      toast.success('Link copied')
+    } catch {
+      toast.error('Could not copy — link: ' + url)
+    }
+  }
+
+  const openWhatsappManually = async () => {
+    const url = await getShareLink()
+    if (!url) return
+    const kind = invoice.docType === 'RECEIPT' ? 'receipt' : 'invoice'
+    const phone = String(invoice.client?.phone || '').replace(/[^0-9]/g, '')
+    const msg = `Hi ${invoice.client?.clientName || ''}, your ${kind} ${invoice.invoiceNumber} for ₹${invoice.totalAmount.toLocaleString('en-IN')} is ready: ${url}`
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank')
+  }
+
+  const openEmailManually = async () => {
+    const url = await getShareLink()
+    if (!url) return
+    const kind = invoice.docType === 'RECEIPT' ? 'Receipt' : 'Invoice'
+    const subject = `${kind} ${invoice.invoiceNumber}`
+    const body = `Hi ${invoice.client?.clientName || ''},\n\nYour ${kind.toLowerCase()} ${invoice.invoiceNumber} for ₹${invoice.totalAmount.toLocaleString('en-IN')} is ready. You can view/download it here:\n${url}\n\nThanks.`
+    window.location.href = `mailto:${invoice.client?.email || ''}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+  }
+
+  const deleteInvoice = async () => {
+    const kind = invoice.docType === 'RECEIPT' ? 'receipt' : 'invoice'
+    if (!confirm(`Delete this ${kind} (${invoice.invoiceNumber})? This cannot be undone.`)) return
+    setDeleting(true)
+    try {
+      await api.delete(`/invoices/${id}`)
+      toast.success(`${kind === 'receipt' ? 'Receipt' : 'Invoice'} deleted`)
+      router.push('/invoices')
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Delete failed')
+      setDeleting(false)
+    }
   }
 
   const recordPayment = async () => {
@@ -105,6 +176,7 @@ export default function InvoiceDetailPage() {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1 flex-wrap">
             <span className="font-mono text-sm text-gray-500">{invoice.invoiceNumber}</span>
+            {invoice.docType === 'RECEIPT' && <span className="badge bg-purple-100 text-purple-700">Receipt</span>}
             <Badge status={invoice.status} />
             {isOverdue && <span className="badge bg-red-100 text-red-700"><AlertCircle size={10} /> Overdue</span>}
           </div>
@@ -124,9 +196,17 @@ export default function InvoiceDetailPage() {
           <button onClick={() => setModal('send')} className="btn-secondary btn-sm">
             <Send size={13} /> Send to Client
           </button>
+          <button onClick={copyLink} disabled={linkLoading} className="btn-secondary btn-sm">
+            {linkLoading ? <Loader2 size={13} className="animate-spin" /> : <Copy size={13} />} Copy Link
+          </button>
           <button onClick={downloadPdf} className="btn-secondary btn-sm">
             <Download size={13} /> PDF
           </button>
+          {isAtLeast('ADMIN') && (
+            <button onClick={deleteInvoice} disabled={deleting} className="btn-secondary btn-sm !text-red-600 hover:!bg-red-50">
+              {deleting ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />} Delete
+            </button>
+          )}
         </div>
       </div>
 
@@ -246,14 +326,40 @@ export default function InvoiceDetailPage() {
         </div>
       </Modal>
 
-      <Modal open={modal === 'send'} onClose={() => setModal('none')} title="Send Invoice">
+      <Modal open={modal === 'send'} onClose={() => { setModal('none'); setLastSendResult(null) }} title={invoice.docType === 'RECEIPT' ? 'Send Receipt' : 'Send Invoice'}>
         <div className="space-y-4">
           <div className="bg-brand-50 border border-blue-200 rounded-lg p-3 text-sm">
-            <p>Send invoice <b>{invoice.invoiceNumber}</b> to <b>{invoice.client?.clientName}</b> via email + WhatsApp.</p>
+            <p>Send {invoice.docType === 'RECEIPT' ? 'receipt' : 'invoice'} <b>{invoice.invoiceNumber}</b> to <b>{invoice.client?.clientName}</b> via email + WhatsApp.</p>
           </div>
+
+          {lastSendResult && (
+            <div className={`rounded-lg p-3 text-xs space-y-1 ${lastSendResult.emailSent || lastSendResult.whatsappSent ? 'bg-green-50 border border-green-200 text-green-800' : 'bg-red-50 border border-red-200 text-red-800'}`}>
+              <p>Email: {lastSendResult.emailSent ? '✓ Sent' : '✗ Not sent'}</p>
+              <p>WhatsApp: {lastSendResult.whatsappSent ? '✓ Sent' : '✗ Not sent'}</p>
+              {!(lastSendResult.emailSent && lastSendResult.whatsappSent) && (
+                <p className="pt-1">If a channel isn't set up (SMTP/WhatsApp API), use the manual buttons below to send the link yourself instead.</p>
+              )}
+            </div>
+          )}
+
           <div className="flex justify-end gap-2">
-            <Button variant="secondary" onClick={() => setModal('none')}>Cancel</Button>
-            <Button onClick={send} loading={saving}><Send size={13} /> Send</Button>
+            <Button variant="secondary" onClick={() => { setModal('none'); setLastSendResult(null) }}>Close</Button>
+            <Button onClick={send} loading={saving}><Send size={13} /> Send via server</Button>
+          </div>
+
+          <div className="border-t border-gray-100 pt-3">
+            <p className="text-xs text-gray-500 mb-2">Or send the link manually:</p>
+            <div className="flex flex-wrap gap-2">
+              <button onClick={copyLink} disabled={linkLoading} className="btn-secondary btn-sm">
+                <Link2 size={13} /> Copy Link
+              </button>
+              <button onClick={openWhatsappManually} disabled={linkLoading || !invoice.client?.phone} className="btn-secondary btn-sm !text-green-700">
+                <MessageCircle size={13} /> Open WhatsApp
+              </button>
+              <button onClick={openEmailManually} disabled={linkLoading || !invoice.client?.email} className="btn-secondary btn-sm !text-blue-700">
+                <Mail size={13} /> Open Email
+              </button>
+            </div>
           </div>
         </div>
       </Modal>

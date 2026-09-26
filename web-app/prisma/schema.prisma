@@ -951,6 +951,7 @@ model Invoice {
   dueAmount     Float         @default(0)
 
   status        String        @default("PENDING") // DRAFT, PENDING, PARTIAL, PAID, OVERDUE, CANCELLED
+  docType       String        @default("INVOICE") // INVOICE | RECEIPT — same billing document, just the label/numbering a client-facing PDF uses. RECEIPT is for clients who don't want a formal tax invoice.
   dueDate       DateTime?     @db.Date
   notes         String?       @db.Text
   terms         String?       @db.Text

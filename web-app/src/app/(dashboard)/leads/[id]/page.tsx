@@ -667,8 +667,8 @@ export default function LeadDetailPage() {
                   return (
                     <div key={a.id} className="relative flex gap-3">
                       <div className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center border-2 border-white shadow z-10 ${isMeeting ? 'bg-purple-100 text-purple-600' :
-                          isStatus ? 'bg-brand-100 text-brand-600' :
-                            'bg-gray-100 text-gray-600'
+                        isStatus ? 'bg-brand-100 text-brand-600' :
+                          'bg-gray-100 text-gray-600'
                         }`}>
                         <Icon size={13} />
                       </div>
@@ -727,8 +727,25 @@ export default function LeadDetailPage() {
             <Select label="Area *" value={meetForm.area}
               onChange={e => setMeetForm(p => ({ ...p, area: e.target.value, marketingExecId: '', meetingSlot: '', meetingTime: '' }))}
               options={[{ value: '', label: 'Select area...' }].concat(areas.map((a: any) => ({ value: a.area, label: `${a.area} (${a.executives.length})` })))} />
-            <Input label="Meeting Date *" type="date" value={meetForm.meetingDate}
-              onChange={e => setMeetForm(p => ({ ...p, meetingDate: e.target.value, marketingExecId: '', meetingSlot: '', meetingTime: '' }))} />
+            <Input
+              label="Meeting Date *"
+              type="date"
+              value={meetForm.meetingDate}
+              min={new Date().toISOString().split('T')[0]}
+              max={new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
+                .toISOString()
+                .split('T')[0]}
+              onChange={e =>
+                setMeetForm(p => ({
+                  ...p,
+                  meetingDate: e.target.value,
+                  marketingExecId: '',
+                  meetingSlot: '',
+                  meetingTime: ''
+                }))
+              }
+            />
+
           </div>
 
           {meetForm.area && meetForm.meetingDate && (
@@ -745,11 +762,10 @@ export default function LeadDetailPage() {
                     return (
                       <button key={s.label} type="button" disabled={!s.available}
                         onClick={() => setMeetForm(p => ({ ...p, meetingSlot: s.label, meetingTime: s.start, marketingExecId: '' }))}
-                        className={`text-left rounded-lg border px-3 py-2 text-xs transition-colors ${
-                          !s.available ? 'bg-gray-50 border-gray-100 text-gray-300 cursor-not-allowed' :
+                        className={`text-left rounded-lg border px-3 py-2 text-xs transition-colors ${!s.available ? 'bg-gray-50 border-gray-100 text-gray-300 cursor-not-allowed' :
                           active ? 'bg-brand-600 border-blue-600 text-white' :
-                          'bg-white border-gray-200 hover:border-brand-400 text-gray-700'
-                        }`}>
+                            'bg-white border-gray-200 hover:border-brand-400 text-gray-700'
+                          }`}>
                         <div className="font-semibold">{s.label}</div>
                         <div className={active ? 'text-blue-100' : 'text-gray-400'}>
                           {s.available ? `${s.freeExecutives.length} free` : 'Fully booked'}
@@ -772,9 +788,8 @@ export default function LeadDetailPage() {
                   {s.freeExecutives.map((u: any) => (
                     <button key={u.id} type="button"
                       onClick={() => setMeetForm(p => ({ ...p, marketingExecId: u.id }))}
-                      className={`px-3 py-1.5 rounded-lg text-xs border transition-colors ${
-                        meetForm.marketingExecId === u.id ? 'bg-brand-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-200 hover:border-brand-400'
-                      }`}>
+                      className={`px-3 py-1.5 rounded-lg text-xs border transition-colors ${meetForm.marketingExecId === u.id ? 'bg-brand-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-200 hover:border-brand-400'
+                        }`}>
                       {u.name}
                     </button>
                   ))}
@@ -845,16 +860,18 @@ export default function LeadDetailPage() {
               { key: 'after', label: 'After office hours' },
             ].map(m => (
               <button key={m.key} onClick={() => setRescheduleMode(m.key as any)}
-                className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
-                  rescheduleMode === m.key
-                    ? 'bg-indigo-600 text-white border-indigo-600'
-                    : 'bg-white text-gray-600 border-gray-300 hover:border-indigo-400'}`}>
+                className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${rescheduleMode === m.key
+                  ? 'bg-indigo-600 text-white border-indigo-600'
+                  : 'bg-white text-gray-600 border-gray-300 hover:border-indigo-400'}`}>
                 {m.label}
               </button>
             ))}
           </div>
 
-          <Input label="New Date *" type="date" value={rescheduleForm.meetingDate}
+          <Input label="New Date *" type="date" value={rescheduleForm.meetingDate} min={new Date().toISOString().split('T')[0]}
+            max={new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
+              .toISOString()
+              .split('T')[0]}
             onChange={e => setRescheduleForm(p => ({ ...p, meetingDate: e.target.value }))} />
 
           {rescheduleMode === 'slot' ? (
@@ -886,21 +903,20 @@ export default function LeadDetailPage() {
                     </button>
                   )}
                   <div className="grid grid-cols-2 gap-2 max-h-56 overflow-y-auto">
-                  {rsSlots.map((sl: any) => (
-                    <button key={sl.label} disabled={!sl.available}
-                      onClick={() => setPickedSlot(sl.label)}
-                      className={`px-3 py-2 rounded-lg text-left border text-xs transition-colors ${
-                        pickedSlot === sl.label
+                    {rsSlots.map((sl: any) => (
+                      <button key={sl.label} disabled={!sl.available}
+                        onClick={() => setPickedSlot(sl.label)}
+                        className={`px-3 py-2 rounded-lg text-left border text-xs transition-colors ${pickedSlot === sl.label
                           ? 'bg-indigo-600 text-white border-indigo-600'
                           : sl.available
                             ? 'bg-white border-gray-300 hover:border-indigo-400 text-gray-700'
                             : 'bg-red-50 border-red-200 text-red-400 cursor-not-allowed'}`}>
-                      <span className="font-semibold block">{sl.label}</span>
-                      <span className="text-[10px] opacity-80">
-                        {sl.available ? 'Free' : `Booked${sl.bookedWith ? ` — ${sl.bookedWith}` : ''}`}
-                      </span>
-                    </button>
-                  ))}
+                        <span className="font-semibold block">{sl.label}</span>
+                        <span className="text-[10px] opacity-80">
+                          {sl.available ? 'Free' : `Booked${sl.bookedWith ? ` — ${sl.bookedWith}` : ''}`}
+                        </span>
+                      </button>
+                    ))}
                   </div>
                 </div>
               )}
