@@ -11,8 +11,6 @@ import { sendMail, wrapEmailHtml } from '@/lib/mailer'
 import { Notifications } from '@/lib/notify'
 import { dateOnly } from '@/lib/attendanceDate'
 import { getTeamScope } from '@/lib/teamScope'
-import { isCompanyWideRole } from '@/lib/permissions'
-
 import { canSeeBeyondOwn, isCompanyWideRole } from '@/lib/permissions'
 import { computeLeaveDays } from '@/lib/leaveDays'
 
