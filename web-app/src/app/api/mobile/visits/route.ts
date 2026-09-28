@@ -50,6 +50,8 @@ export async function GET(req: NextRequest) {
   const dateFrom = searchParams.get('dateFrom')
   const dateTo = searchParams.get('dateTo')
   const search = searchParams.get('search')
+  const page = Math.max(1, parseInt(searchParams.get('page') || '1') || 1)
+  const limit = Math.min(50, Math.max(1, parseInt(searchParams.get('limit') || '20') || 20))
 
   const where: any = { userId: session.userId }
   // A visit that's been completed (or cancelled) drops out of the working
@@ -91,13 +93,15 @@ export async function GET(req: NextRequest) {
   }
 
   const base = { userId: session.userId }
-  const [visits, counts] = await Promise.all([
+  const [visits, total, counts] = await Promise.all([
     prisma.clientVisit.findMany({
       where,
       orderBy: [{ scheduledDate: 'desc' }, { createdAt: 'desc' }],
-      take: 200,
+      skip: (page - 1) * limit,
+      take: limit,
       include: { client: { select: { clientName: true, phone: true } } },
     }),
+    prisma.clientVisit.count({ where }),
     (async () => {
       const [all, todayC, pending, completed, upcoming, overdue, cancelled] = await Promise.all([
         prisma.clientVisit.count({ where: base }),
@@ -112,7 +116,7 @@ export async function GET(req: NextRequest) {
     })(),
   ])
 
-  return ok(visits.map(shape), { counts })
+  return ok(visits.map(shape), { counts, pagination: { page, limit, total, hasMore: page * limit < total } })
 }
 
 export async function POST(req: NextRequest) {

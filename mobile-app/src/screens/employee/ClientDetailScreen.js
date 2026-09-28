@@ -8,6 +8,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { EmployeeAPI } from '../../services/employee.api';
 import ScreenWrapper from '../../components/ScreenWrapper';
 import { Picker } from '@react-native-picker/picker';
+import { DatePickerField, toISO } from '../../components/DatePickerField';
 
 const PROPOSAL_STATUS_COLOR = {
   DRAFT: '#94A3B8', SENT: '#3B82F6', VIEWED: '#A855F7',
@@ -22,7 +23,7 @@ export default function ClientDetailScreen({ route, navigation }) {
   const { client: clientParam } = route.params;
   const [client, setClient] = useState(clientParam);
   const [showAssign, setShowAssign] = useState(false);
-  const [service, setService] = useState({ service_name: '', price: '', billingCycle: '' });
+  const [service, setService] = useState({ service_name: '', price: '', billingCycle: '', startDate: toISO(new Date()), expiryDate: '' });
   const [assigning, setAssigning] = useState(false);
   const [packages, setPackages] = useState([]);
   const [selectedPackage, setSelectedPackage] = useState(null);
@@ -142,6 +143,10 @@ export default function ClientDetailScreen({ route, navigation }) {
   const handleAssignService = async () => {
     if (!selectedPackage) { Alert.alert('Error', 'Please select a package'); return; }
     if (!service.price.trim()) { Alert.alert('Error', 'Price is required'); return; }
+    if (service.billingCycle === 'CUSTOM') {
+      if (!service.expiryDate) { Alert.alert('Error', 'Please choose an expiry date'); return; }
+      if (service.expiryDate <= (service.startDate || toISO(new Date()))) { Alert.alert('Error', 'Expiry date must be after the start date'); return; }
+    }
     setAssigning(true);
     try {
       await EmployeeAPI.assignService({
@@ -149,10 +154,12 @@ export default function ClientDetailScreen({ route, navigation }) {
         package_id: selectedPackage,
         price: parseFloat(service.price),
         billingCycle: service.billingCycle || 'ONE_TIME',
+        start_date: service.startDate || toISO(new Date()),
+        ...(service.billingCycle === 'CUSTOM' ? { expiry_date: service.expiryDate } : {}),
       });
       Alert.alert('Success', 'Service assigned!');
       setShowAssign(false);
-      setService({ service_name: '', price: '', billingCycle: '' });
+      setService({ service_name: '', price: '', billingCycle: '', startDate: toISO(new Date()), expiryDate: '' });
       setSelectedPackage(null);
       fetchDetail();
     } catch (e) {
@@ -496,8 +503,14 @@ export default function ClientDetailScreen({ route, navigation }) {
                     </View>
                   </View>
                 ))}
+                <DatePickerField
+                  label="SERVICE START DATE *"
+                  value={service.startDate}
+                  onChange={(iso) => setService(prev => ({ ...prev, startDate: iso }))}
+                />
+
                 <View style={{ marginBottom: 10 }}>
-                  <Text style={{ fontSize: 11, fontWeight: '700', color: colors.text2, marginBottom: 6 }}>BILLING CYCLE (SETS EXPIRY DATE)</Text>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: colors.text2, marginBottom: 6 }}>BILLING CYCLE (SETS EXPIRY DATE FROM START DATE)</Text>
                   <View style={[s.fieldWrap, { backgroundColor: colors.card, borderColor: colors.border, paddingVertical: 0 }]}>
                     <Picker
                       selectedValue={service.billingCycle || 'ONE_TIME'}
@@ -509,9 +522,17 @@ export default function ClientDetailScreen({ route, navigation }) {
                       <Picker.Item label="Quarterly (expires in 3 months)" value="QUARTERLY" />
                       <Picker.Item label="Half-Yearly (expires in 6 months)" value="HALF_YEARLY" />
                       <Picker.Item label="Yearly (expires in 12 months)" value="YEARLY" />
+                      <Picker.Item label="Custom (choose expiry date)" value="CUSTOM" />
                     </Picker>
                   </View>
                 </View>
+                {service.billingCycle === 'CUSTOM' && (
+                  <DatePickerField
+                    label="EXPIRY DATE *"
+                    value={service.expiryDate}
+                    onChange={(iso) => setService(prev => ({ ...prev, expiryDate: iso }))}
+                  />
+                )}
                 <TouchableOpacity onPress={handleAssignService} disabled={assigning}>
                   <LinearGradient colors={[colors.gradStart, colors.gradEnd]} style={s.assignBtn} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
                     {assigning ? <ActivityIndicator color="#fff" size="small" /> : <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>Assign Service</Text>}

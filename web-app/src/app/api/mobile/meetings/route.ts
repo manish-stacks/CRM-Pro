@@ -23,6 +23,8 @@ export async function GET(req: NextRequest) {
   const search = searchParams.get('search')
   const lat = parseFloat(searchParams.get('lat') || '')
   const lng = parseFloat(searchParams.get('lng') || '')
+  const page = Math.max(1, parseInt(searchParams.get('page') || '1') || 1)
+  const limit = Math.min(50, Math.max(1, parseInt(searchParams.get('limit') || '20') || 20))
 
   const where: any = { meetingAssignedToId: session.userId }
 
@@ -91,13 +93,15 @@ export async function GET(req: NextRequest) {
   }
 
   const base = { meetingAssignedToId: session.userId, status: { in: ACTIVE } }
-  const [leads, counts] = await Promise.all([
+  const [leads, total, counts] = await Promise.all([
     prisma.lead.findMany({
       where,
       orderBy: [{ meetingDate: 'asc' }, { meetingTime: 'asc' }, { createdAt: 'desc' }],
-      take: 150,
+      skip: (page - 1) * limit,
+      take: limit,
       select,
     }),
+    prisma.lead.count({ where }),
     (async () => {
       const weekEnd = new Date(today.start.getTime() + 7 * 86400000 - 1)
       const [all, todayC, tomorrowC, upcoming, week, done, past] = await Promise.all([
@@ -178,6 +182,6 @@ export async function GET(req: NextRequest) {
         eta_approx: e?.approx ?? null,
       }
     }),
-    { counts }
+    { counts, pagination: { page, limit, total, hasMore: page * limit < total } }
   )
 }

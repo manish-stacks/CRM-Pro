@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
 
   let body: any = {}
   try { body = await req.json() } catch { return fail('Invalid body') }
-  const { client_id, package_id, price, duration, billingCycle } = body
+  const { client_id, package_id, price, duration, billingCycle, start_date, expiry_date } = body
 
   if (!client_id) return fail('client_id required')
   if (!package_id) return fail('package_id required')
@@ -32,9 +32,20 @@ export async function POST(req: NextRequest) {
   // `duration` kept only for backward-compat with old app builds still in the wild.
   const months = CYCLE_MONTHS[cycle] ?? (duration ? parseInt(String(duration)) : 0)
 
-  const start = new Date()
+  // Service start date is now an explicit field from the app (defaults to
+  // today if not sent by an older app build) — expiry is always calculated
+  // from THIS date, not from "now", so a back-dated or future start still
+  // gets the right expiry.
+  const start = start_date ? new Date(start_date) : new Date()
+  if (isNaN(start.getTime())) return fail('Invalid start_date')
   let expiry: Date | null = null
-  if (months > 0) {
+  if (cycle === 'CUSTOM') {
+    // Custom cycle: the employee picks the exact expiry date.
+    if (!expiry_date) return fail('expiry_date is required for a custom billing cycle')
+    expiry = new Date(expiry_date)
+    if (isNaN(expiry.getTime())) return fail('Invalid expiry_date')
+    if (expiry <= start) return fail('Expiry date must be after the start date')
+  } else if (months > 0) {
     expiry = new Date(start)
     expiry.setMonth(expiry.getMonth() + months)
   }

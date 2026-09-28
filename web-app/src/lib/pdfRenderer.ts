@@ -148,7 +148,7 @@ const BUSINESS_BODY_STYLES = `
   .badge-neutral { background: #dbeafe; color: #1d4ed8; }
   .section-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: #94a3b8; margin-bottom: 7px; }
   .two-col { display: flex; gap: 24px; margin-bottom: 22px; }
-  .info-box { flex: 1; background: #f8fafc; border-radius: 8px; padding: 12px 14px; }
+  .info-box { flex: 1; max-width: 340px; background: #f8fafc; border-radius: 8px; padding: 12px 14px; }
   .items-table { width: 100%; font-size: 12px; margin-bottom: 6px; border-radius: 6px; overflow: hidden; }
   .items-table th { background: #1e293b; color: #f1f5f9; padding: 9px 10px; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.3px; font-weight: 700; }
   .items-table td { padding: 9px 10px; border-bottom: 1px solid #eef1f5; }

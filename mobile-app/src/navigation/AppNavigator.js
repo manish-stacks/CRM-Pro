@@ -35,6 +35,9 @@ import ClientsScreen from '../screens/employee/ClientsScreen';
 import AddClientScreen from '../screens/employee/AddClientScreen';
 import ClientDetailScreen from '../screens/employee/ClientDetailScreen';
 import VisitsScreen from '../screens/employee/VisitsScreen';
+import { ChatAPI, unreadBus } from '../services/chat.api';
+import ChatScreen from '../screens/employee/ChatScreen';
+import ChatConversationScreen from '../screens/employee/ChatConversationScreen';
 import LeavesScreen from '../screens/employee/LeavesScreen';
 import EmployeeProfileScreen from '../screens/employee/EmployeeProfileScreen';
 import EmployeeEditProfileScreen from '../screens/employee/EmployeeEditProfileScreen';
@@ -113,6 +116,15 @@ function ClientTabs() {
 // ─── Employee Bottom Tabs ─────────────────────────────────────────────────────
 function EmployeeTabs() {
   const { colors } = useTheme();
+  const [chatUnread, setChatUnread] = React.useState(0);
+  React.useEffect(() => {
+    let alive = true;
+    const load = () => ChatAPI.unread().then(r => alive && setChatUnread(r.data?.data?.total || 0)).catch(() => {});
+    load();
+    const iv = setInterval(load, 10000);
+    const off = unreadBus.subscribe(n => setChatUnread(n));
+    return () => { alive = false; clearInterval(iv); off(); };
+  }, []);
   const insets = useSafeAreaInsets();
   const tabBarBottomPad = Math.max(insets.bottom, 10);
   return (
@@ -136,7 +148,7 @@ function EmployeeTabs() {
             Clients: focused ? 'people' : 'people-outline',
 
             Visits: focused ? 'map' : 'map-outline',
-            EmpProfile: focused ? 'person' : 'person-outline',
+            Chat: focused ? 'chatbubbles' : 'chatbubbles-outline',
           };
           return <Ionicons name={icons[route.name]} size={22} color={color} />;
         },
@@ -146,12 +158,15 @@ function EmployeeTabs() {
       <Tab.Screen name="Meetings" component={MeetingsScreen} />
       <Tab.Screen name="Clients" component={ClientsScreen} />
       <Tab.Screen name="Visits" component={VisitsScreen} />
-      <Tab.Screen name="EmpProfile" component={EmployeeProfileScreen} options={{ tabBarLabel: 'Profile' }} />
+      <Tab.Screen name="Chat" component={ChatScreen} options={{ tabBarBadge: chatUnread > 0 ? (chatUnread > 99 ? '99+' : chatUnread) : undefined, tabBarBadgeStyle: { backgroundColor: '#16A34A', color: '#fff', fontSize: 10 } }} />
 
       {/* --- hidden tabs: keep the bottom menu visible on these screens --- */}
+      {/* Profile lives in the Dashboard header now (avatar, top-right) so the bottom bar stays at 5 tabs. */}
+      <Tab.Screen name="EmpProfile" component={EmployeeProfileScreen} options={HIDDEN_TAB} />
       <Tab.Screen name="MeetingDetail" component={MeetingDetailScreen} options={HIDDEN_TAB} />
       <Tab.Screen name="ClientDetail" component={ClientDetailScreen} options={HIDDEN_TAB} />
       <Tab.Screen name="AddClient" component={AddClientScreen} options={HIDDEN_TAB} />
+      <Tab.Screen name="ChatConversation" component={ChatConversationScreen} options={HIDDEN_TAB} />
       <Tab.Screen name="Leaves" component={LeavesScreen} options={HIDDEN_TAB} />
       <Tab.Screen name="EmployeeEditProfile" component={EmployeeEditProfileScreen} options={HIDDEN_TAB} />
       <Tab.Screen name="EmployeeChangePassword" component={EmployeeChangePasswordScreen} options={HIDDEN_TAB} />

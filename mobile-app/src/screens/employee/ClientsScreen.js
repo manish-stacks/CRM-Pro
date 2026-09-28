@@ -7,6 +7,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { EmployeeAPI } from '../../services/employee.api';
+import usePaginatedList from '../../hooks/usePaginatedList';
 import ScreenWrapper from '../../components/ScreenWrapper';
 import { CalendarModal, toISO, prettyDate } from '../../components/DatePickerField';
 
@@ -93,37 +94,21 @@ const cStyles = StyleSheet.create({
 
 export default function ClientsScreen({ navigation }) {
   const { colors } = useTheme();
-  const [clients, setClients] = useState([]);
   const [search, setSearch] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
 
   const [tab, setTab] = useState('today');
   const [pickedDate, setPickedDate] = useState('');
   const [dateModal, setDateModal] = useState(false);
+
 
   const activeParams = useMemo(() => {
     const base = pickedDate ? { date: pickedDate } : (TABS.find(t => t.key === tab) || TABS[0]).params;
     return { ...base, ...(search ? { search } : {}) };
   }, [tab, pickedDate, search]);
 
-  const fetchClients = useCallback(async (silent = false) => {
-    if (!silent) setLoading(true);
-    try {
-      const res = await EmployeeAPI.getClients(activeParams);
-      setClients(res.data?.data || []);
-    } catch (e) {
-      Alert.alert('Error', e.response?.data?.message || e.message || 'Failed to load clients');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [activeParams]);
-
-  useEffect(() => { fetchClients(); }, [fetchClients]);
-  useFocusEffect(useCallback(() => { fetchClients(true); }, [fetchClients]));
-
-  const onRefresh = useCallback(() => { setRefreshing(true); fetchClients(true); }, [fetchClients]);
+  const { items: clients, loading, refreshing, loadingMore, reload: fetchClients, loadMore: loadMoreClients, focusRefresh, onRefresh } =
+    usePaginatedList((page, limit) => EmployeeAPI.getClients({ ...activeParams, page, limit }), JSON.stringify(activeParams));
+  useFocusEffect(useCallback(() => { focusRefresh(); }, [focusRefresh]));
 
   const s = styles(colors);
   return (
@@ -210,6 +195,13 @@ export default function ClientsScreen({ navigation }) {
           contentContainerStyle={{ padding: 16, paddingTop: 8, paddingBottom: 30 }}
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+          onEndReached={loadMoreClients}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={loadingMore ? (
+            <View style={{ paddingVertical: 16 }}>
+              <ActivityIndicator size="small" color={colors.primary} />
+            </View>
+          ) : null}
           ListEmptyComponent={
             <View style={{ alignItems: 'center', paddingTop: 60 }}>
               <Ionicons name="people-outline" size={48} color={colors.text3} />

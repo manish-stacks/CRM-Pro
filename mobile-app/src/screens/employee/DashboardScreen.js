@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, RefreshControl,
-  ScrollView, ActivityIndicator, Alert,
+  ScrollView, ActivityIndicator, Alert, Image,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -56,6 +56,13 @@ const statStyles = StyleSheet.create({
 export default function DashboardScreen({ navigation }) {
   const { colors } = useTheme();
   const { user } = useAuth();
+  // Profile photo for the header avatar — login data can be stale, so refresh from the profile API on focus.
+  const [profileImage, setProfileImage] = useState(user?.image || null);
+  useEffect(() => {
+    const load = () => EmployeeAPI.getProfile().then(r => setProfileImage(r.data?.data?.image || null)).catch(() => {});
+    load();
+    return navigation.addListener('focus', load);
+  }, [navigation]);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -219,9 +226,13 @@ export default function DashboardScreen({ navigation }) {
             <Text style={s.greeting}>Good day, {user?.name?.split(' ')[0] || 'Employee'} 👋</Text>
             <Text style={s.heroSub}>Here's your overview for today</Text>
           </View>
-          {/* <View style={s.avatarCircle}>
-            <Text style={s.avatarText}>{user?.name ? user.name[0].toUpperCase() : 'E'}</Text>
-          </View> */}
+          <TouchableOpacity activeOpacity={0.8} onPress={() => navigation.navigate('EmpProfile')} style={s.avatarCircle}>
+            {profileImage ? (
+              <Image source={{ uri: profileImage }} style={s.avatarImg} />
+            ) : (
+              <Text style={s.avatarText}>{user?.name ? user.name[0].toUpperCase() : 'E'}</Text>
+            )}
+          </TouchableOpacity>
         </LinearGradient>
 
 
@@ -416,6 +427,7 @@ const styles = (c) => StyleSheet.create({
     color: 'rgba(255,255,255,0.75)',
     marginTop: 4
   },
+  avatarImg: { width: 44, height: 44, borderRadius: 14 },
   avatarCircle: {
     width: 48,
     height: 48,

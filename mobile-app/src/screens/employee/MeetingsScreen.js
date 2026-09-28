@@ -7,6 +7,7 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
+import usePaginatedList from '../../hooks/usePaginatedList';
 import ScreenWrapper from '../../components/ScreenWrapper';
 import { CalendarModal, toISO, prettyDate } from '../../components/DatePickerField';
 import { EmployeeAPI } from '../../services/employee.api';
@@ -152,10 +153,7 @@ function MeetingCard({ item, colors, onPress }) {
 
 export default function MeetingsScreen({ route, navigation }) {
   const { colors } = useTheme();
-  const [meetings, setMeetings] = useState([]);
-  const [counts, setCounts] = useState({});
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const [schedRefreshing, setSchedRefreshing] = useState(false);
 
   const [tab, setTab] = useState(route?.params?.tab || 'today');
   const [pickedDate, setPickedDate] = useState('');
@@ -177,6 +175,7 @@ export default function MeetingsScreen({ route, navigation }) {
 
   // Current location — sent to the backend to calculate ETA
   const [coords, setCoords] = useState(null);
+
 
   useEffect(() => {
     let alive = true;
@@ -200,21 +199,9 @@ export default function MeetingsScreen({ route, navigation }) {
     };
   }, [tab, pickedDate, search, coords, pastFrom, pastTo]);
 
-  const fetchMeetings = useCallback(async (silent = false) => {
-    if (!silent) setLoading(true);
-    try {
-      const res = await EmployeeAPI.getMeetings(activeParams);
-      setMeetings(res.data?.data || []);
-      setCounts(res.data?.counts || {});
-    } catch {
-      setMeetings([]);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [activeParams]);
-
-  useEffect(() => { fetchMeetings(); }, [fetchMeetings]);
+  const { items: meetings, extra, loading, refreshing, loadingMore, reload: fetchMeetings, loadMore: loadMoreMeetings, focusRefresh, onRefresh } =
+    usePaginatedList((page, limit) => EmployeeAPI.getMeetings({ ...activeParams, page, limit }), JSON.stringify(activeParams));
+  const counts = extra.counts || {};
 
   const fetchSchedule = useCallback(async () => {
     if (viewMode !== 'slots') return;
@@ -228,7 +215,7 @@ export default function MeetingsScreen({ route, navigation }) {
   }, [viewMode, scheduleDate]);
 
   useEffect(() => { fetchSchedule(); }, [fetchSchedule]);
-  useFocusEffect(useCallback(() => { fetchMeetings(true); }, [fetchMeetings]));
+  useFocusEffect(useCallback(() => { focusRefresh(); }, [focusRefresh]));
 
   useEffect(() => {
     if (route?.params?.refresh) fetchMeetings(true);
@@ -244,7 +231,6 @@ export default function MeetingsScreen({ route, navigation }) {
     }
   }, [route?.params?.tab]);
 
-  const onRefresh = () => { setRefreshing(true); fetchMeetings(true); };
 
   const badgeFor = (key) => {
     if (key === 'today') return counts.today;
@@ -360,7 +346,7 @@ export default function MeetingsScreen({ route, navigation }) {
           ) : (
             <ScrollView
               contentContainerStyle={{ padding: 16, paddingTop: 0, paddingBottom: 30, gap: 8 }}
-              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchSchedule().finally(() => setRefreshing(false)); }} tintColor={colors.primary} />}
+              refreshControl={<RefreshControl refreshing={schedRefreshing} onRefresh={() => { setSchedRefreshing(true); fetchSchedule().finally(() => setSchedRefreshing(false)); }} tintColor={colors.primary} />}
             >
               {schedule.slots.map((sl, i) => (
                 <TouchableOpacity
@@ -483,6 +469,13 @@ export default function MeetingsScreen({ route, navigation }) {
           )}
           contentContainerStyle={{ padding: 16, paddingTop: 4, paddingBottom: 30 }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+          onEndReached={loadMoreMeetings}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={loadingMore ? (
+            <View style={{ paddingVertical: 16 }}>
+              <ActivityIndicator size="small" color={colors.primary} />
+            </View>
+          ) : null}
           ListEmptyComponent={
             <View style={s.empty}>
               <Ionicons name="calendar-clear-outline" size={40} color={colors.text3} />

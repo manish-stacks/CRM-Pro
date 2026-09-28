@@ -137,6 +137,10 @@ export function buildInvoiceBody(d: InvoiceDocData): string {
         ${d.company.companyPhone ? `<div>Contact: ${esc(d.company.companyPhone)}</div>` : ''}
         ${d.company.companyEmail ? `<div>Email: ${esc(d.company.companyEmail)}</div>` : ''}
         ${d.gstApplicable && d.company.companyGst ? `<div>GSTIN: ${esc(d.company.companyGst)}</div>` : ''}
+      </div>
+    </div>
+    <div class="doc-meta">
+      <div class="doc-number">${isReceipt ? 'Receipt No' : 'Invoice No'}: ${esc(d.invoiceNumber)}</div>
       <div>Date: ${fmtDate(d.createdAt)}</div>
       ${d.dueDate ? `<div>Due: ${fmtDate(d.dueDate)}</div>` : ''}
       <div><span class="badge ${statusBadgeClass(d.status)}">${esc(d.status)}</span></div>

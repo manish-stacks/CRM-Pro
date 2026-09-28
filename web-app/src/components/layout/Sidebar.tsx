@@ -1,8 +1,9 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
+import api from '@/lib/axios'
 import {
   LayoutDashboard, Users, Clock, Calendar, DollarSign, Building2,
   Target, FileText, Users2, CreditCard, BarChart3, Settings,
@@ -100,10 +101,32 @@ const NAV: NavItem[] = [
 // Client portal external link shown below nav
 
 
+// Total unread chat messages — polled every 15s; also pushes the count into the
+// browser tab title "(3) ..." so new messages are noticed on other tabs.
+function useChatUnread(enabled: boolean) {
+  const [total, setTotal] = useState(0)
+  useEffect(() => {
+    if (!enabled) return
+    let stop = false
+    const load = () => api.get('/chat/unread').then(r => { if (!stop) setTotal(r.data?.data?.total || 0) }).catch(() => {})
+    load()
+    const iv = setInterval(load, 15000)
+    const onFocus = () => load()
+    window.addEventListener('focus', onFocus)
+    return () => { stop = true; clearInterval(iv); window.removeEventListener('focus', onFocus) }
+  }, [enabled])
+  useEffect(() => {
+    const base = document.title.replace(/^\(\d+\+?\)\s*/, '')
+    document.title = total > 0 ? `(${total > 99 ? '99+' : total}) ${base}` : base
+  }, [total])
+  return total
+}
+
 function NavLink({ item, depth = 0 }: { item: NavItem; depth?: number }) {
   const pathname = usePathname()
   const { user, can } = useAuth()
   const [open, setOpen] = useState(() => item.children?.some(c => pathname.startsWith(c.href || '')))
+  const chatUnread = useChatUnread(item.href === '/chat')
 
   // A `permission` gate wins over the legacy `roles` list, so a custom role
   // can open or close a menu entry without touching this file.
@@ -149,6 +172,11 @@ function NavLink({ item, depth = 0 }: { item: NavItem; depth?: number }) {
       <div className={`sidebar-link ${isActive ? 'active' : ''}`}>
         <item.icon size={17} />
         <span>{displayLabel}</span>
+        {item.href === '/chat' && chatUnread > 0 && (
+          <span className="ml-auto min-w-[20px] h-5 px-1.5 rounded-full bg-green-500 text-white text-[11px] font-bold flex items-center justify-center">
+            {chatUnread > 99 ? '99+' : chatUnread}
+          </span>
+        )}
       </div>
     </Link>
   )

@@ -25,6 +25,8 @@ export async function GET(req: NextRequest) {
   const status = searchParams.get('status')
   const expiry = searchParams.get('expiry')
   const search = searchParams.get('search')
+  const page = Math.max(1, parseInt(searchParams.get('page') || '1') || 1)
+  const limit = Math.min(50, Math.max(1, parseInt(searchParams.get('limit') || '20') || 20))
 
   const { start: todayStart, end: todayEnd } = istDayRange() // for createdAt (real timestamp)
   const expiryToday = todayDateOnly() // for expiryDate (@db.Date column)
@@ -81,22 +83,24 @@ export async function GET(req: NextRequest) {
     if (Object.keys(svc).length) where.services = { some: svc }
   }
 
-  const clients = await prisma.client.findMany({
+  const [clients, total, todayCount] = await Promise.all([
+   prisma.client.findMany({
     where,
     orderBy: { createdAt: 'desc' },
-    take: 300,
+    skip: (page - 1) * limit,
+    take: limit,
     select: {
       id: true, clientCode: true, clientName: true, companyName: true,
       phone: true, email: true, city: true, status: true, createdAt: true,
       services: { select: { serviceName: true, expiryDate: true, status: true }, orderBy: { expiryDate: 'asc' }, take: 3 },
       _count: { select: { services: true } },
     },
-  })
+   }),
+   prisma.client.count({ where }),
+   prisma.client.count({ where: { ...where, createdAt: { gte: todayStart, lte: todayEnd } } }),
+  ])
 
-  const counts = {
-    all: clients.length,
-    today: clients.filter(c => c.createdAt >= todayStart && c.createdAt <= todayEnd).length,
-  }
+  const counts = { all: total, today: todayCount }
 
   return ok(
     clients.map(c => {
@@ -116,7 +120,7 @@ export async function GET(req: NextRequest) {
         created_at: c.createdAt,
       }
     }),
-    { counts }
+    { counts, pagination: { page, limit, total, hasMore: page * limit < total } }
   )
 }
 
