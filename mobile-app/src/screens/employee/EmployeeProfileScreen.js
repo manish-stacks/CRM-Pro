@@ -11,6 +11,7 @@ const ITEMS = [
   { icon: 'person-outline', label: 'Edit Profile', sub: 'Update your info', color: '#3B82F6', bg: 'rgba(59,130,246,0.1)', action: 'edit' },
   { icon: 'lock-closed-outline', label: 'Change Password', sub: 'Update your password', color: '#A855F7', bg: 'rgba(168,85,247,0.1)', action: 'password' },
   { icon: 'people-outline', label: 'My Clients', sub: 'View assigned clients', color: '#22C55E', bg: 'rgba(34,197,94,0.1)', action: 'clients' },
+  { icon: 'card-outline', label: 'Visiting Card', sub: 'Share card & company profile', color: '#6366F1', bg: 'rgba(99,102,241,0.1)', action: 'card', marketingOnly: true },
   { icon: 'map-outline', label: 'My Visits', sub: 'View visit history', color: '#F59E0B', bg: 'rgba(245,158,11,0.1)', action: 'visits' },
 ];
 
@@ -47,6 +48,7 @@ export default function EmployeeProfileScreen({ navigation }) {
   const handleAction = (action) => {
     if (action === 'clients') navigation.navigate('Clients');
     else if (action === 'visits') navigation.navigate('Visits');
+    else if (action === 'card') navigation.navigate('VisitingCard');
     else if (action === 'edit') navigation.navigate('EmployeeEditProfile');
     else if (action === 'password') navigation.navigate('EmployeeChangePassword');
     else Alert.alert('Coming Soon', 'This feature will be available soon.');
@@ -87,11 +89,11 @@ export default function EmployeeProfileScreen({ navigation }) {
 
         <View style={{ padding: 20 }}>
           <View style={s.card}>
-            {ITEMS.map((item, i) => (
+            {ITEMS.filter(it => !it.marketingOnly || profile?.role === 'MARKETING_EXECUTIVE').map((item, i, arr) => (
               <TouchableOpacity
                 key={i}
                 onPress={() => handleAction(item.action)}
-                style={[s.profileItem, i === ITEMS.length - 1 && { borderBottomWidth: 0, paddingBottom: 0 }]}
+                style={[s.profileItem, i === arr.length - 1 && { borderBottomWidth: 0, paddingBottom: 0 }]}
               >
                 <View style={[s.pIcon, { backgroundColor: item.bg }]}>
                   <Ionicons name={item.icon} size={18} color={item.color} />

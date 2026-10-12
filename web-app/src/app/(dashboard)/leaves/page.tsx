@@ -9,6 +9,7 @@ import {
   Eye, Pencil
 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { formatLeaveDuration } from '@/lib/leaveDuration'
 
 const LEAVE_TYPES = ['PAID', 'UNPAID', 'SICK', 'CASUAL', 'MATERNITY', 'PATERNITY']
 const DURATIONS = [
@@ -314,7 +315,7 @@ export default function LeavesPage() {
                     )}
                   </td>
                   <td className="text-sm font-semibold tabular-nums">
-                    {l.duration === 'SHORT_HOURLY' ? `${l.hourlyHours.toFixed(1)}h` : l.duration === 'SINGLE_DAY' ? `${l.days.toFixed(1)}h` : `${l.days.toFixed(1)}d`}
+                    {formatLeaveDuration(l)}
                   </td>
                   <td className="text-xs text-gray-700 max-w-xs">
                     <button onClick={() => setReasonModal(l)} className="text-left hover:text-brand-600 truncate block max-w-[220px] underline decoration-dotted">
@@ -387,7 +388,7 @@ export default function LeavesPage() {
               <Badge status={reasonModal.leaveType} />
               <Badge status={reasonModal.status} />
               <span className="text-gray-500">
-                {formatDate(reasonModal.startDate)}{reasonModal.duration === 'MULTIPLE_DAYS' ? ` → ${formatDate(reasonModal.endDate)}` : ''} · {reasonModal.days} day(s)
+                {formatDate(reasonModal.startDate)}{reasonModal.duration === 'MULTIPLE_DAYS' ? ` → ${formatDate(reasonModal.endDate)}` : ''} · {formatLeaveDuration(reasonModal)}
               </span>
             </div>
             <div className="bg-slate-50 rounded-xl p-4 text-sm text-gray-800 whitespace-pre-wrap max-h-[50vh] overflow-y-auto">

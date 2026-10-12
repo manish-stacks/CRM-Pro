@@ -4,7 +4,7 @@ import { AxiosInstance } from '../lib/Axios.instance';
 import { Alert } from 'react-native';
 import { stopTracking } from '../services/LocationTracker';
 import { registerForPush, unregisterPush } from '../services/push';
-import { setSessionExpiredHandler } from '../lib/authEvents';
+import { setSessionExpiredHandler, resetSessionExpired } from '../lib/authEvents';
 
 const AuthContext = createContext();
 
@@ -59,6 +59,7 @@ export function AuthProvider({ children }) {
       // on this phone, and it must now be attached to the account that just
       // logged in — otherwise notifications keep going to the old user.
       registerForPush(true).catch(() => {});
+      resetSessionExpired();
       return true;
     } catch (error) {
       Alert.alert('Login Failed', error.message || 'Invalid credentials');

@@ -18,6 +18,7 @@ export const EmployeeAPI = {
   // Dashboard + profile
   getDashboard: () => AxiosInstance.get('/mobile/dashboard'),
   getProfile: () => AxiosInstance.get('/mobile/profile'),
+  getVisitingCard: () => AxiosInstance.get('/mobile/visiting-card'),
   updateProfile: (data) => AxiosInstance.patch('/mobile/profile', data),
   changePassword: (data) => AxiosInstance.post('/mobile/profile/change-password', data),
   uploadImage: (dataUrl, folder = 'avatars') => AxiosInstance.post('/upload', { dataUrl, folder }),

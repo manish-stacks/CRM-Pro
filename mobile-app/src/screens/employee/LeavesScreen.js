@@ -10,6 +10,15 @@ import { useTheme } from '../../context/ThemeContext';
 import ScreenWrapper from '../../components/ScreenWrapper';
 import { EmployeeAPI } from '../../services/employee.api';
 
+
+// "1 d", "2 d", "3h 30m", "1 d 4h"
+function fmtLeaveDuration(l) {
+  const fh = (h) => { const t = Math.round(h * 60), hh = Math.floor(t / 60), mm = t % 60; return [hh ? `${hh}h` : '', mm ? `${mm}m` : ''].filter(Boolean).join(' ') || '0h'; };
+  if (l.duration === 'SHORT_HOURLY') return fh(Number(l.hourly_hours ?? (Number(l.days) || 0) * 8));
+  const d = Number(l.days) || 0, w = Math.floor(d + 1e-9), r = d - w;
+  return r < 0.01 ? `${w} d` : `${w ? w + ' d ' : ''}${fh(r * 8)}`.trim();
+}
+
 const LEAVE_TYPES = ['PAID', 'UNPAID', 'SICK', 'CASUAL', 'MATERNITY', 'PATERNITY'];
 const DURATIONS = [
   { key: 'SINGLE_DAY', label: 'Single', icon: 'calendar-outline' },
@@ -60,7 +69,7 @@ function LeaveCard({ leave, colors, onPressReason }) {
 
       <View style={lStyles.bottomRow}>
         <Text style={[lStyles.daysText, { color: colors.text }]}>
-          {leave.duration === 'SHORT_HOURLY' ? `${leave.hourly_hours}h` : `${leave.days}d`}
+          {fmtLeaveDuration(leave)}
         </Text>
         <TouchableOpacity style={{ flex: 1 }} onPress={() => onPressReason(leave)}>
           <Text numberOfLines={1} style={[lStyles.reasonText, { color: colors.text2 }]}>

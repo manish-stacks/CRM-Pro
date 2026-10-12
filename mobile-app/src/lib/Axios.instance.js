@@ -7,7 +7,7 @@ import { notifySessionExpired } from './authEvents';
 // ── New HBS CRM (Next.js) base URL ──
 // Mobile endpoints live under /api/mobile/* and return { success, data, token }.
 // Update this to your deployed CRM domain.
-const BASE_URL = 'http://192.168.1.15:3008/api' // 'https://web-crm.hoverbusinessservices.com/api'; // 
+const BASE_URL = 'http://192.168.1.21:3008/api' // 'https://web-crm.hoverbusinessservices.com/api'; // 
 
 // React Native's default fetch/axios User-Agent doesn't look like a phone UA
 // to server-side UA parsers, so the CRM was logging every app punch-in as
@@ -53,7 +53,10 @@ const attachInterceptors = (instance) => {
       // 403 = session is fine, this specific action just isn't allowed
       // (e.g. you're not this lead's meeting owner) -> keep the user logged in,
       // just surface the error message.
-      if (status === 401) {
+      // Only treat it as an expired session if this request actually carried a token
+      // (a wrong-password 401 on the login screen must not trigger "Session Expired").
+      const hadToken = !!error.config?.headers?.Authorization;
+      if (status === 401 && hadToken) {
         await AsyncStorage.multiRemove(['userToken', 'userRole', 'userData']);
         notifySessionExpired(); // flips AuthContext's isLoggedIn -> navigator shows Login
       }

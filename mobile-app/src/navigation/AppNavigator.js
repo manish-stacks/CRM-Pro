@@ -39,6 +39,7 @@ import { ChatAPI, unreadBus } from '../services/chat.api';
 import ChatScreen from '../screens/employee/ChatScreen';
 import ChatConversationScreen from '../screens/employee/ChatConversationScreen';
 import LeavesScreen from '../screens/employee/LeavesScreen';
+import VisitingCardScreen from '../screens/employee/VisitingCardScreen';
 import EmployeeProfileScreen from '../screens/employee/EmployeeProfileScreen';
 import EmployeeEditProfileScreen from '../screens/employee/EmployeeEditProfileScreen';
 import EmployeeChangePasswordScreen from '../screens/employee/EmployeeChangePasswordScreen';
@@ -168,6 +169,7 @@ function EmployeeTabs() {
       <Tab.Screen name="AddClient" component={AddClientScreen} options={HIDDEN_TAB} />
       <Tab.Screen name="ChatConversation" component={ChatConversationScreen} options={HIDDEN_TAB} />
       <Tab.Screen name="Leaves" component={LeavesScreen} options={HIDDEN_TAB} />
+      <Tab.Screen name="VisitingCard" component={VisitingCardScreen} options={HIDDEN_TAB} />
       <Tab.Screen name="EmployeeEditProfile" component={EmployeeEditProfileScreen} options={HIDDEN_TAB} />
       <Tab.Screen name="EmployeeChangePassword" component={EmployeeChangePasswordScreen} options={HIDDEN_TAB} />
       <Tab.Screen name="Notifications" component={NotificationsScreen} options={HIDDEN_TAB} />

@@ -9,6 +9,7 @@ import { ReminderWidget } from '@/components/ReminderWidget'
 import { NoteWidget } from '@/components/NoteWidget'
 import { GlobalSearch } from '@/components/GlobalSearch'
 import { MyIdCardButton } from '@/components/MyIdCardButton'
+import { VisitingCardButton } from '@/components/VisitingCardButton'
 import { HolidayCalendarButton } from '@/components/HolidayCalendarButton'
 
 export default function Header({ onMenuClick }: { onMenuClick?: () => void }) {
@@ -39,6 +40,9 @@ export default function Header({ onMenuClick }: { onMenuClick?: () => void }) {
 
         {/* My ID Card */}
         <MyIdCardButton />
+
+        {/* Visiting card (marketing only) */}
+        <VisitingCardButton />
 
         {/* Holiday Calendar */}
         <HolidayCalendarButton />

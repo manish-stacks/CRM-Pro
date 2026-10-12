@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { getRequestSession } from '@/lib/auth'
 import { successResponse, errorResponse, unauthorizedResponse } from '@/lib/api'
 import { isCompanyWideRole } from '@/lib/permissions'
+import { cached } from '@/lib/memoCache'
 
 export async function GET(req: NextRequest) {
   const session = await getRequestSession(req)
@@ -63,7 +64,7 @@ export async function GET(req: NextRequest) {
 
       const [totalEmployees, totalLeads, totalClients, totalProposals, pendingLeaves, monthRevenue] = await Promise.all([
         prisma.employee.count({ where: { user: { isActive: true } } }),
-        prisma.lead.count(),
+        cached('leads:total', 60_000, () => prisma.lead.count()),
         prisma.client.count(),
         prisma.proposal.count(),
         prisma.leave.count({ where: pendingLeavesWhere }),
@@ -91,7 +92,7 @@ export async function GET(req: NextRequest) {
         revenueChart.push({ month: d.toLocaleString('default', { month: 'short' }), revenue: res._sum.amount || 0 })
       }
 
-      const leadsByStatus = (await prisma.lead.groupBy({ by: ['status'], _count: { _all: true } }))
+      const leadsByStatus = (await cached('leads:byStatus', 60_000, () => prisma.lead.groupBy({ by: ['status'], _count: { _all: true } })))
         .map(l => ({ status: l.status, count: l._count._all }))
 
       return successResponse({

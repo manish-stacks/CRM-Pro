@@ -24,15 +24,24 @@ function dayLabel(iso) {
 }
 const signature = (list) => list.map(m => `${m.id}${m.isEdited ? 'e' : ''}${m.isDeleted ? 'd' : ''}${m.isPinned ? 'p' : ''}${m.reactions?.length || 0}`).join(',');
 
-// Message text with @mentions highlighted (same idea as web).
+// Message text: links / emails / phone numbers are tappable, @mentions highlighted.
+const LINK_RE = /((?:https?:\/\/|www\.)[^\s<]+[^\s<.,;:!?)"'\]]|[\w.+-]+@[\w-]+\.[\w.-]+[a-zA-Z]|\+?\d[\d\s-]{8,13}\d)/g;
 function MentionText({ content, mentions, color, mentionColor }) {
+  const base = { color, fontSize: 14, lineHeight: 20 };
+  if (!content) return <Text style={base}>{content}</Text>;
   const names = [...new Set((mentions || []).map(mn => mn.user?.name).filter(Boolean))].sort((a, b) => b.length - a.length);
-  if (!content || !names.length) return <Text style={{ color, fontSize: 14, lineHeight: 20 }}>{content}</Text>;
-  const re = new RegExp(`(@(?:${names.map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')}))(?=\\s|$)`, 'g');
+  const mentionRe = names.length ? new RegExp(`(@(?:${names.map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')}))(?=\\s|$)`, 'g') : null;
+  const plain = (text, key) => !mentionRe ? text : text.split(mentionRe).map((part, i) =>
+    part.startsWith('@') && names.includes(part.slice(1)) ? <Text key={`${key}-${i}`} style={{ color: mentionColor, fontWeight: '800' }}>{part}</Text> : part);
   return (
-    <Text style={{ color, fontSize: 14, lineHeight: 20 }}>
-      {content.split(re).map((part, i) => part.startsWith('@') && names.includes(part.slice(1))
-        ? <Text key={i} style={{ color: mentionColor, fontWeight: '800' }}>{part}</Text> : part)}
+    <Text style={base}>
+      {content.split(LINK_RE).map((part, i) => {
+        if (i % 2 === 0) return <Text key={i}>{plain(part, String(i))}</Text>;
+        const web = /^(https?:|www\.)/i.test(part);
+        const email = !web && part.includes('@');
+        const url = email ? `mailto:${part}` : web ? (part.startsWith('www.') ? `https://${part}` : part) : `tel:${part.replace(/[\s-]/g, '')}`;
+        return <Text key={i} style={{ color: '#2563EB', textDecorationLine: 'underline' }} onPress={() => Linking.openURL(url).catch(() => {})}>{part}</Text>;
+      })}
     </Text>
   );
 }
@@ -74,6 +83,15 @@ export default function ChatConversationScreen({ route, navigation }) {
   const [busy, setBusy] = useState(false);
 
   const listRef = useRef(null);
+  const [flashId, setFlashId] = useState(null);
+  const jumpToMessage = (id) => {
+    const idx = messages.findIndex(x => x.id === id);
+    if (idx < 0) { Alert.alert('Message not loaded', 'The original message is too old to show here.'); return; }
+    atBottom.current = false;
+    listRef.current?.scrollToIndex({ index: idx, animated: true, viewPosition: 0.4 });
+    setFlashId(id);
+    setTimeout(() => setFlashId(cur => (cur === id ? null : cur)), 1600);
+  };
   const atBottom = useRef(true);
   const sigRef = useRef('');
   const lastTypingPing = useRef(0);
@@ -324,7 +342,7 @@ export default function ChatConversationScreen({ route, navigation }) {
       const g = groupedReactions[r.emoji] || (groupedReactions[r.emoji] = { count: 0, mine: false });
       g.count++; if (r.user?.id === user?.id) g.mine = true;
     });
-    const bg = m.isDeleted ? colors.bg2 : mine ? colors.primary + '26' : mentioned ? '#FEF3C7' : colors.card;
+    const bg = flashId === m.id ? '#FDE68A' : m.isDeleted ? colors.bg2 : mine ? colors.primary + '26' : mentioned ? '#FEF3C7' : colors.card;
     const fg = m.isDeleted ? colors.text3 : colors.text;
     const tick = mine && !m._optimistic ? readTick(m) : null;
     return (
@@ -359,12 +377,12 @@ export default function ChatConversationScreen({ route, navigation }) {
               ) : (
                 <>
                   {m.replyTo && (
-                    <View style={[s.quote, { borderColor: colors.primary, backgroundColor: 'rgba(0,0,0,0.05)' }]}>
+                    <TouchableOpacity activeOpacity={0.7} onPress={() => jumpToMessage(m.replyTo.id)} style={[s.quote, { borderColor: colors.primary, backgroundColor: 'rgba(0,0,0,0.05)' }]}>
                       <Text style={{ color: colors.primary, fontWeight: '800', fontSize: 12 }}>{m.replyTo.sender?.name}</Text>
                       <Text style={{ color: colors.text2, fontSize: 12 }} numberOfLines={2}>
                         {m.replyTo.isDeleted ? 'Message deleted' : (m.replyTo.content || m.replyTo.attachmentName || 'Attachment')}
                       </Text>
-                    </View>
+                    </TouchableOpacity>
                   )}
                   {m.attachmentUrl ? (
                     m.attachmentType?.startsWith('image/') ? (
@@ -445,6 +463,10 @@ export default function ChatConversationScreen({ route, navigation }) {
             data={messages}
             keyExtractor={(m) => m.id}
             renderItem={renderMessage}
+            onScrollToIndexFailed={(info) => {
+              listRef.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: false });
+              setTimeout(() => listRef.current?.scrollToIndex({ index: info.index, animated: true, viewPosition: 0.4 }), 150);
+            }}
             contentContainerStyle={{ padding: 12, paddingBottom: 16 }}
             onScroll={(e) => {
               const { contentOffset, layoutMeasurement, contentSize } = e.nativeEvent;

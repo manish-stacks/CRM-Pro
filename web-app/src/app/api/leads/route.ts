@@ -11,6 +11,7 @@ import { dateOnly } from '@/lib/attendanceDate'
 import { getTeamUserIds } from '@/lib/teamScope'
 import { canSeeBeyondOwn, COMPANY_WIDE_ROLES } from '@/lib/permissions'
 import { userCan } from '@/lib/permissions.server'
+import { cached, invalidateCache } from '@/lib/memoCache'
 
 const VALID_STATUSES = ['NEW', 'NOT_INTERESTED', 'FOLLOW_UP', 'RINGING', 'MEETING_SCHEDULED', 'CALLBACK', 'CONVERTED', 'CLOSED']
 
@@ -33,6 +34,7 @@ export async function DELETE(req: NextRequest) {
   if (leads.length === 0) return errorResponse('No matching leads found')
 
   const { count } = await prisma.lead.deleteMany({ where: { id: { in: leads.map(l => l.id) } } })
+  invalidateCache('leads:')
 
   await Promise.all(leads.map(l => logFromRequest(req, {
     userId: session.userId,
@@ -103,18 +105,26 @@ export async function GET(req: NextRequest) {
   if (hasEmail === 'yes') where.clientEmail = { not: null }
   if (hasEmail === 'no') where.clientEmail = null
 
+  // Search is index-friendly: at 5 lakh+ rows a LIKE '%x%' over 9 columns (incl. TEXT)
+  // scanned the whole table. Now: phones / email / lead number match from the START
+  // (uses the indexes); only the two name columns use "contains".
   if (search) {
-    where.OR = [
-      { leadNumber: { contains: search } },
-      { clientName: { contains: search } },
-      { companyName: { contains: search } },
-      { clientPhone: { contains: search } },
-      { clientEmail: { contains: search } },
-      { alternatePhone: { contains: search } },
-      { city: { contains: search } },
-      { service: { contains: search } },
-      { remark: { contains: search } },
-    ]
+    const digits = search.replace(/[\s+-]/g, '')
+    if (/^\d+$/.test(digits)) {
+      where.OR = [
+        { clientPhone: { startsWith: digits } },
+        { alternatePhone: { startsWith: digits } },
+        { leadNumber: { contains: digits } },
+      ]
+    } else if (search.includes('@')) {
+      where.OR = [{ clientEmail: { startsWith: search.toLowerCase() } }]
+    } else {
+      where.OR = [
+        { clientName: { contains: search } },
+        { companyName: { contains: search } },
+        { leadNumber: { startsWith: search } },
+      ]
+    }
   }
   if (dateFrom || dateTo) {
     where.createdAt = {}
@@ -249,7 +259,9 @@ export async function GET(req: NextRequest) {
       },
       orderBy,
     }),
-    prisma.lead.count({ where }),
+    // COUNT(*) on 5 lakh rows is the slowest part and is identical for every page of the
+    // same filter — cache it briefly (cleared automatically when leads are added/deleted).
+    cached(`leads:count:${JSON.stringify(where)}`, 20_000, () => prisma.lead.count({ where })),
   ])
 
   // Serial number, continuous across pages (page 2 starts at 21, etc.)
@@ -314,6 +326,7 @@ export async function POST(req: NextRequest) {
     // creates there's a small race window, so retry once with a freshly
     // generated number if we hit a collision.
     let lead
+    invalidateCache('leads:')
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
         lead = await prisma.lead.create({

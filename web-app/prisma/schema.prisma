@@ -676,6 +676,18 @@ model Lead {
   @@index([meetingAssignedToId])
   @@index([followUpDate])
   @@index([meetingDate])
+  @@index([callbackDate])
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([clientPhone])
+  @@index([alternatePhone])
+  @@index([clientEmail])
+  @@index([clientName])
+  @@index([companyName])
+  @@index([status, createdAt])
+  @@index([assignedToId, createdAt])
+  @@index([createdById, createdAt])
+  @@index([meetingAssignedToId, meetingDate])
   @@map("leads")
 }
 

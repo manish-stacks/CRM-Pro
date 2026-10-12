@@ -17,6 +17,8 @@ const DEFAULTS: Record<string, any> = {
   company_gst: '',
   company_logo_url: '',
   company_signature_url: '',
+  company_website: '',
+  company_profile_url: '',
   // Finance
   currency: 'INR',
   currency_symbol: '₹',
@@ -182,7 +184,7 @@ export default function SettingsPage() {
     try {
       // Bucket the values by category (must include EVERY editable key)
       const CATS: Record<string, string[]> = {
-        company: ['company_name', 'company_address', 'company_phone', 'company_email', 'company_gst', 'company_logo_url', 'company_signature_url', 'timezone', 'hr_email'],
+        company: ['company_name', 'company_address', 'company_phone', 'company_email', 'company_gst', 'company_logo_url', 'company_signature_url', 'company_website', 'company_profile_url', 'timezone', 'hr_email'],
         finance: ['currency', 'currency_symbol', 'gst_default_rate', 'gst_enabled_by_default', 'invoice_due_days', 'invoice_prefix', 'payment_methods'],
         hrm: ['weekly_off_days', 'working_hours_per_day', 'half_day_threshold_hours',
           'payroll_basic_percent', 'payroll_hra_percent', 'payroll_conveyance_amount', 'payroll_medical_amount',
@@ -255,6 +257,8 @@ export default function SettingsPage() {
                 <Input label="Email" type="email" value={values.company_email || ''} onChange={e => set('company_email', e.target.value)} />
                 <Input label="Hr Email" type="email" value={values.hr_email || ''} onChange={e => set('hr_email', e.target.value)} />
                 <Input label="Logo URL" value={values.company_logo_url || ''} onChange={e => set('company_logo_url', e.target.value)} placeholder="https://..." />
+                <Input label="Website" value={values.company_website || ''} onChange={e => set('company_website', e.target.value)} placeholder="https://..." />
+                <Input label="Company Profile Link (PDF / Drive)" value={values.company_profile_url || ''} onChange={e => set('company_profile_url', e.target.value)} placeholder="https://..." />
                 <Select label="Timezone" value={values.timezone || 'Asia/Kolkata'} onChange={e => set('timezone', e.target.value)} options={[
                   { value: 'Asia/Kolkata', label: 'Asia/Kolkata (IST)' },
                   { value: 'Asia/Dubai', label: 'Asia/Dubai (GST)' },

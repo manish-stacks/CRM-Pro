@@ -3,7 +3,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAuth, getRequestSession, hasMinRole } from '@/lib/auth'
 import { errorResponse, successResponse } from '@/lib/api'
-import { dateOnly } from '@/lib/attendanceDate'
+import { dateOnly, getISTDateParts } from '@/lib/attendanceDate'
+import { Settings } from '@/lib/settings'
 import { getTeamScope } from '@/lib/teamScope'
 import { generateClientCode, generateLeadNumber } from '@/lib/idgen'
 import { canSeeBeyondOwn, isCompanyWideRole } from '@/lib/permissions'
@@ -381,10 +382,29 @@ export async function GET(req: NextRequest) {
         }
         const monthParam = searchParams.get('month') || new Date().toISOString().slice(0, 7)
         const [y, m] = monthParam.split('-').map(Number)
-        const monthStart = new Date(y, m - 1, 1)
-        const monthEnd = new Date(y, m, 0, 23, 59, 59)
+        const total = new Date(Date.UTC(y, m, 0)).getUTCDate()
+        // Attendance.date is a UTC-midnight DATE — build the window in UTC (local-time
+        // boundaries leaked the previous month's last day into this month on IST servers).
+        const monthStart = new Date(Date.UTC(y, m - 1, 1))
+        const monthEnd = new Date(Date.UTC(y, m - 1, total, 23, 59, 59))
 
-        const empWhere: any = { user: { isActive: true, role: { notIn: ['ADMIN', 'SUPER_ADMIN'] } } }
+        // Same day rules as payroll: weekly offs + company holidays are not working days,
+        // future days are not counted, mid-month joiners count from their joining date.
+        const [offDays, holidayList] = await Promise.all([Settings.weeklyOffDays(), Settings.companyHolidays()])
+        const pad = (n: number) => String(n).padStart(2, '0')
+        const holidaySet = new Set((Array.isArray(holidayList) ? holidayList : []).map(h => String(h).slice(0, 10)))
+        const ist = getISTDateParts(new Date())
+        const isCurrent = ist.year === y && ist.month + 1 === m
+        const isFuture = y > ist.year || (y === ist.year && m > ist.month + 1)
+        const lastDay = isFuture ? 0 : isCurrent ? ist.day : total
+        const companyDays: number[] = []
+        for (let d = 1; d <= lastDay; d++) {
+          if (offDays.includes(new Date(Date.UTC(y, m - 1, d)).getUTCDay())) continue
+          if (holidaySet.has(`${y}-${pad(m)}-${pad(d)}`)) continue
+          companyDays.push(d)
+        }
+
+        const empWhere: any = { user: { isActive: true, role: { notIn: ['ADMIN', 'SUPER_ADMIN'] } }, OR: [{ joiningDate: null }, { joiningDate: { lte: monthEnd } }] }
         // Non-admin (TL / manager): summary only for employees under them
         if (!isAdminRole(session.role)) {
           const scope = await getTeamScope((session as any).userId)
@@ -402,50 +422,75 @@ export async function GET(req: NextRequest) {
         })
         const empIds = employees.map(e => e.id)
 
-        // Attendance rows for the month
-        const atts = await prisma.attendance.findMany({
-          where: { employeeId: { in: empIds }, date: { gte: monthStart, lte: monthEnd } },
-          select: { employeeId: true, status: true, workMode: true, isLate: true },
-        })
-        // Approved leaves overlapping the month
-        const leaves = await prisma.leave.findMany({
-          where: {
-            employeeId: { in: empIds },
-            status: 'APPROVED',
-            startDate: { lte: monthEnd },
-            endDate: { gte: monthStart },
-          },
-          select: { employeeId: true, duration: true, days: true, leaveType: true },
-        })
+        const [atts, leaves] = await Promise.all([
+          prisma.attendance.findMany({
+            where: { employeeId: { in: empIds }, date: { gte: monthStart, lte: monthEnd } },
+            select: { employeeId: true, date: true, status: true, workMode: true, isLate: true, punchIn: true },
+          }),
+          prisma.leave.findMany({
+            where: { employeeId: { in: empIds }, status: 'APPROVED', startDate: { lte: monthEnd }, endDate: { gte: monthStart } },
+            select: { employeeId: true, duration: true, startDate: true, endDate: true },
+          }),
+        ])
+        const attBy: Record<string, any[]> = {}, lvBy: Record<string, any[]> = {}
+        atts.forEach(a => (attBy[a.employeeId] ||= []).push(a))
+        leaves.forEach(l => (lvBy[l.employeeId] ||= []).push(l))
+        const dayNum = (d: Date | string) => new Date(d).getUTCDate()
+        const dayStamp = (d: Date | string) => { const x = new Date(d); return Date.UTC(x.getUTCFullYear(), x.getUTCMonth(), x.getUTCDate()) }
 
-        const agg: Record<string, any> = {}
-        for (const e of employees) {
-          agg[e.id] = { present: 0, leave: 0, late: 0, wfh: 0, shortLeave: 0, halfDay: 0 }
-        }
-        for (const a of atts) {
-          const g = agg[a.employeeId]; if (!g) continue
-          if (a.status === 'PRESENT') g.present++
-          if (a.status === 'HALF_DAY') g.halfDay++
-          if (a.workMode === 'WFH') g.wfh++
-          if (a.isLate) g.late++
-        }
-        for (const lv of leaves) {
-          const g = agg[lv.employeeId]; if (!g) continue
-          if (lv.duration === 'SHORT_HOURLY') g.shortLeave++
-          else g.leave += lv.days || 0
-        }
+        data = employees.map(e => {
+          let joinDay = 1
+          if (e.joiningDate) {
+            const j = new Date(e.joiningDate)
+            if (j.getUTCFullYear() === y && j.getUTCMonth() + 1 === m) joinDay = j.getUTCDate()
+          }
+          const workSet = new Set(companyDays.filter(d => d >= joinDay))
+          const rows = attBy[e.id] || []
+          // Extra office-closed days marked on the employee's attendance
+          rows.forEach(r => { if (r.status === 'HOLIDAY') workSet.delete(dayNum(r.date)) })
+          const onWork = rows.filter(r => workSet.has(dayNum(r.date)))
 
-        data = employees.map(e => ({
-          EmployeeID: e.employeeId,
-          Name: e.user.name,
-          Department: e.department?.name || '',
-          Present: agg[e.id].present,
-          Leave: agg[e.id].leave,
-          Late: agg[e.id].late,
-          WFH: agg[e.id].wfh,
-          'Short leave': agg[e.id].shortLeave,
-          'Half days': agg[e.id].halfDay,
-        }))
+          const present = onWork.filter(r => r.status === 'PRESENT').length
+          const halfDay = onWork.filter(r => r.status === 'HALF_DAY').length
+          const late = onWork.filter(r => r.isLate).length
+          const wfh = onWork.filter(r => r.workMode === 'WFH' && r.punchIn).length
+
+          // Leave days = approved full-day leave dates inside the month, on working days only
+          // (clipped to the month, no Sundays/holidays, no double count with a punched-in day).
+          const punched = new Set(onWork.filter(r => r.punchIn || r.status === 'PRESENT' || r.status === 'HALF_DAY').map(r => dayNum(r.date)))
+          const leaveSet = new Set<number>()
+          let shortLeave = 0
+          for (const lv of lvBy[e.id] || []) {
+            if (lv.duration === 'SHORT_HOURLY') {
+              const sd = new Date(lv.startDate)
+              if (sd.getUTCFullYear() === y && sd.getUTCMonth() + 1 === m) shortLeave++
+              continue
+            }
+            const s = dayStamp(lv.startDate), en = dayStamp(lv.endDate)
+            for (const d of workSet) {
+              const t = Date.UTC(y, m - 1, d)
+              if (t >= s && t <= en && !punched.has(d)) leaveSet.add(d)
+            }
+          }
+          onWork.forEach(r => { if (r.status === 'LEAVE' && !r.punchIn) leaveSet.add(dayNum(r.date)) })
+
+          const accounted = new Set<number>([...onWork.map(r => dayNum(r.date)), ...leaveSet])
+          const absent = Math.max(0, workSet.size - accounted.size)
+
+          return {
+            EmployeeID: e.employeeId,
+            Name: e.user.name,
+            Department: e.department?.name || '',
+            'Working days': workSet.size,
+            Present: present,
+            Leave: leaveSet.size,
+            Absent: absent,
+            Late: late,
+            WFH: wfh,
+            'Short leave': shortLeave,
+            'Half days': halfDay,
+          }
+        })
         filename = `attendance-summary-${monthParam}`
         break
       }

@@ -20,16 +20,29 @@ const EDIT_WINDOW_MS = 15 * 60 * 1000
 
 // Highlights "@Name" spans inside a message so a mention reads distinctly
 // from the rest of the text — same idea as WhatsApp's tinted @mentions.
-function renderMessageContent(content: string, mentions: any[]) {
-  const names = [...new Set((mentions || []).map((mn: any) => mn.user?.name).filter(Boolean))]
-  if (!content || names.length === 0) return content
-  const escaped = names.sort((a, b) => b.length - a.length).map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
-  const re = new RegExp(`(@(?:${escaped.join('|')}))(?=\\s|$)`, 'g')
-  return content.split(re).map((part, i) =>
+// Linkify URLs / emails / phone numbers, then highlight @mentions in the plain parts.
+const LINK_RE = /((?:https?:\/\/|www\.)[^\s<]+[^\s<.,;:!?)"'\]]|[\w.+-]+@[\w-]+\.[\w.-]+[a-zA-Z]|\+?\d[\d\s-]{8,13}\d)/g
+function renderMessageContent(content: string, mentions: any[], mine = false) {
+  if (!content) return content
+  const names = [...new Set((mentions || []).map((mn: any) => mn.user?.name).filter(Boolean))] as string[]
+  const mentionRe = names.length
+    ? new RegExp(`(@(?:${names.sort((a, b) => b.length - a.length).map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')}))(?=\\s|$)`, 'g')
+    : null
+  const withMentions = (text: string, key: string) => !mentionRe ? text : text.split(mentionRe).map((part, i) =>
     part.startsWith('@') && names.includes(part.slice(1))
-      ? <span key={i} className="text-brand-700 font-semibold bg-brand-100 rounded px-0.5">{part}</span>
-      : part
-  )
+      ? <span key={`${key}-${i}`} className="text-brand-700 font-semibold bg-brand-100 rounded px-0.5">{part}</span>
+      : part)
+  return content.split(LINK_RE).map((part, i) => {
+    if (i % 2 === 0) return <span key={i}>{withMentions(part, String(i))}</span>
+    const isEmail = !/^(https?:|www\.)/i.test(part) && part.includes('@')
+    const isPhone = !isEmail && !/^(https?:|www\.)/i.test(part)
+    const href = isEmail ? `mailto:${part}` : isPhone ? `tel:${part.replace(/[\s-]/g, '')}` : (part.startsWith('www.') ? `https://${part}` : part)
+    return (
+      <a key={i} href={href} target={isEmail || isPhone ? undefined : '_blank'} rel="noopener noreferrer"
+        onClick={e => e.stopPropagation()}
+        className="text-blue-600 underline underline-offset-2 hover:text-blue-800 break-all">{part}</a>
+    )
+  })
 }
 
 export default function ChatPage() {
@@ -87,6 +100,15 @@ export default function ChatPage() {
 
   // Reply / quote
   const [replyingTo, setReplyingTo] = useState<any | null>(null)
+  const [flashId, setFlashId] = useState<string | null>(null)
+  const jumpToMessage = (id?: string) => {
+    if (!id) return
+    const el = document.getElementById(`msg-${id}`)
+    if (!el) { toast('Original message is not loaded', { icon: 'ℹ️' }); return }
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    setFlashId(id)
+    setTimeout(() => setFlashId(cur => (cur === id ? null : cur)), 1600)
+  }
 
   // Reactions
   const [reactionPickerFor, setReactionPickerFor] = useState<string | null>(null)
@@ -820,7 +842,7 @@ export default function ChatPage() {
                       if (r.user?.id === user?.id) reactionGroups[r.emoji].mine = true
                     }
                     return (
-                      <div key={m.id}>
+                      <div key={m.id} id={`msg-${m.id}`} className={`transition-colors duration-500 rounded-lg ${flashId === m.id ? 'bg-yellow-200/70' : ''}`}>
                       {showDateDivider && (
                         <div className="flex justify-center my-3">
                           <span className="bg-white/90 text-gray-500 text-[11px] font-semibold px-3 py-1 rounded-full shadow-sm border border-gray-100">
@@ -888,7 +910,7 @@ export default function ChatPage() {
                             ) : (
                               <>
                                 {m.replyTo && (
-                                  <div className="border-l-2 border-brand-400 bg-black/5 rounded px-2 py-1 mb-1.5 text-xs">
+                                  <div onClick={() => jumpToMessage(m.replyTo.id)} className="border-l-2 border-brand-400 bg-black/5 rounded px-2 py-1 mb-1.5 text-xs cursor-pointer hover:bg-black/10">
                                     <p className="font-semibold text-brand-700">{m.replyTo.sender?.name}</p>
                                     <p className="text-gray-600 truncate">
                                       {m.replyTo.isDeleted ? 'Message deleted' : (m.replyTo.content || m.replyTo.attachmentName || 'Attachment')}
