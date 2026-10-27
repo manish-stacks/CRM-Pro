@@ -168,7 +168,7 @@ export default function AttendancePage() {
     setAttModal(r.id)
   }
   const saveAtt = async () => {
-    if (!attForm.employeeId || !attForm.date) { toast.error('Employee + date zaroori'); return }
+    if (!attForm.employeeId || !attForm.date) { toast.error('Employee and date are required'); return }
     setAttSaving(true)
     try {
       const iso = (time: string) => time ? new Date(`${attForm.date}T${time}`).toISOString() : null
@@ -476,8 +476,11 @@ export default function AttendancePage() {
                         <tr key={e.employeeId}>
                           <td>
                             <div className="flex items-center gap-2">
-                              <div className="w-7 h-7 rounded-full bg-brand-100 flex items-center justify-center text-[10px] font-bold text-brand-700 flex-shrink-0">
-                                {e.avatar ? <img src={e.avatar} className="w-full h-full rounded-full object-cover" /> : getInitials(e.name)}
+                              <div className="w-7 h-7 rounded-full bg-brand-100 flex items-center justify-center text-[10px] font-bold text-brand-700 flex-shrink-0 overflow-hidden">
+                                {e.avatar
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  ? <img src={e.avatar} alt="" className="w-full h-full object-cover" />
+                                  : getInitials(e.name)}
                               </div>
                               <div>
                                 <p className="text-sm font-medium text-gray-900">{e.name}</p>
@@ -663,8 +666,12 @@ export default function AttendancePage() {
                   {canSeeAll && (
                     <td>
                       <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-full bg-brand-600 flex items-center justify-center text-white text-xs font-bold">
-                          {getInitials(r.employee?.user?.name || '?')}
+                        <div className="w-8 h-8 rounded-full bg-brand-600 flex items-center justify-center text-white text-xs font-bold overflow-hidden shrink-0">
+                          {r.employee?.user?.avatar
+                            // eslint-disable-next-line @next/next/no-img-element
+                            ? <img src={r.employee.user.avatar} alt="" className="w-full h-full object-cover"
+                                onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} />
+                            : getInitials(r.employee?.user?.name || '?')}
                         </div>
                         <div>
                           <p className="font-medium text-gray-900 text-sm">{r.employee?.user?.name}</p>

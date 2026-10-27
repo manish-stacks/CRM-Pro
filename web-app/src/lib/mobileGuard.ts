@@ -36,6 +36,8 @@ export const MOBILE_ALLOWED_PREFIXES = [
   '/api/card',
   '/api/id-verify',
   '/api/geocode',
+  '/kiosk',
+  '/api/kiosk',
   '/_next',
 ]
 

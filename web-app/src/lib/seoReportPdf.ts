@@ -42,6 +42,8 @@ export interface SeoReportData {
   websiteKeywords?: KeywordRow[]
   // Footer
   companyLogo?: string | null
+  // Section toggles. A missing key means ON, so old reports render unchanged.
+  show?: Record<string, boolean>
 }
 
 export interface SeoReportMeta {
@@ -135,12 +137,24 @@ export function generateSeoReportPdf(meta: SeoReportMeta, data: SeoReportData): 
 
   const newPage = () => { doc.addPage(); chrome(); y = TOP }
   const need = (h: number) => { if (y + h > BOTTOM) newPage() }
+  const on = (k: string) => data.show?.[k] !== false
+
+  // Shared autoTable options: tables that spill onto a new page keep the
+  // header bar, the top margin and never split a row across pages.
+  const tableBase = () => {
+    const startPage = doc.getNumberOfPages()
+    return {
+      margin: { left: M, right: M, top: TOP, bottom: H - BOTTOM },
+      rowPageBreak: 'avoid' as const,
+      didDrawPage: (d: any) => { if (d.pageNumber !== startPage && d.pageNumber > startPage) chrome() },
+    }
+  }
 
   chrome()
 
   // ---- section bar (navy) ----
-  const sectionBar = (label: string) => {
-    need(14)
+  const sectionBar = (label: string, keep = 40) => {
+    need(keep)
     doc.setFillColor(...NAVY)
     doc.rect(M, y, W - M * 2, 9, 'F')
     doc.setTextColor(255, 255, 255).setFont('helvetica', 'bold').setFontSize(11)
@@ -149,16 +163,16 @@ export function generateSeoReportPdf(meta: SeoReportMeta, data: SeoReportData): 
     y += 14
   }
 
-  const bigHeading = (label: string, color: [number, number, number] = NAVY) => {
-    need(16)
+  const bigHeading = (label: string, color: [number, number, number] = NAVY, keep = 56) => {
+    need(keep)
     doc.setTextColor(...color).setFont('helvetica', 'bold').setFontSize(18)
     doc.text(label, W / 2, y + 6, { align: 'center' })
     doc.setTextColor(0, 0, 0)
     y += 14
   }
 
-  const subHeading = (label: string, color: [number, number, number] = RED) => {
-    need(16)
+  const subHeading = (label: string, color: [number, number, number] = RED, keep = 40) => {
+    need(keep)
     doc.setTextColor(...color).setFont('helvetica', 'bold').setFontSize(13)
     doc.text(label, M, y + 4.5)
     doc.setTextColor(0, 0, 0)
@@ -176,14 +190,23 @@ export function generateSeoReportPdf(meta: SeoReportMeta, data: SeoReportData): 
     y += h + 12
   }
 
+  // Heading + screenshot always land on the same page.
+  const imageSection = (label: string, dataUrl?: string | null, maxH = 100) => {
+    if (!dataUrl) return
+    const { h } = imgSize(doc, dataUrl, W - M * 2 - 10, maxH)
+    need(h + 12 + 14)
+    subHeading(label, RED, 0)
+    image(dataUrl, maxH)
+  }
+
   // ---- link table (Sr. No | Link | Status) ----
   const linkTable = (rows: LinkRow[] | undefined, header = 'Backlinks') => {
     const list = (rows || []).filter(r => r?.url?.trim())
     if (!list.length) return
     need(24)
     autoTable(doc, {
+      ...tableBase(),
       startY: y,
-      margin: { left: M, right: M },
       head: [['Sr. No', header, 'Status']],
       body: list.map((r, i) => [String(i + 1), r.url, r.status || 'Live']),
       theme: 'grid',
@@ -194,7 +217,6 @@ export function generateSeoReportPdf(meta: SeoReportMeta, data: SeoReportData): 
         0: { cellWidth: 16, halign: 'center', textColor: [30, 30, 30] },
         2: { cellWidth: 20, halign: 'center', fontStyle: 'bold', textColor: [30, 30, 30] },
       },
-      didDrawPage: () => { },
     })
     y = (doc as any).lastAutoTable.finalY + 10
   }
@@ -204,8 +226,8 @@ export function generateSeoReportPdf(meta: SeoReportMeta, data: SeoReportData): 
     if (!list.length) return
     need(24)
     autoTable(doc, {
+      ...tableBase(),
       startY: y,
-      margin: { left: M, right: M },
       head: [['Sr. No', 'Keywords', 'Position']],
       body: list.map((r, i) => [String(i + 1), r.keyword, String(r.position ?? '')]),
       theme: 'grid',
@@ -222,11 +244,11 @@ export function generateSeoReportPdf(meta: SeoReportMeta, data: SeoReportData): 
 
   // ================================================== COVER
   if (data.clientLogo) {
-    const { w, h } = imgSize(doc, data.clientLogo, 90, 50)
+    const { w, h } = imgSize(doc, data.clientLogo, 80, 34)
     doc.setDrawColor(220).setLineWidth(0.3)
     doc.rect(M + 12, y, W - (M + 12) * 2, h + 10)
     try { doc.addImage(data.clientLogo, (W - w) / 2, y + 5, w, h) } catch { }
-    y += h + 18
+    y += h + 14
   }
 
   doc.setTextColor(...NAVY).setFont('helvetica', 'bold').setFontSize(19)
@@ -234,7 +256,7 @@ export function generateSeoReportPdf(meta: SeoReportMeta, data: SeoReportData): 
     `${meta.businessName} SEO + GMB Monthly Report ${meta.reportMonth}`, W - M * 2 - 20
   )
   doc.text(titleLines, W / 2, y + 6, { align: 'center' })
-  y += titleLines.length * 9 + 8
+  y += titleLines.length * 9 + 4
   doc.setTextColor(0, 0, 0)
 
   autoTable(doc, {
@@ -250,70 +272,79 @@ export function generateSeoReportPdf(meta: SeoReportMeta, data: SeoReportData): 
     styles: { fontSize: 10, cellPadding: 3 },
     columnStyles: { 0: { cellWidth: 55, fontStyle: 'bold' } },
   })
-  y = (doc as any).lastAutoTable.finalY + 14
+  y = (doc as any).lastAutoTable.finalY + 10
 
   // ================================================== GMB
-  bigHeading('Google My Business Report', [0, 0, 0])
-  image(data.gmbScreenshot, 110)
+  if (on('gmb')) {
+    // Heading + profile screenshot are fitted into the space left on the
+    // cover page, so they never split across pages. If too little room is
+    // left, both move together to the next page.
+    const MIN_SHOT = 70
+    if (BOTTOM - y - 22 < MIN_SHOT) newPage()
+    bigHeading('Google My Business Report', [0, 0, 0], 0)
+    if (data.gmbScreenshot) {
+      const room = BOTTOM - y - 8
+      image(data.gmbScreenshot, Math.max(MIN_SHOT, Math.min(110, room - 6)))
+    }
 
-  // ---- Local Citation — Google Profile ----
-  sectionBar('Local Citation - Google Profile')
+    // ---- Local Citation — Google Profile ----
+    sectionBar('Local Citation - Google Profile', 70)
 
-  // ---- Performance analytics strip ----
-  const stats = [
-    { label: 'GMB Overview', value: data.gmbOverview },
-    { label: 'Calls', value: data.gmbCalls },
-    { label: 'Chats', value: data.gmbChats },
-    { label: 'Directions', value: data.gmbDirections },
-    { label: 'Website Clicks', value: data.gmbWebsiteClicks },
-  ].filter(s => s.value !== undefined && s.value !== '' && s.value !== null)
+    const stats = [
+      { label: 'GMB Overview', value: data.gmbOverview },
+      { label: 'Calls', value: data.gmbCalls },
+      { label: 'Chats', value: data.gmbChats },
+      { label: 'Directions', value: data.gmbDirections },
+      { label: 'Website Clicks', value: data.gmbWebsiteClicks },
+    ].filter(s => s.value !== undefined && s.value !== '' && s.value !== null)
 
-  if (stats.length) {
-    subHeading('Performance Analytics', NAVY)
-    need(26)
-    const gap = 3
-    const boxW = (W - M * 2 - gap * (stats.length - 1)) / stats.length
-    stats.forEach((s, i) => {
-      const x = M + i * (boxW + gap)
-      doc.setFillColor(...GREY)
-      doc.setDrawColor(220).setLineWidth(0.3)
-      doc.roundedRect(x, y, boxW, 20, 1.5, 1.5, 'FD')
-      doc.setTextColor(...NAVY).setFont('helvetica', 'bold').setFontSize(15)
-      doc.text(String(s.value), x + boxW / 2, y + 9, { align: 'center' })
-      doc.setTextColor(90).setFont('helvetica', 'normal').setFontSize(6.5)
-      doc.text(doc.splitTextToSize(s.label, boxW - 2), x + boxW / 2, y + 15, { align: 'center' })
-    })
-    doc.setTextColor(0, 0, 0)
-    y += 26
-    if (data.gmbNote?.trim()) {
-      doc.setFont('helvetica', 'italic').setFontSize(8).setTextColor(90)
-      const noteLines = doc.splitTextToSize(`Note: ${data.gmbNote}`, W - M * 2)
-      need(noteLines.length * 4 + 8)
-      doc.text(noteLines, M, y + 3)
-      doc.setTextColor(0, 0, 0).setFont('helvetica', 'normal')
-      y += noteLines.length * 4 + 9
+    if (stats.length) {
+      subHeading('Performance Analytics', NAVY, 40)
+      need(26)
+      const gap = 3
+      const boxW = (W - M * 2 - gap * (stats.length - 1)) / stats.length
+      stats.forEach((s, i) => {
+        const x = M + i * (boxW + gap)
+        doc.setFillColor(...GREY)
+        doc.setDrawColor(220).setLineWidth(0.3)
+        doc.roundedRect(x, y, boxW, 20, 1.5, 1.5, 'FD')
+        doc.setTextColor(...NAVY).setFont('helvetica', 'bold').setFontSize(15)
+        doc.text(String(s.value), x + boxW / 2, y + 9, { align: 'center' })
+        doc.setTextColor(90).setFont('helvetica', 'normal').setFontSize(6.5)
+        doc.text(doc.splitTextToSize(s.label, boxW - 2), x + boxW / 2, y + 15, { align: 'center' })
+      })
+      doc.setTextColor(0, 0, 0)
+      y += 26
+      if (data.gmbNote?.trim()) {
+        doc.setFont('helvetica', 'italic').setFontSize(8).setTextColor(90)
+        const noteLines = doc.splitTextToSize(`Note: ${data.gmbNote}`, W - M * 2)
+        need(noteLines.length * 4 + 8)
+        doc.text(noteLines, M, y + 3)
+        doc.setTextColor(0, 0, 0).setFont('helvetica', 'normal')
+        y += noteLines.length * 4 + 9
+      }
     }
   }
 
   const posts = (data.gmbPosts || []).filter(p => p?.url?.trim())
-  if (posts.length) {
+  if (on('gmbPosts') && posts.length) {
     subHeading(`GMB Posting Activity — ${posts.length} live posts`, NAVY)
     linkTable(posts, 'Posting')
   }
 
-  if (data.localCitations?.some(r => r.url?.trim())) {
+  if (on('localCitations') && data.localCitations?.some(r => r.url?.trim())) {
     subHeading('Local Citation Backlinks', NAVY)
     linkTable(data.localCitations)
   }
 
-  if (data.gmbKeywords?.length) {
+  if (on('gmbKeywords') && data.gmbKeywords?.some(k => k.keyword?.trim())) {
     sectionBar('Google Profile - Keywords Ranking')
     keywordTable(data.gmbKeywords)
   }
 
   // ================================================== WEBSITE SEO
   const work = (data.technicalWork || []).filter(w => w?.trim())
-  if (work.length) {
+  if (on('technicalWork') && work.length) {
     sectionBar('Website SEO - Technical & On-Page Work')
     need(work.length * 6 + 6)
     doc.setFont('helvetica', 'normal').setFontSize(9.5)
@@ -327,17 +358,13 @@ export function generateSeoReportPdf(meta: SeoReportMeta, data: SeoReportData): 
     y += 6
   }
 
-  if (data.gscScreenshot) {
-    subHeading(`Google Search Console — ${meta.reportMonth}`)
-    image(data.gscScreenshot, 100)
-  }
-  if (data.gaScreenshot) {
-    subHeading(`Google Analytics — ${meta.reportMonth}`)
-    image(data.gaScreenshot, 100)
+  if (on('analytics')) {
+    imageSection(`Google Search Console — ${meta.reportMonth}`, data.gscScreenshot)
+    imageSection(`Google Analytics — ${meta.reportMonth}`, data.gaScreenshot)
   }
 
   // ================================================== ON-PAGE
-  if (data.pages?.some(p => p.url?.trim()) || data.blogs?.some(b => b.url?.trim())) {
+  if (on('onPage') && (data.pages?.some(p => p.url?.trim()) || data.blogs?.some(b => b.url?.trim()))) {
     bigHeading('On-Page SEO Work', [0, 0, 0])
     if (data.pages?.some(p => p.url?.trim())) {
       sectionBar('Website Pages')
@@ -351,15 +378,17 @@ export function generateSeoReportPdf(meta: SeoReportMeta, data: SeoReportData): 
 
   // ================================================== OFF-PAGE
   const offSections: Array<[string, LinkRow[] | undefined]> = [
-    ['Profile Creation', data.profileCreation],
-    ['Forum Submission', data.forumSubmission],
-    ['Classified Ads Submissions', data.classifiedAds],
-    ['Business Listings', data.businessListings],
+    ['Profile Creation', on('profileCreation') ? data.profileCreation : []],
+    ['Forum Submission', on('forumSubmission') ? data.forumSubmission : []],
+    ['Classified Ads Submissions', on('classifiedAds') ? data.classifiedAds : []],
+    ['Business Listings', on('businessListings') ? data.businessListings : []],
   ]
+  const web20Rows = on('web20') ? data.web20 : []
+  const articleRows = on('articles') ? data.articles : []
   const hasOff =
     offSections.some(([, rows]) => rows?.some(r => r.url?.trim())) ||
-    data.web20?.some(r => r.url?.trim()) ||
-    data.articles?.some(r => r.url?.trim())
+    web20Rows?.some(r => r.url?.trim()) ||
+    articleRows?.some(r => r.url?.trim())
 
   if (hasOff) {
     bigHeading('Off-Page SEO — Backlink Creations', [0, 0, 0])
@@ -369,13 +398,13 @@ export function generateSeoReportPdf(meta: SeoReportMeta, data: SeoReportData): 
       linkTable(rows)
     })
 
-    const web = (data.web20 || []).filter(r => r?.url?.trim())
+    const web = (web20Rows || []).filter(r => r?.url?.trim())
     if (web.length) {
       sectionBar('Web 2.0 Submissions')
       need(24)
       autoTable(doc, {
+        ...tableBase(),
         startY: y,
-        margin: { left: M, right: M },
         head: [['Website', 'Backlinks', 'Status']],
         body: web.map(r => [r.website || '', r.url, r.status || 'Live']),
         theme: 'grid',
@@ -390,15 +419,15 @@ export function generateSeoReportPdf(meta: SeoReportMeta, data: SeoReportData): 
       y = (doc as any).lastAutoTable.finalY + 10
     }
 
-    if (data.articles?.some(r => r.url?.trim())) {
+    if (articleRows?.some(r => r.url?.trim())) {
       sectionBar('Article Submission')
-      linkTable(data.articles)
+      linkTable(articleRows, 'Backlinks')
     }
   }
 
   // ================================================== WEBSITE KEYWORDS
-  if (data.websiteKeywords?.some(k => k.keyword?.trim())) {
-    sectionBar('Website – Keywords Ranking')
+  if (on('websiteKeywords') && data.websiteKeywords?.some(k => k.keyword?.trim())) {
+    sectionBar('Website - Keywords Ranking')
     keywordTable(data.websiteKeywords)
   }
 

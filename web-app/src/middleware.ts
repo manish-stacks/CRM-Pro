@@ -26,7 +26,9 @@ const publicPaths = [
   '/api/client-portal/forgot-password', // send-otp + reset (no auth — user is locked out)
   '/api/mobile/auth/login',
   '/api/mobile/auth/forgot-password',   // staff send-otp + reset (no auth)
-  '/api/mobile/client-login'
+  '/api/mobile/client-login',
+  '/kiosk',                      // Face-scan attendance kiosk page (device key protected)
+  '/api/kiosk',                  // Kiosk punch API (x-kiosk-key header + face match)
 ]
 
 // Client-portal protected paths (require client-token, NOT auth-token)

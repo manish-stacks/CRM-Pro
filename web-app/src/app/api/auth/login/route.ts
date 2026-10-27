@@ -19,6 +19,11 @@ import { isMobileBrowserUA, MOBILE_BLOCK_MESSAGE } from '@/lib/mobileGuard'
 
 const ADMIN_ROLES = ['ADMIN', 'SUPER_ADMIN']
 
+// admin can log in without access to a real inbox. Works only when
+// DEMO_ACCOUNTS_ENABLED=true AND the email ends with @demo.local.
+const isDemoAccount = (email: string) =>
+  process.env.DEMO_ACCOUNTS_ENABLED === 'true' && email.toLowerCase().endsWith('@demo.local')
+
 export async function POST(req: NextRequest) {
   try {
     // Desktop-only: phones / tablets / iOS browsers must use the mobile app.
@@ -62,7 +67,7 @@ export async function POST(req: NextRequest) {
 
     // Password is correct. Admin roles need a second factor before a
     // session is issued — email an OTP and stop here.
-    if (ADMIN_ROLES.includes(user.role)) {
+    if (ADMIN_ROLES.includes(user.role) && !isDemoAccount(user.email)) {
       if (!user.email) {
         return NextResponse.json(
           { error: 'No email on file to send the login code to. Contact a super admin.' },

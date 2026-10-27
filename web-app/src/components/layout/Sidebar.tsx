@@ -35,6 +35,7 @@ const NAV: NavItem[] = [
     label: 'HRM', icon: Users, children: [
       { label: 'Employees', href: '/employees', icon: UserCheck, permission: 'employees.view' },
       { label: 'Attendance', href: '/attendance', icon: Clock, permission: 'attendance.view' },
+      { label: 'Face Attendance', href: '/face-enroll', icon: UserCheck, permission: 'attendance.manage' },
       { label: 'Leaves', href: '/leaves', icon: Calendar, permission: 'leaves.view' },
       { label: 'Payroll', href: '/payroll', icon: DollarSign, permission: 'payroll.view' },
       { label: 'Letters', href: '/letters', icon: FileText, permission: 'letters.view' },

@@ -18,6 +18,11 @@ const DEFAULT_WORK = [
   'Content written and optimised for the website pages'
 ]
 
+const SECTION_KEYS = [
+  'gmb', 'analytics', 'localCitations', 'gmbKeywords', 'technicalWork', 'gmbPosts', 'onPage',
+  'profileCreation', 'forumSubmission', 'classifiedAds', 'businessListings', 'web20', 'articles', 'websiteKeywords',
+]
+
 const EMPTY: SeoReportData = {
   clientLogo: null,
   gmbScreenshot: null,
@@ -31,6 +36,7 @@ const EMPTY: SeoReportData = {
   web20: [], articles: [],
   websiteKeywords: [],
   companyLogo: null,
+  show: {},
 }
 
 // ------------------------------------------------------------------ helpers
@@ -43,17 +49,38 @@ async function fileToDataUrl(file: File): Promise<string> {
   })
 }
 
-function Card({ title, desc, children, right }: any) {
+function Switch({ checked, onChange, disabled }: { checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
+    <button type="button" role="switch" aria-checked={checked} disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors
+        ${checked ? 'bg-brand-600' : 'bg-gray-300'} ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
+      <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-4' : 'translate-x-0.5'}`} />
+    </button>
+  )
+}
+
+// `toggle` controls whether this card is included in the PDF. Default is ON.
+function Card({ title, desc, children, right, toggle }: any) {
+  const included = toggle ? toggle.on : true
+  return (
+    <div className={`bg-white rounded-xl border p-4 space-y-3 transition-colors ${included ? 'border-gray-200' : 'border-dashed border-gray-300 bg-gray-50'}`}>
       <div className="flex items-start justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <h3 className="font-semibold text-gray-900 text-sm">{title}</h3>
           {desc && <p className="text-[11px] text-gray-500 mt-0.5">{desc}</p>}
         </div>
-        {right}
+        <div className="flex items-center gap-2 shrink-0">
+          {right}
+          {toggle && (
+            <label className="flex items-center gap-1.5 text-[11px] text-gray-500 select-none">
+              {included ? 'In PDF' : 'Hidden'}
+              <Switch checked={included} onChange={toggle.onChange} disabled={toggle.disabled} />
+            </label>
+          )}
+        </div>
       </div>
-      {children}
+      <div className={included ? '' : 'opacity-50'}>{children}</div>
     </div>
   )
 }
@@ -216,6 +243,15 @@ export default function SeoReportBuilderPage() {
 
   const set = <K extends keyof SeoReportData>(k: K, v: SeoReportData[K]) => setD(p => ({ ...p, [k]: v }))
 
+  // Section toggles live in d.show; a missing key means ON.
+  const isOn = (k: string) => d.show?.[k] !== false
+  const tg = (k: string) => ({
+    on: isOn(k), disabled: locked,
+    onChange: (v: boolean) => setD(p => ({ ...p, show: { ...(p.show || {}), [k]: v } })),
+  })
+  const setAll = (v: boolean) => setD(p => ({ ...p, show: Object.fromEntries(SECTION_KEYS.map(k => [k, v])) }))
+  const onCount = SECTION_KEYS.filter(isOn).length
+
   const load = useCallback(async () => {
     setLoading(true)
     try {
@@ -302,7 +338,7 @@ export default function SeoReportBuilderPage() {
   return (
     <div className="space-y-4 pb-24">
       {/* header */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 sticky top-0 z-20 bg-gray-50/95 backdrop-blur py-2 -mt-2">
         <div className="flex items-start gap-3">
           <button onClick={() => router.back()} className="p-2 rounded-lg hover:bg-gray-100 mt-0.5">
             <ArrowLeft size={17} />
@@ -336,9 +372,21 @@ export default function SeoReportBuilderPage() {
         </div>
       )}
 
-      <div className="grid lg:grid-cols-2 gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-2 bg-white border border-gray-200 rounded-xl px-4 py-2.5">
+        <p className="text-xs text-gray-600">
+          <b className="text-gray-900">{onCount}</b> of {SECTION_KEYS.length} sections will appear in the PDF. Hidden sections are skipped completely.
+        </p>
+        {!locked && (
+          <div className="flex gap-3 text-[11px]">
+            <button type="button" onClick={() => setAll(true)} className="text-brand-600 hover:underline">Turn all on</button>
+            <button type="button" onClick={() => setAll(false)} className="text-gray-500 hover:underline">Turn all off</button>
+          </div>
+        )}
+      </div>
+
+      <div className="grid lg:grid-cols-2 gap-4 items-start">
         {/* ---------- cover ---------- */}
-        {/* <Card title="Cover" desc="Client logo — uploaded once, reused in every month's report">
+        <Card title="Client Logo" desc={d.clientLogo ? 'Shown on the cover page. Replace it any time.' : 'No logo on file. Upload one once and it is reused in every report.'}>
           <ImageBox
             label="Client Logo"
             hint="Saved on the client profile. Uploading again replaces the old file."
@@ -346,13 +394,10 @@ export default function SeoReportBuilderPage() {
             onChange={v => saveClientAsset('clientLogo', v)}
             disabled={locked}
           />
-          <p className="text-[11px] text-gray-500">
-            Agency logo and name come from Settings → Company, so there is nothing to upload here.
-          </p>
-        </Card> */}
+        </Card>
 
         {/* ---------- GMB ---------- */}
-        <Card title="Google My Business" desc="Profile screenshot + performance numbers">
+        <Card title="Google My Business" desc="Profile screenshot + performance numbers" toggle={tg('gmb')}>
           <ImageBox
             label="GMB Profile Screenshot"
             hint="One-time upload, saved on the client profile and reused each month."
@@ -371,22 +416,22 @@ export default function SeoReportBuilderPage() {
             placeholder="The call performance data reflects 1-Aug to 28-Aug." disabled={locked} />
         </Card>
 
-        <Card title="Analytics Screenshots" desc="Search Console + Google Analytics for the period">
+        <Card title="Analytics Screenshots" desc="Search Console + Google Analytics for the period" toggle={tg('analytics')}>
           <ImageBox label={`Google Search Console — ${report.reportMonth}`} value={d.gscScreenshot} onChange={v => set('gscScreenshot', v)} disabled={locked} />
           <ImageBox label={`Google Analytics — ${report.reportMonth}`} value={d.gaScreenshot} onChange={v => set('gaScreenshot', v)} disabled={locked} />
         </Card>
 
 
-        <Card title="Local Citation — Google Profile" desc="Directory / citation backlinks for the GMB profile">
+        <Card title="Local Citation — Google Profile" desc="Directory / citation backlinks for the GMB profile" toggle={tg('localCitations')}>
           <LinkRows label="Local Citation Backlinks" rows={d.localCitations || []} onChange={v => set('localCitations', v)} disabled={locked} />
         </Card>
 
-        <Card title="Google Profile — Keywords Ranking">
+        <Card title="Google Profile — Keywords Ranking" toggle={tg('gmbKeywords')}>
           <KeywordRows label="GMB keywords" rows={d.gmbKeywords || []} onChange={v => set('gmbKeywords', v)} disabled={locked} />
         </Card>
 
         {/* ---------- website SEO ---------- */}
-        <Card title="Website SEO — Technical & On-Page Work">
+        <Card title="Website SEO — Technical & On-Page Work" toggle={tg('technicalWork')}>
           <div className="space-y-2">
             {(d.technicalWork || []).map((w, i) => (
               <div key={i} className="flex gap-1.5 items-center">
@@ -414,35 +459,35 @@ export default function SeoReportBuilderPage() {
         </Card>
 
 
-        <Card title="GMB Posting Activity">
+        <Card title="GMB Posting Activity" toggle={tg('gmbPosts')}>
           <LinkRows label="GMB Post links" rows={d.gmbPosts || []} onChange={v => set('gmbPosts', v)} disabled={locked} placeholder="https://share.google/..." />
         </Card>
 
         {/* ---------- on-page ---------- */}
-        <Card title="On-Page SEO Work">
+        <Card title="On-Page SEO Work" toggle={tg('onPage')}>
           <LinkRows label="Website Pages" rows={d.pages || []} onChange={v => set('pages', v)} disabled={locked} />
           <div className="pt-2 border-t border-gray-100" />
           <LinkRows label="Website Blogs" rows={d.blogs || []} onChange={v => set('blogs', v)} disabled={locked} />
         </Card>
 
         {/* ---------- off-page ---------- */}
-        <Card title="Off-Page — Profile Creation">
+        <Card title="Off-Page — Profile Creation" toggle={tg('profileCreation')}>
           <LinkRows label="Profile Creation" rows={d.profileCreation || []} onChange={v => set('profileCreation', v)} disabled={locked} />
         </Card>
 
-        <Card title="Off-Page — Forum Submission">
+        <Card title="Off-Page — Forum Submission" toggle={tg('forumSubmission')}>
           <LinkRows label="Forum Submission" rows={d.forumSubmission || []} onChange={v => set('forumSubmission', v)} disabled={locked} />
         </Card>
 
-        <Card title="Off-Page — Classified Ads">
+        <Card title="Off-Page — Classified Ads" toggle={tg('classifiedAds')}>
           <LinkRows label="Classified Ads Submissions" rows={d.classifiedAds || []} onChange={v => set('classifiedAds', v)} disabled={locked} />
         </Card>
 
-        <Card title="Off-Page — Business Listings">
+        <Card title="Off-Page — Business Listings" toggle={tg('businessListings')}>
           <LinkRows label="Business Listings" rows={d.businessListings || []} onChange={v => set('businessListings', v)} disabled={locked} />
         </Card>
 
-        <Card title="Off-Page — Web 2.0 Submissions">
+        <Card title="Off-Page — Web 2.0 Submissions" toggle={tg('web20')}>
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-gray-700">Web 2.0 <span className="text-gray-400">({(d.web20 || []).length})</span></span>
@@ -479,11 +524,11 @@ export default function SeoReportBuilderPage() {
           </div>
         </Card>
 
-        <Card title="Off-Page — Article Submission">
+        <Card title="Off-Page — Article Submission" toggle={tg('articles')}>
           <LinkRows label="Article Submission" rows={d.articles || []} onChange={v => set('articles', v)} disabled={locked} />
         </Card>
 
-        <Card title="Website — Keywords Ranking">
+        <Card title="Website — Keywords Ranking" toggle={tg('websiteKeywords')}>
           <KeywordRows label="Website keywords" rows={d.websiteKeywords || []} onChange={v => set('websiteKeywords', v)} disabled={locked} />
         </Card>
       </div>
