@@ -3,7 +3,7 @@
 // kiosk key once, and leave it running. People just look at the camera.
 import { useEffect, useRef, useState } from 'react'
 import { BRAND } from '@/lib/branding'
-import { loadFaceApi, readFace, startCamera, stopCamera } from '@/lib/faceClient'
+import { loadFaceApi, onFaceProgress, readFace, startCamera, stopCamera, FaceStep } from '@/lib/faceClient'
 import { CheckCircle2, LogOut, XCircle, Clock, ScanFace, ShieldCheck, Wifi, WifiOff, Sparkles } from 'lucide-react'
 
 type Result = {
@@ -31,6 +31,9 @@ export default function KioskPage() {
   const [feed, setFeed] = useState<Feed[]>([])
   const [online, setOnline] = useState(true)
   const [now, setNow] = useState(new Date())
+  const [engine, setEngine] = useState<FaceStep>({ msg: 'Starting…', pct: 0 })
+
+  useEffect(() => onFaceProgress(setEngine), [])
 
   useEffect(() => {
     const k = localStorage.getItem('kioskKey')
@@ -266,7 +269,10 @@ export default function KioskPage() {
             {phase === 'init' && (
               <div className="absolute inset-0 bg-slate-950 flex flex-col items-center justify-center gap-3 text-slate-300 text-sm">
                 <div className="w-10 h-10 rounded-full border-2 border-white/20 border-t-brand-500 animate-spin" />
-                Starting camera and face engine…
+                <span>{engine.msg}</span>
+                <div className="w-48 h-1.5 rounded-full bg-white/15 overflow-hidden">
+                  <div className="h-full bg-brand-500 transition-all duration-300" style={{ width: `${engine.pct}%` }} />
+                </div>
               </div>
             )}
             {phase === 'error' && (

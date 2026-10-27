@@ -5,7 +5,7 @@ import api from '@/lib/axios'
 import toast from 'react-hot-toast'
 import { Button, Spinner } from '@/components/ui'
 import { ScanFace, Trash2, CheckCircle2, Search, Users, UserCheck, UserX, ChevronLeft, ChevronRight, X } from 'lucide-react'
-import { loadFaceApi, readFace, startCamera, stopCamera } from '@/lib/faceClient'
+import { loadFaceApi, onFaceProgress, readFace, startCamera, stopCamera, FaceStep } from '@/lib/faceClient'
 
 const NEEDED = 5
 const PAGE_SIZE = 20
@@ -24,6 +24,7 @@ export default function FaceEnrollPage() {
   const [camReady, setCamReady] = useState(false)
   const [samples, setSamples] = useState<number[][]>([])
   const [busy, setBusy] = useState(false)
+  const [engine, setEngine] = useState<FaceStep>({ msg: 'Waiting to start', pct: 0 })
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -48,19 +49,30 @@ export default function FaceEnrollPage() {
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  // Start loading the face engine as soon as the page opens, so it is ready (and
+  // already warmed up) by the time someone clicks Register.
+  useEffect(() => {
+    const off = onFaceProgress(setEngine)
+    loadFaceApi().catch(() => { })
+    return off
+  }, [])
   useEffect(() => () => stopCamera(streamRef.current), [])
   useEffect(() => { setPage(1) }, [search, statusFilter, deptFilter])
 
   const open = async (emp: any) => {
     setTarget(emp); setSamples([]); setCamReady(false)
-    try {
-      await loadFaceApi()
-      setTimeout(async () => {
+    loadFaceApi().catch((e: any) => toast.error(e?.message || 'Face engine failed to load'))
+    setTimeout(async () => {
+      try {
         if (!videoRef.current) return
         streamRef.current = await startCamera(videoRef.current)
         setCamReady(true)
-      }, 50)
-    } catch (e: any) { toast.error(e?.message || 'Camera error'); setTarget(null) }
+      } catch (e: any) {
+        toast.error(e?.name === 'NotAllowedError' ? 'Camera permission is blocked. Allow the camera and try again.' : (e?.message || 'Camera error'))
+        setTarget(null)
+      }
+    }, 50)
   }
 
   const close = () => { stopCamera(streamRef.current); streamRef.current = null; setTarget(null); setSamples([]); setCamReady(false) }
@@ -68,6 +80,7 @@ export default function FaceEnrollPage() {
   const capture = async () => {
     if (!videoRef.current) return
     setBusy(true)
+    await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)))   // let the loader paint first
     try {
       const f = await loadFaceApi()
       const r = await readFace(f, videoRef.current, 0.25)
@@ -235,6 +248,22 @@ export default function FaceEnrollPage() {
             <div className="relative aspect-[4/3] bg-black rounded-xl overflow-hidden">
               <video ref={videoRef} muted playsInline className="w-full h-full object-cover -scale-x-100" />
               {!camReady && <div className="absolute inset-0 flex items-center justify-center text-slate-300 text-sm">Starting camera…</div>}
+              {camReady && engine.pct < 100 && (
+                <div className="absolute inset-0 bg-slate-950/85 flex flex-col items-center justify-center gap-3 px-8 text-center">
+                  <div className="w-9 h-9 rounded-full border-2 border-white/20 border-t-brand-500 animate-spin" />
+                  <p className="text-white text-sm font-medium">{engine.msg}</p>
+                  <div className="w-full max-w-[220px] h-1.5 rounded-full bg-white/15 overflow-hidden">
+                    <div className="h-full bg-brand-500 transition-all duration-300" style={{ width: `${engine.pct}%` }} />
+                  </div>
+                  <p className="text-slate-400 text-[11px]">First time only. This can take a few seconds.</p>
+                </div>
+              )}
+              {busy && (
+                <div className="absolute inset-0 bg-black/55 flex flex-col items-center justify-center gap-2">
+                  <div className="w-9 h-9 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                  <p className="text-white text-sm">Scanning face…</p>
+                </div>
+              )}
             </div>
             <div className="flex gap-1">
               {Array.from({ length: NEEDED }).map((_, i) => (
@@ -243,7 +272,7 @@ export default function FaceEnrollPage() {
             </div>
             <div className="flex justify-end gap-2">
               <Button variant="secondary" onClick={close}>Cancel</Button>
-              <Button onClick={capture} loading={busy} disabled={!camReady}><ScanFace size={14} /> Capture ({samples.length}/{NEEDED})</Button>
+              <Button onClick={capture} loading={busy} disabled={!camReady || engine.pct < 100}><ScanFace size={14} /> {engine.pct < 100 ? 'Preparing…' : busy ? 'Scanning…' : `Capture (${samples.length}/${NEEDED})`}</Button>
             </div>
           </div>
         </div>
