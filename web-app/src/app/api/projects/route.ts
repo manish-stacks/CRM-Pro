@@ -6,6 +6,7 @@ import { getRequestSession, hasMinRole } from '@/lib/auth'
 import { successResponse, successStatusResponse, errorResponse, unauthorizedResponse, getPaginationParams } from '@/lib/api'
 import { logFromRequest } from '@/lib/audit'
 import { Notifications } from '@/lib/notify'
+import { projectPerms } from '@/lib/clientAccess'
 
 export async function GET(req: NextRequest) {
   const session = await getRequestSession(req)
@@ -85,16 +86,11 @@ export async function POST(req: NextRequest) {
   if (!clientServiceId) return errorResponse('clientServiceId required')
   if (!managerId && memberIds.length === 0) return errorResponse('Either managerId or memberIds required')
 
-  // Permission: admins/managers can assign anything. A project HEAD (any app-role) can
-  // add members to the service they head — but NOT change the head (managerId).
-  if (!hasMinRole(session.role, 'MANAGER')) {
-    const isHead = await prisma.projectAssignment.findFirst({
-      where: { clientServiceId, managerId: session.userId, isActive: true },
-      select: { id: true },
-    })
-    if (!isHead) return errorResponse('Forbidden', 403)
-    if (managerId) return errorResponse('Only an admin can change the project head', 403)
-  }
+  // Permission: admin, or whoever added/was assigned the client, can set head + members.
+  // A project HEAD can add members only.
+  const perms = await projectPerms(session, clientServiceId)
+  if (!perms.members) return errorResponse('Forbidden', 403)
+  if (managerId && !perms.full) return errorResponse('Only the admin or the client owner can set the project head', 403)
 
   const svc = await prisma.clientService.findUnique({
     where: { id: clientServiceId },

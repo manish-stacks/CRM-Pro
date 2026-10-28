@@ -7,10 +7,11 @@ import { requireAuth, hasMinRole } from '@/lib/auth'
 import { successResponse, notFoundResponse, errorResponse } from '@/lib/api'
 import { logFromRequest } from '@/lib/audit'
 import { Notifications } from '@/lib/notify'
+import { projectPerms } from '@/lib/clientAccess'
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const auth = await requireAuth(req, 'MANAGER')
+  const auth = await requireAuth(req)
   if (auth instanceof Response) return auth
   const session = (auth as any).session
 
@@ -29,10 +30,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const { managerId, memberId, role, isActive } = await req.json()
 
-  // Only ADMIN+ may swap the project head. A MANAGER can swap members.
+  // Admin or client owner may swap the head; the project head can swap members.
+  const perms = await projectPerms(session, a.clientServiceId)
+  if (!perms.members) return errorResponse('Forbidden', 403)
   const isHeadRow = !!a.managerId
-  if (isHeadRow && managerId !== undefined && !hasMinRole(session.role, 'ADMIN')) {
-    return errorResponse('Only an admin can change the project head', 403)
+  if (isHeadRow && managerId !== undefined && !perms.full) {
+    return errorResponse('Only the admin or the client owner can change the project head', 403)
   }
 
   const data: any = {}
@@ -113,12 +116,14 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const auth = await requireAuth(req, 'MANAGER')
+  const auth = await requireAuth(req)
   if (auth instanceof Response) return auth
   const session = (auth as any).session
 
   const a = await prisma.projectAssignment.findUnique({ where: { id } })
   if (!a) return notFoundResponse('Assignment')
+  const perms = await projectPerms(session, a.clientServiceId)
+  if (a.managerId ? !perms.full : !perms.members) return errorResponse('Forbidden', 403)
 
   const { searchParams } = new URL(req.url)
   const hard = searchParams.get('hard') === 'true'

@@ -5,6 +5,7 @@
 // on their own list pages (TELECALLER → own, MARKETING_EXECUTIVE → own,
 // EMPLOYEE → none for clients/leads/invoices; team-scope for employees),
 // so this never leaks a record the user couldn't otherwise see.
+import { managerClientWhere } from '@/lib/clientAccess'
 import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/auth'
@@ -71,6 +72,7 @@ export async function GET(req: NextRequest) {
   }
   if (role === 'TELECALLER') clientsWhere.telecallerId = session.userId
   else if (role === 'MARKETING_EXECUTIVE') clientsWhere.marketingPersonId = session.userId
+  else if (role === 'MANAGER') clientsWhere.AND = [await managerClientWhere(session.userId)]
 
 
   // ---- Leads ----

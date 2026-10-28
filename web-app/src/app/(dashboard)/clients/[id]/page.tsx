@@ -14,8 +14,7 @@ import {
   Loader2, Package, FileText, CreditCard, MessageSquare, RefreshCw,
   Send, Copy, Check, Plus, KeyRound, RotateCcw, Users2, TrendingUp,
   DollarSign, AlertCircle, Calendar, Video, X,
-  Trash2, FileBarChart2, Eye, ImagePlus, PauseCircle, PlayCircle, Search
-} from 'lucide-react'
+  Trash2, FileBarChart2, Eye, ImagePlus, PauseCircle, PlayCircle, Search, Pencil } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { openSeoReportPdf } from '@/lib/seoReportPdf'
 import { lookupPincode } from '@/lib/pincode'
@@ -38,7 +37,9 @@ export default function ClientDetailPage() {
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<'services' | 'proposals' | 'invoices' | 'payments' | 'tickets' | 'seo-reports' | 'team'>('services')
 
-  const [modal, setModal] = useState<'none' | 'service' | 'renew' | 'portal' | 'edit'>('none')
+  const [modal, setModal] = useState<'none' | 'service' | 'renew' | 'portal' | 'edit' | 'editService'>('none')
+  const isAdmin = hasRole('SUPER_ADMIN', 'ADMIN')
+  const [esForm, setEsForm] = useState<any>({})
   const [saving, setSaving] = useState(false)
   const [showPwd, setShowPwd] = useState<string | null>(null)
   const [customPwd, setCustomPwd] = useState('')
@@ -202,6 +203,31 @@ export default function ClientDetailPage() {
       toast.success('Service deleted')
       fetchClient()
     } catch (e: any) { toast.error(e.response?.data?.error || 'Failed') }
+  }
+
+  const openEditService = (svc: any) => {
+    setTarget(svc)
+    setEsForm({
+      serviceName: svc.serviceName || '', description: svc.description || '',
+      departmentId: svc.departmentId || '', billingCycle: svc.billingCycle || 'ONE_TIME',
+      startDate: svc.startDate ? String(svc.startDate).split('T')[0] : '',
+      expiryDate: svc.expiryDate ? String(svc.expiryDate).split('T')[0] : '',
+      amount: String(svc.amount ?? 0), autoRenew: !!svc.autoRenew,
+    })
+    setModal('editService')
+  }
+
+  const saveService = async () => {
+    if (!isAdmin || !esForm.serviceName) { toast.error('Service name required'); return }
+    setSaving(true)
+    try {
+      await api.patch(`/clients/${id}/services/${target.id}`, esForm)
+      toast.success('Service updated')
+      setModal('none')
+      fetchClient()
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Failed')
+    } finally { setSaving(false) }
   }
 
   const openRenew = (svc: any) => {
@@ -443,6 +469,12 @@ export default function ClientDetailPage() {
                             <RotateCcw size={12} /> Renew
                           </button>
                         )}
+                        {isAdmin && (
+                          <button onClick={() => openEditService(s)}
+                            className="btn-secondary btn-sm" title="Edit this service">
+                            <Pencil size={12} /> Edit
+                          </button>
+                        )}
                         {canEdit && (s.status === 'ACTIVE' ? (
                           <button onClick={() => setServiceStatus(s, 'CANCELLED')}
                             className="btn-secondary btn-sm border-amber-300 text-amber-700" title="Stop this service">
@@ -547,7 +579,7 @@ export default function ClientDetailPage() {
 
           {/* TEAM */}
           {tab === 'team' && (
-            <TeamSection clientId={client.id} services={client.services} canEdit={canEdit} user={user} onChanged={fetchClient} />
+            <TeamSection clientId={client.id} services={client.services} canEdit={canEdit} isAdmin={isAdmin} isOwner={client.createdById === user?.id || client.assignedToId === user?.id} user={user} onChanged={fetchClient} />
           )}
 
           {/* TICKETS */}
@@ -697,6 +729,32 @@ export default function ClientDetailPage() {
             <div className="flex justify-end gap-2 pt-1">
               <Button variant="secondary" onClick={() => setModal('none')}>Cancel</Button>
               <Button onClick={addService} loading={saving}>Add Service</Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Edit Service Modal — admin only */}
+      {isAdmin && (
+        <Modal open={modal === 'editService'} onClose={() => setModal('none')} title={`Edit Service: ${target?.serviceName || ''}`}>
+          <div className="space-y-3">
+            <Input label="Service Name *" value={esForm.serviceName || ''} onChange={e => setEsForm((p: any) => ({ ...p, serviceName: e.target.value }))} />
+            <Select label="Department" value={esForm.departmentId || ''} onChange={e => setEsForm((p: any) => ({ ...p, departmentId: e.target.value }))}
+              options={[{ value: '', label: '— None —' }, ...departments.map((d: any) => ({ value: d.id, label: d.name }))]} />
+            <div className="grid grid-cols-2 gap-3">
+              <Input label="Start Date" type="date" value={esForm.startDate || ''} onChange={e => setEsForm((p: any) => ({ ...p, startDate: e.target.value }))} />
+              <Input label="Expiry Date" type="date" value={esForm.expiryDate || ''} onChange={e => setEsForm((p: any) => ({ ...p, expiryDate: e.target.value }))} />
+              <Input label="Amount" type="number" value={esForm.amount || ''} onChange={e => setEsForm((p: any) => ({ ...p, amount: e.target.value }))} />
+              <Select label="Billing Cycle" value={esForm.billingCycle || 'ONE_TIME'} onChange={e => setEsForm((p: any) => ({ ...p, billingCycle: e.target.value }))}
+                options={['ONE_TIME', 'MONTHLY', 'QUARTERLY', 'HALF_YEARLY', 'YEARLY'].map(v => ({ value: v, label: v.replace('_', ' ') }))} />
+            </div>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={!!esForm.autoRenew} onChange={e => setEsForm((p: any) => ({ ...p, autoRenew: e.target.checked }))} />
+              Auto Renew
+            </label>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="secondary" onClick={() => setModal('none')}>Cancel</Button>
+              <Button onClick={saveService} loading={saving}>Save</Button>
             </div>
           </div>
         </Modal>
@@ -889,8 +947,8 @@ function PaymentsSection({ clientId }: { clientId: string }) {
 }
 
 // Reports sub-section
-function TeamSection({ clientId, services, canEdit, user, onChanged }: {
-  clientId: string, services: any[], canEdit: boolean, user: any, onChanged: () => void,
+function TeamSection({ clientId, services, canEdit, isAdmin, isOwner, user, onChanged }: {
+  clientId: string, services: any[], canEdit: boolean, isAdmin: boolean, isOwner: boolean, user: any, onChanged: () => void,
 }) {
   const [projects, setProjects] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -912,7 +970,7 @@ function TeamSection({ clientId, services, canEdit, user, onChanged }: {
   useEffect(() => { load() }, [clientId])
   useEffect(() => {
     api.get('/departments').then(r => setDepartments(r.data.data || [])).catch(() => { })
-    api.get('/users/by-role?roles=EMPLOYEE,MANAGER').then(r => setStaff(r.data.data || [])).catch(() => { })
+    api.get('/users/by-role?roles=EMPLOYEE,MANAGER,ADMIN,SUPER_ADMIN').then(r => setStaff(r.data.data || [])).catch(() => { })
   }, [])
 
   // departmentId -> head user
@@ -934,16 +992,29 @@ function TeamSection({ clientId, services, canEdit, user, onChanged }: {
 
   // Who can assign the HEAD? admin/canEdit only. Who can assign MEMBERS? admin OR the service's head.
   const isServiceHead = (svc: any) => groupFor(svc.id).manager?.managerId === user?.id
-  const canAssignHead = canEdit
-  const canAssignMembers = (svc: any) => canEdit || isServiceHead(svc)
+  // Admin or the client's owner (who added / was assigned it) manages the whole team;
+  // a service head can add members only.
+  const canAssignHead = isAdmin || isOwner
+  const canAssignMembers = (svc: any) => canAssignHead || isServiceHead(svc)
 
   // Member candidates: same dept as the service (falls back to all). Include self.
   const memberCandidates = (svc: any) => {
     const list = staff.filter((u: any) =>
-      !svc.departmentId || u.employee?.department?.id === svc.departmentId
+      !['SUPER_ADMIN', 'ADMIN'].includes(u.role) &&
+      (!svc.departmentId || u.employee?.department?.id === svc.departmentId)
     )
     return list
   }
+
+  // Project head can be picked manually from all TLs (MANAGER) and admins.
+  const headOptions = (_svc: any) =>
+    staff
+      .filter((u: any) => ['SUPER_ADMIN', 'ADMIN', 'MANAGER'].includes(u.role))
+      .map((u: any) => ({
+        id: u.id,
+        name: u.name,
+        deptName: ['SUPER_ADMIN', 'ADMIN'].includes(u.role) ? 'Admin' : (u.employee?.department?.name || 'TL'),
+      }))
 
   const openHead = (svc: any) => {
     const suggested = svc.departmentId ? deptHead[svc.departmentId]?.id : ''
@@ -1090,9 +1161,9 @@ function TeamSection({ clientId, services, canEdit, user, onChanged }: {
                   onChange={e => setForm(p => ({ ...p, managerId: e.target.value }))}
                   options={[
                     { value: '', label: '— Select head —' },
-                    ...staff.map((u: any) => ({
-                      value: u.id,
-                      label: `${u.name} · ${(u.role || '').replace(/_/g, ' ')}${u.employee?.department?.name ? ` (${u.employee.department.name})` : ''}`,
+                    ...headOptions(modal.service).map((h: any) => ({
+                      value: h.id,
+                      label: h.deptName === 'Admin' ? `${h.name} · Admin` : `${h.name} · TL (${h.deptName})`,
                     })),
                   ]}
                 />

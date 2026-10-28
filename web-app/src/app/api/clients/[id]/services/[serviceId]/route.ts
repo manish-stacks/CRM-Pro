@@ -24,9 +24,21 @@ export async function PATCH(
   const svc = await prisma.clientService.findFirst({ where: { id: serviceId, clientId: id } })
   if (!svc) return notFoundResponse('Service')
 
-  const { status, autoRenew, renewalNote, expiryDate, amount } = await req.json()
+  const body = await req.json()
+  const { status, autoRenew, renewalNote, expiryDate, amount } = body
 
   const data: any = {}
+  // Full edit of service details — admin only
+  if (['SUPER_ADMIN', 'ADMIN'].includes(session.role)) {
+    if (body.serviceName !== undefined) {
+      if (!String(body.serviceName).trim()) return errorResponse('Service name required')
+      data.serviceName = String(body.serviceName).trim()
+    }
+    if (body.description !== undefined) data.description = body.description || null
+    if (body.startDate) data.startDate = new Date(body.startDate)
+    if (body.billingCycle) data.billingCycle = body.billingCycle
+    if (body.departmentId !== undefined) data.departmentId = body.departmentId || null
+  }
   if (status !== undefined) {
     if (!ALLOWED_STATUS.includes(status)) return errorResponse('Invalid status')
     data.status = status

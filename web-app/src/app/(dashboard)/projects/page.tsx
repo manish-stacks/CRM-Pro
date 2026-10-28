@@ -13,7 +13,7 @@ import toast from 'react-hot-toast'
 
 export default function ProjectsPage() {
   const { user, isAtLeast } = useAuth()
-  const canManage = isAtLeast('MANAGER')
+  const canManage = isAtLeast('MANAGER') || ['MARKETING_EXECUTIVE', 'TELECALLER'].includes(user?.role || '')
 
   const [assignments, setAssignments] = useState<any[]>([])
   const [total, setTotal] = useState(0)
@@ -325,7 +325,7 @@ export default function ProjectsPage() {
             }}
           />
           <Select label="Service *" value={form.clientServiceId} onChange={e => setForm(p => ({...p, clientServiceId: e.target.value}))} disabled={!form.clientId} options={[{ value: '', label: form.clientId ? 'Pick a service...' : 'Pick client first' }, ...clientServices.map((s: any) => ({ value: s.id, label: `${s.serviceName} — ${s.status}` }))]} />
-          <Select label="Manager (dept head)" value={form.managerId} onChange={e => setForm(p => ({...p, managerId: e.target.value}))} options={[{ value: '', label: '— No manager —' }, ...managerOptions]} />
+          {canManage && <Select label="Manager (dept head)" value={form.managerId} onChange={e => setForm(p => ({...p, managerId: e.target.value}))} options={[{ value: '', label: '— No manager —' }, ...managerOptions]} />}
 
           <div>
             <label className="label">Team Members</label>

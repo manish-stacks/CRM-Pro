@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/auth'
 import { successResponse, errorResponse, notFoundResponse } from '@/lib/api'
 import { logFromRequest } from '@/lib/audit'
+import { canAccessClient, canAssignClients, normPhone, loadPhoneMap } from '@/lib/clientAccess'
 import { deleteFile, publicIdFromUrl } from '@/lib/cloudinary'
 
 const CLIENT_UPDATABLE = new Set([
@@ -24,6 +25,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const { id } = await params
   const auth = await requireAuth(req)
   if (auth instanceof Response) return auth
+  if (!(await canAccessClient((auth as any).session, id))) return notFoundResponse('Client')
 
   const client = await prisma.client.findUnique({
     where: { id },
@@ -58,6 +60,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     },
   })
   if (!client) return notFoundResponse('Client')
+  const creator = client.createdById
+    ? await prisma.user.findUnique({ where: { id: client.createdById }, select: { id: true, name: true, role: true } })
+    : null
 
   // Stats
   const totalPaid = client.invoices.reduce((s, i) => s + i.paidAmount, 0)
@@ -73,6 +78,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   return successResponse({
     ...client,
+    createdBy: creator,
     stats: { totalPaid, totalDue, activeServices, expiringSoon: expiringServices.length },
     expiringServices,
   })
@@ -83,6 +89,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const auth = await requireAuth(req, 'MANAGER')
   if (auth instanceof Response) return auth
   const session = (auth as any).session
+  if (!(await canAccessClient(session, id))) return notFoundResponse('Client')
 
   const body = await req.json()
   const { services, ...rest } = body
@@ -91,7 +98,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   for (const [k, v] of Object.entries(rest)) {
     const key = LEGACY_ALIAS[k] || k
     if (!CLIENT_UPDATABLE.has(key)) continue
+    if (key === 'assignedToId' && !canAssignClients(session.role)) continue
     data[key] = v === '' ? null : v
+  }
+  if (data.phone) {
+    const dup = (await loadPhoneMap(id)).get(normPhone(data.phone))
+    if (dup) return errorResponse(`A client with this phone already exists (${dup})`)
   }
   if (data.onboardingDate) data.onboardingDate = new Date(data.onboardingDate)
   if (data.email) data.email = String(data.email).toLowerCase()

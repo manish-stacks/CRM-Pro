@@ -6,6 +6,7 @@ import { errorResponse, successResponse } from '@/lib/api'
 import { dateOnly, getISTDateParts } from '@/lib/attendanceDate'
 import { Settings } from '@/lib/settings'
 import { getTeamScope } from '@/lib/teamScope'
+import { managerClientWhere, normPhone, loadPhoneMap } from '@/lib/clientAccess'
 import { generateClientCode, generateLeadNumber } from '@/lib/idgen'
 import { canSeeBeyondOwn, isCompanyWideRole } from '@/lib/permissions'
 
@@ -103,18 +104,7 @@ export async function GET(req: NextRequest) {
         // Same TL (MANAGER) visibility as the clients list — only their own
         // added/assigned clients export, Admin/Super Admin export everything.
         if (session.role === 'MANAGER') {
-          where.AND = [
-            ...(where.AND || []),
-            {
-              OR: [
-                { createdById: session.userId },
-                { telecallerId: session.userId },
-                { marketingPersonId: session.userId },
-                { reportingPersonId: session.userId },
-                { assignedToId: session.userId },
-              ],
-            },
-          ]
+          where.AND = [...(where.AND || []), await managerClientWhere(session.userId)]
         }
 
         const clients = await prisma.client.findMany({
@@ -610,6 +600,7 @@ export async function POST(req: NextRequest) {
       return out
     }
 
+    const phoneMap = await loadPhoneMap()
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i]
       const companyName = row.companyName || row.CompanyName || row.company
@@ -617,6 +608,11 @@ export async function POST(req: NextRequest) {
       const phone = row.phone || row.Phone
       if (!companyName || !clientName || !phone) {
         errors.push({ row: i + 1, error: 'Company name, client name and phone required' })
+        continue
+      }
+      const pn = normPhone(phone)
+      if (phoneMap.has(pn)) {
+        errors.push({ row: i + 1, error: `Phone already exists (${phoneMap.get(pn)})` })
         continue
       }
       try {
@@ -641,6 +637,7 @@ export async function POST(req: NextRequest) {
           },
         })
         created.push(client)
+        phoneMap.set(pn, client.clientCode)
 
         // ---- services for this client (multiple supported) ----
         for (const sv of parseServices(row)) {

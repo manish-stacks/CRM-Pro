@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
       employee: {
         select: {
           employeeId: true,
-          department: { select: { name: true } },
+          department: { select: { id: true, name: true } },
         },
       },
     },

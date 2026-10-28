@@ -41,6 +41,7 @@ export default function ClientsPage() {
 
   const [telecallerPool, setTelecallerPool] = useState<any[]>([])
   const [marketingPool, setMarketingPool] = useState<any[]>([])
+  const [assignPool, setAssignPool] = useState<any[]>([])
   const [modal, setModal] = useState<'none' | 'add' | 'edit' | 'import'>('none')
   const [saving, setSaving] = useState(false)
   const [showPwd, setShowPwd] = useState<string | null>(null)
@@ -55,7 +56,7 @@ export default function ClientsPage() {
     companyName: '', clientName: '', phone: '', altPhone: '', email: '',
     address: '', state: '', city: '', pincode: '',
     gstApplicable: false, gstNo: '',
-    telecallerId: '', marketingPersonId: '',
+    telecallerId: '', marketingPersonId: '', assignedToId: '',
     onboardingDate: new Date().toISOString().split('T')[0],
     sendWelcome: true,
   })
@@ -85,6 +86,11 @@ export default function ClientsPage() {
       api.get('/users/by-role?roles=TELECALLER,MANAGER&headOfRole=TELECALLER')
         .then(r => setTelecallerPool([...selfOption, ...(r.data.data || [])]))
         .catch(() => { })
+      if (isCompanyWideRole(user?.role || '')) {
+        api.get('/users/by-role?roles=MANAGER,TELECALLER,MARKETING_EXECUTIVE')
+          .then(r => setAssignPool(r.data.data || []))
+          .catch(() => { })
+      }
       api.get('/users/by-role?roles=MARKETING_EXECUTIVE,MANAGER&headOfRole=MARKETING_EXECUTIVE')
         .then(r => setMarketingPool([...selfOption, ...(r.data.data || [])]))
         .catch(() => { })
@@ -103,6 +109,7 @@ export default function ClientsPage() {
         : isCompanyWideRole(user?.role || '') ? (user?.id || '') : '',
       marketingPersonId: user?.role === 'MARKETING_EXECUTIVE' ? (user.id || '')
         : isCompanyWideRole(user?.role || '') ? (user?.id || '') : '',
+      assignedToId: '',
       onboardingDate: new Date().toISOString().split('T')[0],
       sendWelcome: true,
     })
@@ -241,6 +248,7 @@ export default function ClientsPage() {
       address: c.address || '', state: c.state || '', city: c.city || '', pincode: c.pincode || '',
       gstApplicable: !!c.gstApplicable, gstNo: c.gstNo || '',
       telecallerId: c.telecallerId || '', marketingPersonId: c.marketingPersonId || '',
+      assignedToId: c.assignedToId || '',
       onboardingDate: c.onboardingDate ? c.onboardingDate.split('T')[0] : new Date().toISOString().split('T')[0],
       sendWelcome: false,
     })
@@ -423,15 +431,17 @@ export default function ClientsPage() {
                 <th>Services</th>
                 <th>Next Expiry</th>
                 <th>Invoices</th>
+                <th>Added By</th>
+                <th>Assigned To</th>
                 <th>Status</th>
                 <th className="text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={9} className="text-center py-8"><Loader2 className="animate-spin inline text-gray-400" /></td></tr>
+                <tr><td colSpan={11} className="text-center py-8"><Loader2 className="animate-spin inline text-gray-400" /></td></tr>
               ) : clients.length === 0 ? (
-                <tr><td colSpan={9}><EmptyState icon={<Users2 size={40} />} title="No clients" description="No clients match your filters" /></td></tr>
+                <tr><td colSpan={11}><EmptyState icon={<Users2 size={40} />} title="No clients" description="No clients match your filters" /></td></tr>
               ) : clients.map((c: any) => (
                 <tr key={c.id} className="hover:bg-slate-50">
                   <td className="font-mono text-xs text-gray-600">{c.clientCode}</td>
@@ -470,6 +480,12 @@ export default function ClientsPage() {
                     })()}
                   </td>
                   <td className="text-sm"><FileText size={12} className="inline text-gray-400 mr-1" />{c._count?.invoices || 0}</td>
+                  <td className="text-xs text-gray-700">
+                    {c.createdBy?.name || <span className="text-gray-300">—</span>}
+                  </td>
+                  <td className="text-xs text-gray-700">
+                    {c.assignedTo?.name || <span className="text-gray-300">—</span>}
+                  </td>
                   <td><Badge status={c.status} /></td>
                   <td className="text-right">
                     <Link href={`/clients/${c.id}`} className="btn-ghost btn-sm !p-1.5" title="View">
@@ -559,6 +575,9 @@ export default function ClientsPage() {
               <Select label="Marketing Person" value={form.marketingPersonId} onChange={e => setForm(p => ({ ...p, marketingPersonId: e.target.value }))} options={marketingPool.map(u => ({ value: u.id, label: u.role === 'MANAGER' ? `${u.name} (Head)` : isCompanyWideRole(u.role) ? `${u.name} (Admin)` : u.name }))} />
 
             </div>
+            {isCompanyWideRole(user?.role || '') && (
+              <Select label="Assign Client To" value={form.assignedToId || ''} onChange={e => setForm(p => ({ ...p, assignedToId: e.target.value }))} options={assignPool.map(u => ({ value: u.id, label: `${u.name} (${u.role})` }))} />
+            )}
             {isEdit ? (
               <div className="flex justify-end gap-2 pt-2">
                 <Button variant="secondary" onClick={() => setModal('none')}>Cancel</Button>

@@ -10,6 +10,7 @@ import { logFromRequest } from '@/lib/audit'
 import { activateClientPortal } from '@/lib/welcomeFlow'
 import { todayDateOnly } from '@/lib/attendanceDate'
 import { isNotOwnScopeRole } from '@/lib/permissions'
+import { managerClientWhere, attachCreators, canAssignClients, normPhone, loadPhoneMap } from '@/lib/clientAccess'
 
 const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000
 
@@ -96,29 +97,9 @@ export async function GET(req: NextRequest) {
   } else if (session.role === 'MARKETING_EXECUTIVE') {
     where.marketingPersonId = session.userId
   } else if (session.role === 'MANAGER') {
-    // TL sees: clients they added themselves, clients where admin has assigned
-    // them as telecaller/marketing/reporting person, AND clients whose
-    // service they've been made project-head of via the Project Assignments
-    // page (even if no client-level field points at them directly).
-    const headedServices = await prisma.projectAssignment.findMany({
-      where: { managerId: session.userId, isActive: true },
-      select: { clientService: { select: { clientId: true } } },
-    })
-    const headedClientIds = Array.from(new Set(headedServices.map(a => a.clientService.clientId)))
-
-    where.AND = [
-      ...(where.AND || []),
-      {
-        OR: [
-          { createdById: session.userId },
-          { telecallerId: session.userId },
-          { marketingPersonId: session.userId },
-          { reportingPersonId: session.userId },
-          { assignedToId: session.userId },
-          ...(headedClientIds.length ? [{ id: { in: headedClientIds } }] : []),
-        ],
-      },
-    ]
+    // TL sees only clients they added/imported, clients admin assigned to
+    // them, and clients of services they head as project manager.
+    where.AND = [...(where.AND || []), await managerClientWhere(session.userId)]
   } else if (session.role === 'EMPLOYEE') {
     // Employees see clients where they're on a project team (Phase 5)
     // For now, empty
@@ -141,6 +122,7 @@ export async function GET(req: NextRequest) {
       include: {
         telecaller: { select: { id: true, name: true } },
         marketingPerson: { select: { id: true, name: true } },
+        assignedTo: { select: { id: true, name: true } },
         // For the expiry column — service expiring soonest goes on top
         services: {
           select: { id: true, serviceName: true, status: true, expiryDate: true, amount: true },
@@ -153,7 +135,7 @@ export async function GET(req: NextRequest) {
     }),
     prisma.client.count({ where }),
   ])
-  return successResponse(clients, total)
+  return successResponse(await attachCreators(clients), total)
 }
 
 export async function POST(req: NextRequest) {
@@ -181,6 +163,9 @@ export async function POST(req: NextRequest) {
 
   if (!companyName || !clientName || !phone) return errorResponse('Company, client name and phone required')
 
+  const dup = (await loadPhoneMap()).get(normPhone(phone))
+  if (dup) return errorResponse(`A client with this phone already exists (${dup})`)
+
   try {
     const client = await prisma.client.create({
       data: {
@@ -197,7 +182,7 @@ export async function POST(req: NextRequest) {
         onboardingDate: onboardingDate ? new Date(onboardingDate) : new Date(),
         status: status || 'ACTIVE',
         image: image || null,
-        assignedToId: assignedToId || null,
+        assignedToId: canAssignClients(session.role) ? (assignedToId || null) : null,
         marketingPersonId: marketingPersonId || salesPersonId ||
           (session.role === 'MARKETING_EXECUTIVE' || session.role === 'ADMIN' || session.role === 'SUPER_ADMIN' ? session.userId : null),
         telecallerId: telecallerId || telesalesId ||
