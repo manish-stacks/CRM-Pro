@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma'
 import { getRequestSession, hasMinRole } from '@/lib/auth'
 import { successResponse, successStatusResponse, errorResponse, unauthorizedResponse, getPaginationParams } from '@/lib/api'
 import { logFromRequest } from '@/lib/audit'
+import { generateSeoReportNumber } from '@/lib/idgen'
 
 /** Client service ids the user may report on (null = unrestricted). */
 export async function scopedServiceIds(userId: string, role: string): Promise<string[] | null> {
@@ -17,10 +18,6 @@ export async function scopedServiceIds(userId: string, role: string): Promise<st
   return Array.from(new Set(rows.map(r => r.clientServiceId)))
 }
 
-async function generateReportNumber(): Promise<string> {
-  const count = await prisma.seoReport.count()
-  return `SEO-${String(count + 1).padStart(6, '0')}`
-}
 
 export async function GET(req: NextRequest) {
   const session = await getRequestSession(req)
@@ -117,19 +114,34 @@ export async function POST(req: NextRequest) {
   const client = await prisma.client.findUnique({ where: { id: clientId }, select: { companyName: true } })
   if (!client) return errorResponse('Client not found', 404)
 
-  const report = await prisma.seoReport.create({
-    data: {
-      reportNumber: await generateReportNumber(),
-      clientId,
-      clientServiceId: clientServiceId || null,
-      projectAssignmentId: projectAssignmentId || null,
-      title: title || `${client.companyName} SEO + GMB Monthly Report ${reportMonth}`,
-      reportMonth,
-      reportDate: reportDate ? new Date(reportDate) : new Date(),
-      data: data ? JSON.stringify(data) : null,
-      createdById: session.userId,
-    },
-  })
+  let report
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      report = await prisma.seoReport.create({
+        data: {
+          reportNumber: await generateSeoReportNumber(),
+          clientId,
+          clientServiceId: clientServiceId || null,
+          projectAssignmentId: projectAssignmentId || null,
+          title: title || `${client.companyName} SEO + GMB Monthly Report ${reportMonth}`,
+          reportMonth,
+          reportDate: reportDate ? new Date(reportDate) : new Date(),
+          data: data ? JSON.stringify(data) : null,
+          createdById: session.userId,
+        },
+      })
+      break
+    } catch (err: any) {
+      if (err?.code === 'P2002' && attempt < 2) {
+        continue
+      }
+      throw err
+    }
+  }
+
+  if (!report) {
+    return errorResponse('Failed to create SEO report due to number collision, please retry')
+  }
 
   await logFromRequest(req, {
     userId: session.userId,
