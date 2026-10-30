@@ -10,11 +10,27 @@ export interface LinkRow { url: string; status?: string }
 export interface Web20Row { website: string; url: string; status?: string }
 export interface KeywordRow { keyword: string; position: string | number }
 
+export interface ExtraGmb {
+  screenshot?: string | null
+  overview?: string | number
+  calls?: string | number
+  chats?: string | number
+  directions?: string | number
+  websiteClicks?: string | number
+  note?: string
+  name?: string
+  posts?: LinkRow[]
+  keywords?: KeywordRow[]
+  citations?: LinkRow[]
+}
+
 export interface SeoReportData {
   // Cover
   clientLogo?: string | null          // dataURL / https URL
   // GMB
   gmbScreenshot?: string | null
+  gmbName?: string
+  reportTitle?: string
   gmbOverview?: string | number
   gmbCalls?: string | number
   gmbChats?: string | number
@@ -22,6 +38,7 @@ export interface SeoReportData {
   gmbWebsiteClicks?: string | number
   gmbNote?: string
   gmbPosts?: LinkRow[]
+  extraGmb?: ExtraGmb[]
   localCitations?: LinkRow[]
   gmbKeywords?: KeywordRow[]
   // Website SEO
@@ -68,6 +85,33 @@ const BOTTOM = 274           // last usable Y
 // ---------------------------------------------------------------- image helper
 /** Fetch any URL (or pass through a dataURL) and return a base64 dataURL. */
 export async function toDataUrl(src?: string | null): Promise<string | null> {
+  const raw = await fetchDataUrl(src)
+  return raw ? await toPdfSafeImage(raw) : null
+}
+
+/** jsPDF only embeds PNG/JPEG reliably — convert WEBP/SVG/GIF/unknown types via canvas. */
+async function toPdfSafeImage(dataUrl: string): Promise<string> {
+  if (/^data:image\/(png|jpe?g);/i.test(dataUrl)) return dataUrl
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image()
+      el.onload = () => resolve(el)
+      el.onerror = reject
+      el.src = dataUrl
+    })
+    const cw = img.naturalWidth || 600
+    const ch = img.naturalHeight || 300
+    const canvas = document.createElement('canvas')
+    canvas.width = cw
+    canvas.height = ch
+    canvas.getContext('2d')!.drawImage(img, 0, 0, cw, ch)
+    return canvas.toDataURL('image/png')
+  } catch {
+    return dataUrl
+  }
+}
+
+async function fetchDataUrl(src?: string | null): Promise<string | null> {
   if (!src) return null
   if (src.startsWith('data:')) return src
 
@@ -101,9 +145,12 @@ export async function toDataUrl(src?: string | null): Promise<string | null> {
 export async function preloadReportImages(d: SeoReportData): Promise<SeoReportData> {
   const [clientLogo, gmbScreenshot, gscScreenshot, gaScreenshot, companyLogo] = await Promise.all([
     toDataUrl(d.clientLogo), toDataUrl(d.gmbScreenshot),
-    toDataUrl(d.gscScreenshot), toDataUrl(d.gaScreenshot), toDataUrl(d.companyLogo),
+    toDataUrl(d.gscScreenshot), toDataUrl(d.gaScreenshot), toDataUrl(d.companyLogo || '/images/hbs-logo.png'),
   ])
-  return { ...d, clientLogo, gmbScreenshot, gscScreenshot, gaScreenshot, companyLogo }
+  const extraGmb = await Promise.all(
+    (d.extraGmb || []).map(async g => ({ ...g, screenshot: await toDataUrl(g.screenshot) }))
+  )
+  return { ...d, clientLogo, gmbScreenshot, gscScreenshot, gaScreenshot, companyLogo, extraGmb }
 }
 
 function imgSize(doc: jsPDF, dataUrl: string, maxW: number, maxH: number) {
@@ -168,6 +215,14 @@ export function generateSeoReportPdf(meta: SeoReportMeta, data: SeoReportData): 
     doc.setTextColor(...color).setFont('helvetica', 'bold').setFontSize(18)
     doc.text(label, W / 2, y + 6, { align: 'center' })
     doc.setTextColor(0, 0, 0)
+    y += 14
+  }
+
+  const locName = (label: string) => {
+    need(30)
+    doc.setTextColor(0, 0, 0).setFont('helvetica', 'bold').setFontSize(15)
+    doc.text(label, W / 2, y + 5, { align: 'center' })
+    doc.setFont('helvetica', 'normal').setFontSize(9.5)
     y += 14
   }
 
@@ -242,6 +297,43 @@ export function generateSeoReportPdf(meta: SeoReportMeta, data: SeoReportData): 
     y = (doc as any).lastAutoTable.finalY + 10
   }
 
+  const gmbStats = (g: { overview?: any; calls?: any; chats?: any; directions?: any; websiteClicks?: any; note?: string }) => {
+  const stats = [
+    { label: 'GMB Overview', value: g.overview },
+    { label: 'Calls', value: g.calls },
+    { label: 'Chats', value: g.chats },
+    { label: 'Directions', value: g.directions },
+    { label: 'Website Clicks', value: g.websiteClicks },
+  ].filter(s => s.value !== undefined && s.value !== '' && s.value !== null)
+
+  if (stats.length) {
+    subHeading('Performance Analytics', NAVY, 40)
+    need(26)
+    const gap = 3
+    const boxW = (W - M * 2 - gap * (stats.length - 1)) / stats.length
+    stats.forEach((s, i) => {
+      const x = M + i * (boxW + gap)
+      doc.setFillColor(...GREY)
+      doc.setDrawColor(220).setLineWidth(0.3)
+      doc.roundedRect(x, y, boxW, 20, 1.5, 1.5, 'FD')
+      doc.setTextColor(...NAVY).setFont('helvetica', 'bold').setFontSize(15)
+      doc.text(String(s.value), x + boxW / 2, y + 9, { align: 'center' })
+      doc.setTextColor(90).setFont('helvetica', 'normal').setFontSize(6.5)
+      doc.text(doc.splitTextToSize(s.label, boxW - 2), x + boxW / 2, y + 15, { align: 'center' })
+    })
+    doc.setTextColor(0, 0, 0)
+    y += 26
+    if (g.note?.trim()) {
+      doc.setFont('helvetica', 'italic').setFontSize(8).setTextColor(90)
+      const noteLines = doc.splitTextToSize(`Note: ${g.note}`, W - M * 2)
+      need(noteLines.length * 4 + 8)
+      doc.text(noteLines, M, y + 3)
+      doc.setTextColor(0, 0, 0).setFont('helvetica', 'normal')
+      y += noteLines.length * 4 + 9
+    }
+  }
+  }
+
   // ================================================== COVER
   if (data.clientLogo) {
     const { w, h } = imgSize(doc, data.clientLogo, 80, 34)
@@ -253,7 +345,7 @@ export function generateSeoReportPdf(meta: SeoReportMeta, data: SeoReportData): 
 
   doc.setTextColor(...NAVY).setFont('helvetica', 'bold').setFontSize(19)
   const titleLines = doc.splitTextToSize(
-    `${meta.businessName} SEO + GMB Monthly Report ${meta.reportMonth}`, W - M * 2 - 20
+    data.reportTitle?.trim() || `${meta.businessName} SEO + GMB Monthly Report ${meta.reportMonth}`, W - M * 2 - 20
   )
   doc.text(titleLines, W / 2, y + 6, { align: 'center' })
   y += titleLines.length * 9 + 4
@@ -282,6 +374,7 @@ export function generateSeoReportPdf(meta: SeoReportMeta, data: SeoReportData): 
     const MIN_SHOT = 70
     if (BOTTOM - y - 22 < MIN_SHOT) newPage()
     bigHeading('Google My Business Report', [0, 0, 0], 0)
+    if (data.gmbName?.trim()) locName(data.gmbName)
     if (data.gmbScreenshot) {
       const room = BOTTOM - y - 8
       image(data.gmbScreenshot, Math.max(MIN_SHOT, Math.min(110, room - 6)))
@@ -290,40 +383,11 @@ export function generateSeoReportPdf(meta: SeoReportMeta, data: SeoReportData): 
     // ---- Local Citation — Google Profile ----
     sectionBar('Local Citation - Google Profile', 70)
 
-    const stats = [
-      { label: 'GMB Overview', value: data.gmbOverview },
-      { label: 'Calls', value: data.gmbCalls },
-      { label: 'Chats', value: data.gmbChats },
-      { label: 'Directions', value: data.gmbDirections },
-      { label: 'Website Clicks', value: data.gmbWebsiteClicks },
-    ].filter(s => s.value !== undefined && s.value !== '' && s.value !== null)
+    gmbStats({
+      overview: data.gmbOverview, calls: data.gmbCalls, chats: data.gmbChats,
+      directions: data.gmbDirections, websiteClicks: data.gmbWebsiteClicks, note: data.gmbNote,
+    })
 
-    if (stats.length) {
-      subHeading('Performance Analytics', NAVY, 40)
-      need(26)
-      const gap = 3
-      const boxW = (W - M * 2 - gap * (stats.length - 1)) / stats.length
-      stats.forEach((s, i) => {
-        const x = M + i * (boxW + gap)
-        doc.setFillColor(...GREY)
-        doc.setDrawColor(220).setLineWidth(0.3)
-        doc.roundedRect(x, y, boxW, 20, 1.5, 1.5, 'FD')
-        doc.setTextColor(...NAVY).setFont('helvetica', 'bold').setFontSize(15)
-        doc.text(String(s.value), x + boxW / 2, y + 9, { align: 'center' })
-        doc.setTextColor(90).setFont('helvetica', 'normal').setFontSize(6.5)
-        doc.text(doc.splitTextToSize(s.label, boxW - 2), x + boxW / 2, y + 15, { align: 'center' })
-      })
-      doc.setTextColor(0, 0, 0)
-      y += 26
-      if (data.gmbNote?.trim()) {
-        doc.setFont('helvetica', 'italic').setFontSize(8).setTextColor(90)
-        const noteLines = doc.splitTextToSize(`Note: ${data.gmbNote}`, W - M * 2)
-        need(noteLines.length * 4 + 8)
-        doc.text(noteLines, M, y + 3)
-        doc.setTextColor(0, 0, 0).setFont('helvetica', 'normal')
-        y += noteLines.length * 4 + 9
-      }
-    }
   }
 
   const posts = (data.gmbPosts || []).filter(p => p?.url?.trim())
@@ -340,6 +404,24 @@ export function generateSeoReportPdf(meta: SeoReportMeta, data: SeoReportData): 
   if (on('gmbKeywords') && data.gmbKeywords?.some(k => k.keyword?.trim())) {
     sectionBar('Google Profile - Keywords Ranking')
     keywordTable(data.gmbKeywords)
+  }
+
+  // ---- Additional GMB profiles (same client, same PDF) ----
+  if (on('gmb')) {
+    ;(data.extraGmb || []).forEach((g, i) => {
+      const MIN_SHOT = 70
+      if (BOTTOM - y - 30 < MIN_SHOT) newPage()
+      locName(g.name?.trim() || `Google My Business ${i + 2}`)
+      if (g.screenshot) {
+        const room = BOTTOM - y - 8
+        image(g.screenshot, Math.max(MIN_SHOT, Math.min(110, room - 6)))
+      }
+      gmbStats(g)
+      const ps = (g.posts || []).filter(p => p?.url?.trim())
+      if (on('gmbPosts') && ps.length) { subHeading('GMB Postings', NAVY); linkTable(ps, 'Posting') }
+      if (on('gmbKeywords') && g.keywords?.some(k => k.keyword?.trim())) { subHeading('GMB Keywords', NAVY); keywordTable(g.keywords) }
+      if (on('localCitations') && g.citations?.some(r => r.url?.trim())) { subHeading('GMB Business Listing', NAVY); linkTable(g.citations) }
+    })
   }
 
   // ================================================== WEBSITE SEO

@@ -26,8 +26,11 @@ const SECTION_KEYS = [
 const EMPTY: SeoReportData = {
   clientLogo: null,
   gmbScreenshot: null,
+  gmbName: '',
+  reportTitle: '',
   gmbOverview: '', gmbCalls: '', gmbChats: '', gmbDirections: '', gmbWebsiteClicks: '',
   gmbNote: '',
+  extraGmb: [],
   gmbPosts: [], localCitations: [], gmbKeywords: [],
   technicalWork: DEFAULT_WORK,
   gscScreenshot: null, gaScreenshot: null,
@@ -225,6 +228,39 @@ function KeywordRows({ label, rows, onChange, disabled }: {
   )
 }
 
+function Group({ n, title, desc, children }: any) {
+  return (
+    <section className="space-y-3">
+      <div className="flex items-center gap-3 pt-2">
+        <span className="h-7 w-7 rounded-full bg-brand-600 text-white text-xs font-bold flex items-center justify-center shrink-0">{n}</span>
+        <div>
+          <h2 className="text-base font-bold text-gray-900 leading-tight">{title}</h2>
+          {desc && <p className="text-xs text-gray-500">{desc}</p>}
+        </div>
+        <div className="flex-1 border-t border-gray-200 ml-2" />
+      </div>
+      {children}
+    </section>
+  )
+}
+
+function Sub({ title, toggle, children }: any) {
+  const on = toggle ? toggle.on : true
+  return (
+    <div className="rounded-lg border border-gray-200 p-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <h4 className="text-xs font-semibold text-gray-700">{title}</h4>
+        {toggle && (
+          <label className="flex items-center gap-1.5 text-[11px] text-gray-500 select-none">
+            {on ? 'In PDF' : 'Hidden'}<Switch checked={on} onChange={toggle.onChange} disabled={toggle.disabled} />
+          </label>
+        )}
+      </div>
+      <div className={on ? '' : 'opacity-50'}>{children}</div>
+    </div>
+  )
+}
+
 // ------------------------------------------------------------------ page
 export default function SeoReportBuilderPage() {
   const { id } = useParams<{ id: string }>()
@@ -239,6 +275,7 @@ export default function SeoReportBuilderPage() {
   const [submitModal, setSubmitModal] = useState(false)
   const [notify, setNotify] = useState({ email: true, whatsapp: true, message: '' })
 
+  const autoTitle: string = report?.title || `${report?.client?.companyName || ''} SEO + GMB Monthly Report ${report?.reportMonth || ''}`
   const locked = report?.status === 'SUBMITTED' && !isAtLeast('ADMIN')
 
   const set = <K extends keyof SeoReportData>(k: K, v: SeoReportData[K]) => setD(p => ({ ...p, [k]: v }))
@@ -384,6 +421,7 @@ export default function SeoReportBuilderPage() {
         )}
       </div>
 
+      <Group n={1} title="Cover Page" desc="Logo and title shown on the first page">
       <div className="grid lg:grid-cols-2 gap-4 items-start">
         {/* ---------- cover ---------- */}
         <Card title="Client Logo" desc={d.clientLogo ? 'Shown on the cover page. Replace it any time.' : 'No logo on file. Upload one once and it is reused in every report.'}>
@@ -396,39 +434,89 @@ export default function SeoReportBuilderPage() {
           />
         </Card>
 
-        {/* ---------- GMB ---------- */}
-        <Card title="Google My Business" desc="Profile screenshot + performance numbers" toggle={tg('gmb')}>
-          <ImageBox
-            label="GMB Profile Screenshot"
-            hint="One-time upload, saved on the client profile and reused each month."
-            value={d.gmbScreenshot}
-            onChange={v => saveClientAsset('gmbScreenshot', v)}
-            disabled={locked}
-          />
-          <div className="grid grid-cols-5 gap-2">
-            <Input label="GMB Overview" value={String(d.gmbOverview ?? '')} onChange={e => set('gmbOverview', e.target.value)} disabled={locked} type="number" />
-            <Input label="Calls" value={String(d.gmbCalls ?? '')} onChange={e => set('gmbCalls', e.target.value)} disabled={locked} type="number" />
-            <Input label="Chats" value={String(d.gmbChats ?? '')} onChange={e => set('gmbChats', e.target.value)} disabled={locked} type="number" />
-            <Input label="Directions" value={String(d.gmbDirections ?? '')} onChange={e => set('gmbDirections', e.target.value)} disabled={locked} type="number" />
-            <Input label="Website Clicks" value={String(d.gmbWebsiteClicks ?? '')} onChange={e => set('gmbWebsiteClicks', e.target.value)} disabled={locked} type="number" />
-          </div>
-          <Textarea label="Note (optional)" rows={5} value={d.gmbNote || ''} onChange={e => set('gmbNote', e.target.value)}
-            placeholder="The call performance data reflects 1-Aug to 28-Aug." disabled={locked} />
+        <Card title="Report Title" desc="Filled automatically. Edit it if you want a custom title on the cover.">
+          <Input label="Title" value={d.reportTitle || autoTitle} onChange={e => set('reportTitle', e.target.value)} disabled={locked} />
+          {!locked && d.reportTitle && d.reportTitle !== autoTitle && (
+            <button type="button" onClick={() => set('reportTitle', '')} className="text-[11px] text-brand-600 hover:underline">Reset to automatic title</button>
+          )}
         </Card>
+      </div>
+      </Group>
+
+      <Group n={2} title="Google My Business" desc="One block per GMB profile. All of them go into the same PDF.">
+      <div className="grid lg:grid-cols-2 gap-4 items-start">
+        <div className="lg:col-span-2 space-y-4">
+        {[
+          {
+            key: -1, title: 'Google My Business 1 (main profile)',
+            g: { name: d.gmbName, screenshot: d.gmbScreenshot, overview: d.gmbOverview, calls: d.gmbCalls, chats: d.gmbChats,
+                 directions: d.gmbDirections, websiteClicks: d.gmbWebsiteClicks, note: d.gmbNote,
+                 posts: d.gmbPosts, keywords: d.gmbKeywords, citations: d.localCitations } as any,
+          },
+          ...(d.extraGmb || []).map((g, i) => ({ key: i, title: `Google My Business ${i + 2}`, g: g as any })),
+        ].map(({ key, title, g }) => {
+          const main = key === -1
+          const map: any = main
+            ? { name: 'gmbName', overview: 'gmbOverview', calls: 'gmbCalls', chats: 'gmbChats', directions: 'gmbDirections',
+                websiteClicks: 'gmbWebsiteClicks', note: 'gmbNote', posts: 'gmbPosts', keywords: 'gmbKeywords', citations: 'localCitations' }
+            : {}
+          const upd = (k: string, v: any) => main
+            ? (k === 'screenshot' ? saveClientAsset('gmbScreenshot', v) : set(map[k], v))
+            : set('extraGmb', (d.extraGmb || []).map((x, j) => (j === key ? { ...x, [k]: v } : x)))
+          const num = (k: string, label: string) => (
+            <Input label={label} type="number" value={String(g[k] ?? '')} onChange={e => upd(k, e.target.value)} disabled={locked} />
+          )
+          return (
+            <Card key={key} title={title} desc={main ? 'Screenshot is saved on the client profile and reused each month.' : 'Added below the previous GMB in the same PDF.'}
+              toggle={main ? tg('gmb') : undefined}
+              right={!main && !locked ? (
+                <button type="button" onClick={() => set('extraGmb', (d.extraGmb || []).filter((_, j) => j !== key))}
+                  className="text-[11px] text-red-600 hover:underline flex items-center gap-1"><Trash2 size={12} /> Remove</button>
+              ) : null}>
+              <div className="grid lg:grid-cols-2 gap-4">
+                <div className="space-y-3">
+                  <Input label="Location name (shown above screenshot)" value={g.name || ''} onChange={e => upd('name', e.target.value)} disabled={locked} placeholder="Greater Kailash" />
+                  <ImageBox label="GMB Profile Screenshot" value={g.screenshot ?? null} onChange={v => upd('screenshot', v)} disabled={locked} />
+                  <div className="grid grid-cols-3 gap-2">
+                    {num('overview', 'Overview')}{num('calls', 'Calls')}{num('chats', 'Chats')}
+                    {num('directions', 'Directions')}{num('websiteClicks', 'Website Clicks')}
+                  </div>
+                  <Textarea label="Note (optional)" rows={2} value={g.note || ''} onChange={e => upd('note', e.target.value)}
+                    placeholder="The call performance data reflects 1-Sep to 24-Sep." disabled={locked} />
+                </div>
+                <div className="space-y-3">
+                  <Sub title="GMB Postings" toggle={tg('gmbPosts')}>
+                    <LinkRows label="Post links" rows={g.posts || []} onChange={v => upd('posts', v)} disabled={locked} placeholder="https://share.google/..." />
+                  </Sub>
+                  <Sub title="GMB Keywords Ranking" toggle={tg('gmbKeywords')}>
+                    <KeywordRows label="Keywords" rows={g.keywords || []} onChange={v => upd('keywords', v)} disabled={locked} />
+                  </Sub>
+                  <Sub title="GMB Business Listing" toggle={tg('localCitations')}>
+                    <LinkRows label="Listing links" rows={g.citations || []} onChange={v => upd('citations', v)} disabled={locked} />
+                  </Sub>
+                </div>
+              </div>
+            </Card>
+          )
+        })}
+        {!locked && (
+          <button type="button" onClick={() => set('extraGmb', [...(d.extraGmb || []), {}])}
+            className="w-full border-2 border-dashed border-brand-300 rounded-xl py-3 text-sm font-medium text-brand-600 hover:bg-brand-50 flex items-center justify-center gap-1">
+            <Plus size={15} /> Add more GMB
+          </button>
+        )}
+        </div>
+      </div>
+      </Group>
+
+      <Group n={3} title="Website SEO" desc="Work done, analytics screenshots and keyword rankings">
+      <div className="grid lg:grid-cols-2 gap-4 items-start">
 
         <Card title="Analytics Screenshots" desc="Search Console + Google Analytics for the period" toggle={tg('analytics')}>
           <ImageBox label={`Google Search Console — ${report.reportMonth}`} value={d.gscScreenshot} onChange={v => set('gscScreenshot', v)} disabled={locked} />
           <ImageBox label={`Google Analytics — ${report.reportMonth}`} value={d.gaScreenshot} onChange={v => set('gaScreenshot', v)} disabled={locked} />
         </Card>
 
-
-        <Card title="Local Citation — Google Profile" desc="Directory / citation backlinks for the GMB profile" toggle={tg('localCitations')}>
-          <LinkRows label="Local Citation Backlinks" rows={d.localCitations || []} onChange={v => set('localCitations', v)} disabled={locked} />
-        </Card>
-
-        <Card title="Google Profile — Keywords Ranking" toggle={tg('gmbKeywords')}>
-          <KeywordRows label="GMB keywords" rows={d.gmbKeywords || []} onChange={v => set('gmbKeywords', v)} disabled={locked} />
-        </Card>
 
         {/* ---------- website SEO ---------- */}
         <Card title="Website SEO — Technical & On-Page Work" toggle={tg('technicalWork')}>
@@ -459,10 +547,6 @@ export default function SeoReportBuilderPage() {
         </Card>
 
 
-        <Card title="GMB Posting Activity" toggle={tg('gmbPosts')}>
-          <LinkRows label="GMB Post links" rows={d.gmbPosts || []} onChange={v => set('gmbPosts', v)} disabled={locked} placeholder="https://share.google/..." />
-        </Card>
-
         {/* ---------- on-page ---------- */}
         <Card title="On-Page SEO Work" toggle={tg('onPage')}>
           <LinkRows label="Website Pages" rows={d.pages || []} onChange={v => set('pages', v)} disabled={locked} />
@@ -471,6 +555,11 @@ export default function SeoReportBuilderPage() {
         </Card>
 
         {/* ---------- off-page ---------- */}
+      </div>
+      </Group>
+
+      <Group n={4} title="Off-Page SEO" desc="Backlink creation work">
+      <div className="grid lg:grid-cols-2 gap-4 items-start">
         <Card title="Off-Page — Profile Creation" toggle={tg('profileCreation')}>
           <LinkRows label="Profile Creation" rows={d.profileCreation || []} onChange={v => set('profileCreation', v)} disabled={locked} />
         </Card>
@@ -532,6 +621,7 @@ export default function SeoReportBuilderPage() {
           <KeywordRows label="Website keywords" rows={d.websiteKeywords || []} onChange={v => set('websiteKeywords', v)} disabled={locked} />
         </Card>
       </div>
+      </Group>
 
       {/* ---------- submit modal ---------- */}
       <Modal open={submitModal} onClose={() => setSubmitModal(false)} title="Submit report to client">
