@@ -1,6 +1,7 @@
 // src/app/api/proposals/[id]/send/route.ts
 // Send proposal to client via Email + WhatsApp. Sets status DRAFT → SENT.
 import { NextRequest } from 'next/server'
+import { getBaseUrl } from '@/lib/baseUrl'
 import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/auth'
 import { successResponse, errorResponse, notFoundResponse } from '@/lib/api'
@@ -29,7 +30,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const recipientEmail = proposal.client?.email || proposal.lead?.clientEmail
   const recipientPhone = proposal.client?.phone || proposal.lead?.clientPhone
 
-  const shareUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3008'}/api/proposals/view/${proposal.shareToken}/pdf`
+  const shareUrl = `${getBaseUrl()}/api/proposals/view/${proposal.shareToken}/pdf`
 
   let emailSent = false, whatsappSent = false
 

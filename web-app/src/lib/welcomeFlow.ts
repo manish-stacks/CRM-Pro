@@ -2,6 +2,7 @@
 // Sends welcome credentials to a newly onboarded client via email + WhatsApp.
 // Generates a temporary portal password, bcrypt-hashes it, saves to Client.
 import { hash } from 'bcryptjs'
+import { getBaseUrl } from '@/lib/baseUrl'
 import { prisma } from './prisma'
 import { sendMail, wrapEmailHtml } from './mailer'
 import { BRAND } from './branding'
@@ -46,7 +47,7 @@ export async function activateClientPortal(clientId: string, options: {
     },
   })
 
-  const portalUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3008'}/client-portal`
+  const portalUrl = `${getBaseUrl()}/client-portal`
   const companyName = client.companyName || client.clientName
 
   // ============ Email ============
@@ -108,7 +109,7 @@ export async function sendEmployeeWelcome(userId: string, plainPassword: string)
   })
   if (!user) throw new Error('User not found')
 
-  const loginUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3008'}/login`
+  const loginUrl = `${getBaseUrl()}/login`
   const companyName = BRAND.name
 
   // ============ Email ============

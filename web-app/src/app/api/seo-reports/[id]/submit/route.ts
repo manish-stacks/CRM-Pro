@@ -6,6 +6,7 @@
 //   4. WhatsApp the client a link
 //   5. push + in-app notify the client and the internal staff on the account
 import { NextRequest } from 'next/server'
+import { getBaseUrl } from '@/lib/baseUrl'
 import { prisma } from '@/lib/prisma'
 import { getRequestSession } from '@/lib/auth'
 import { successResponse, errorResponse, notFoundResponse, unauthorizedResponse } from '@/lib/api'
@@ -51,7 +52,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // — the browser's real address bar origin). Some dev-proxy setups make
   // req.url resolve to a different internal host/port than what's actually
   // in the browser, which was baking the wrong port into the saved link.
-  let base = new URL(req.url).origin
+  let base = getBaseUrl(req)
   if (typeof origin === 'string') {
     try {
       const u = new URL(origin)
@@ -62,7 +63,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const finalPdfUrl = pdfUrl || report.pdfUrl || `${base}/seo-report/view/${shareToken}`
 
   const client = report.client
-  const portalUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3008'}/client-portal/reports`
+  const portalUrl = `${getBaseUrl()}/client-portal/reports`
 
   // ---- 2. mirror into the client portal reports feed ----
   const mirrored = await prisma.clientReport.create({

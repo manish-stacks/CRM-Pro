@@ -4,6 +4,7 @@
 // `id` here is the Payment id (not the Invoice id used elsewhere under
 // /api/payments/[id]/...).
 import { NextRequest } from 'next/server'
+import { getBaseUrl } from '@/lib/baseUrl'
 import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/auth'
 import { successResponse, notFoundResponse, errorResponse } from '@/lib/api'
@@ -25,7 +26,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       })
     }
 
-    const base = new URL(req.url).origin
+    const base = getBaseUrl(req)
     return successResponse({
       token: payment.receiptToken,
       url: `${base}/receipt/view/${payment.receiptToken}`,

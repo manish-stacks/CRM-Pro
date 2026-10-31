@@ -4,6 +4,7 @@
 // server-rendered PDF (GET /api/letters/[id]/pdf) — an A4, letterhead-branded
 // PDF with the header/footer repeating on every page.
 import { NextRequest } from 'next/server'
+import { getBaseUrl } from '@/lib/baseUrl'
 import { prisma } from '@/lib/prisma'
 import { getRequestSession, hasMinRole } from '@/lib/auth'
 import { successResponse, errorResponse, unauthorizedResponse, forbiddenResponse, notFoundResponse } from '@/lib/api'
@@ -31,7 +32,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const recipientEmail = letter.employee.user.email
   if (!recipientEmail) return errorResponse('This employee has no email on file')
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3008'
+  const baseUrl = getBaseUrl()
   const viewUrl = `${baseUrl}/api/letters/${id}/pdf`
   const label = TYPE_LABEL[letter.type] || 'Letter'
 

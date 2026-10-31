@@ -5,6 +5,7 @@
 // the mobile app (Linking.openURL) alike, since the destination itself
 // requires no session — only the unguessable token.
 import { NextRequest } from 'next/server'
+import { getBaseUrl } from '@/lib/baseUrl'
 import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/auth'
 import { successResponse, notFoundResponse, errorResponse } from '@/lib/api'
@@ -26,7 +27,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       })
     }
 
-    const base = new URL(req.url).origin
+    const base = getBaseUrl(req)
     return successResponse({
       token: invoice.shareToken,
       url: `${base}/api/invoices/view/${invoice.shareToken}/pdf`,

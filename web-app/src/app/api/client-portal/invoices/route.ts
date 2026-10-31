@@ -2,6 +2,7 @@
 // Client ke invoices + har invoice ka public PDF link (Invoice.shareToken).
 // The app/web just opens the link — no client-side file generation.
 import { NextRequest, NextResponse } from 'next/server'
+import { getBaseUrl } from '@/lib/baseUrl'
 import { prisma } from '@/lib/prisma'
 import { getClientSession } from '@/lib/clientAuth'
 import { randomToken } from '@/lib/idgen'
@@ -30,7 +31,7 @@ export async function GET(req: NextRequest) {
     })
   )
 
-  const base = new URL(req.url).origin
+  const base = getBaseUrl(req)
 
   const data = invoices.map(i => ({
     ...i,

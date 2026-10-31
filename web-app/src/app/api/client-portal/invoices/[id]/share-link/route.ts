@@ -12,6 +12,7 @@
 // a token-based link that needs no session to open afterwards — the same
 // pattern already used for the employee-side share link.
 import { NextRequest } from 'next/server'
+import { getBaseUrl } from '@/lib/baseUrl'
 import { prisma } from '@/lib/prisma'
 import { getClientSession } from '@/lib/clientAuth'
 import { successResponse, notFoundResponse, errorResponse, unauthorizedResponse } from '@/lib/api'
@@ -33,7 +34,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       })
     }
 
-    const base = new URL(req.url).origin
+    const base = getBaseUrl(req)
     return successResponse({
       token: invoice.shareToken,
       url: `${base}/api/invoices/view/${invoice.shareToken}/pdf`,

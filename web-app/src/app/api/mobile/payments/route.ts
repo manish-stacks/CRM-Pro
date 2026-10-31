@@ -3,6 +3,7 @@
 // /api/payments route, scoped to clients assigned to the logged-in employee
 // (marketingPersonId), same as /mobile/invoices and /mobile/clients.
 import { NextRequest } from 'next/server'
+import { getBaseUrl } from '@/lib/baseUrl'
 import { prisma } from '@/lib/prisma'
 import { requireMobileEmployee, ok, fail } from '@/lib/mobileAuth'
 import { logFromRequest } from '@/lib/audit'
@@ -48,7 +49,7 @@ export async function GET(req: NextRequest) {
     })
   )
 
-  const base = new URL(req.url).origin
+  const base = getBaseUrl(req)
 
   return ok(payments.map(p => ({
     id: p.id,
@@ -154,7 +155,7 @@ export async function POST(req: NextRequest) {
     ).catch(() => {})
   }
 
-  const base = new URL(req.url).origin
+  const base = getBaseUrl(req)
   return ok({
     id: payment.id,
     amount: payment.amount,

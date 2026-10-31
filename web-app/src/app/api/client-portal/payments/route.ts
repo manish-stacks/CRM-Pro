@@ -5,6 +5,7 @@
 //   GET                 -> invoices (with payments, receipt_url on every payment)
 //   GET ?type=payments  -> flat payment list (app ki "Payments Received" list)
 import { NextRequest, NextResponse } from 'next/server'
+import { getBaseUrl } from '@/lib/baseUrl'
 import { prisma } from '@/lib/prisma'
 import { getClientSession } from '@/lib/clientAuth'
 import { randomToken } from '@/lib/idgen'
@@ -30,7 +31,7 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url)
   const type = searchParams.get('type')
-  const base = new URL(req.url).origin
+  const base = getBaseUrl(req)
 
   const invoices = await prisma.invoice.findMany({
     where: { clientId: session.clientId },

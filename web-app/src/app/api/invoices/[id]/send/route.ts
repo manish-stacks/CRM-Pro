@@ -1,6 +1,7 @@
 // src/app/api/invoices/[id]/send/route.ts
 // Send invoice via email + WhatsApp
 import { NextRequest } from 'next/server'
+import { getBaseUrl } from '@/lib/baseUrl'
 import { BRAND } from '@/lib/branding'
 import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/auth'
@@ -25,7 +26,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   })
   if (!invoice) return notFoundResponse('Invoice')
 
-  const portalUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3008'}/client-portal`
+  const portalUrl = `${getBaseUrl()}/client-portal`
   let emailSent = false, whatsappSent = false
 
   if (viaEmail && invoice.client.email) {

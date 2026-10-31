@@ -10,6 +10,7 @@
 // producing links with the wrong port — the browser always knows its own
 // real address, so we trust that first.
 import { NextRequest } from 'next/server'
+import { getBaseUrl } from '@/lib/baseUrl'
 import { prisma } from '@/lib/prisma'
 import { getRequestSession } from '@/lib/auth'
 import { successResponse, notFoundResponse, unauthorizedResponse, errorResponse } from '@/lib/api'
@@ -40,7 +41,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       })
     }
 
-    const reqOrigin = new URL(req.url).origin
+    const reqOrigin = getBaseUrl(req)
     const base = safeOrigin(req.nextUrl.searchParams.get('origin'), reqOrigin)
     return successResponse({
       token: report.shareToken,
