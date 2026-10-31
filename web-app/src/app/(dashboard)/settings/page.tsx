@@ -95,6 +95,8 @@ export default function SettingsPage() {
   const [tab, setTab] = useState<'company' | 'finance' | 'hrm' | 'attendance' | 'meetings' | 'tracker' | 'notifications' | 'appearance'>('company')
   const [sigUploading, setSigUploading] = useState(false)
   const sigRef = useRef<HTMLInputElement>(null)
+  const [logoUploading, setLogoUploading] = useState(false)
+  const logoRef = useRef<HTMLInputElement>(null)
   const [holidayCalUrl, setHolidayCalUrl] = useState('')
   const [holidayCalUploading, setHolidayCalUploading] = useState(false)
   const holidayCalRef = useRef<HTMLInputElement>(null)
@@ -131,6 +133,25 @@ export default function SettingsPage() {
     } catch (e: any) {
       toast.error(e.response?.data?.error || 'Failed')
     } finally { setHolidayCalUploading(false) }
+  }
+
+  const uploadLogo = async (file: File) => {
+    if (file.size > 2 * 1024 * 1024) { toast.error('Max 2MB'); return }
+    if (!/^image\/(png|jpe?g|webp)$/.test(file.type)) { toast.error('Use PNG, JPG or WEBP'); return }
+    setLogoUploading(true)
+    try {
+      const dataUrl = await new Promise<string>((res, rej) => {
+        const fr = new FileReader()
+        fr.onload = () => res(fr.result as string)
+        fr.onerror = rej
+        fr.readAsDataURL(file)
+      })
+      const r = await api.post('/upload', { dataUrl, folder: 'general' })
+      set('company_logo_url', r.data.data.url)
+      toast.success('Logo uploaded! Click Save All to keep it.')
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Upload failed')
+    } finally { setLogoUploading(false); if (logoRef.current) logoRef.current.value = '' }
   }
 
   const uploadSignature = async (file: File) => {
@@ -256,7 +277,6 @@ export default function SettingsPage() {
                 <Input label="Phone" value={values.company_phone || ''} onChange={e => set('company_phone', e.target.value)} />
                 <Input label="Email" type="email" value={values.company_email || ''} onChange={e => set('company_email', e.target.value)} />
                 <Input label="Hr Email" type="email" value={values.hr_email || ''} onChange={e => set('hr_email', e.target.value)} />
-                <Input label="Logo URL" value={values.company_logo_url || ''} onChange={e => set('company_logo_url', e.target.value)} placeholder="https://..." />
                 <Input label="Website" value={values.company_website || ''} onChange={e => set('company_website', e.target.value)} placeholder="https://..." />
                 <Input label="Company Profile Link (PDF / Drive)" value={values.company_profile_url || ''} onChange={e => set('company_profile_url', e.target.value)} placeholder="https://..." />
                 <Select label="Timezone" value={values.timezone || 'Asia/Kolkata'} onChange={e => set('timezone', e.target.value)} options={[
@@ -269,6 +289,29 @@ export default function SettingsPage() {
               </div>
               <Textarea label="Address" value={values.company_address || ''} onChange={e => set('company_address', e.target.value)} rows={3}
                 placeholder="Full address for invoices and emails" />
+
+              <div>
+                <label className="label">Company Logo</label>
+                <div className="flex items-center gap-3">
+                  {values.company_logo_url ? (
+                    <div className="relative">
+                      <img src={values.company_logo_url} alt="Logo" className="h-14 border border-gray-200 rounded-lg bg-white px-3 object-contain" />
+                      <button type="button" onClick={() => set('company_logo_url', '')}
+                        className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center">
+                        <X size={11} />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="h-14 w-40 border border-dashed border-gray-300 rounded-lg flex items-center justify-center text-xs text-gray-400">Default logo</div>
+                  )}
+                  <button type="button" onClick={() => logoRef.current?.click()} disabled={logoUploading} className="btn-secondary btn-sm">
+                    {logoUploading ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />} Upload
+                  </button>
+                  <input ref={logoRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden"
+                    onChange={e => e.target.files?.[0] && uploadLogo(e.target.files[0])} />
+                </div>
+                <p className="text-xs text-gray-500 mt-1">PNG / JPG / WEBP, max 2MB. Used on SEO reports, invoices, proposals and emails.</p>
+              </div>
 
               <div>
                 <label className="label">Authorised Signature</label>

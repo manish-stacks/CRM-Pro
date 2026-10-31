@@ -128,6 +128,9 @@ async function fetchDataUrl(src?: string | null): Promise<string | null> {
     if (res.ok) return await blobToDataUrl(await res.blob())
   } catch { /* falls through to the proxy */ }
 
+  // Relative paths (bundled assets) can't go through the proxy.
+  if (src.startsWith('/')) return null
+
   // 2) server-side proxy — needed for the agency logo, which is usually hosted
   //    on the company website and blocks cross-origin reads (that's why it was
   //    silently missing from the footer).
@@ -145,7 +148,9 @@ async function fetchDataUrl(src?: string | null): Promise<string | null> {
 export async function preloadReportImages(d: SeoReportData): Promise<SeoReportData> {
   const [clientLogo, gmbScreenshot, gscScreenshot, gaScreenshot, companyLogo] = await Promise.all([
     toDataUrl(d.clientLogo), toDataUrl(d.gmbScreenshot),
-    toDataUrl(d.gscScreenshot), toDataUrl(d.gaScreenshot), toDataUrl(d.companyLogo || '/images/hbs-logo.png'),
+    toDataUrl(d.gscScreenshot), toDataUrl(d.gaScreenshot),
+    // Agency logo: configured one first, bundled default if it fails to load.
+    (async () => (d.companyLogo ? await toDataUrl(d.companyLogo) : null) || await toDataUrl('/images/hbs-logo.png'))(),
   ])
   const extraGmb = await Promise.all(
     (d.extraGmb || []).map(async g => ({ ...g, screenshot: await toDataUrl(g.screenshot) }))
