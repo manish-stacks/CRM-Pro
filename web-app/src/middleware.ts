@@ -14,6 +14,9 @@ const publicPaths = [
   '/api/auth/forgot-password',   // send-otp + reset (user is locked out, no session)
   '/api/proposals/view',         // Public "view proposal" PDF (Proposal.shareToken) + its data API — replaces the old /proposal/view HTML page
   '/api/invoices/view',          // Public "view invoice" PDF (Invoice.shareToken) + its data API — replaces the old /invoice/view HTML page
+  '/seo-report/view',            // Public SEO report page (shareToken) — client opens from email / WhatsApp
+  '/api/seo-reports/view',       // ...its data API
+  '/api/proxy-image',            // Image proxy used by the public report PDF (logos/screenshots)
   '/receipt/view',               // Public "view payment receipt" page (Payment.receiptToken)
   '/api/receipts/view',          // ...its data API
   '/card',                       // Public visiting card page (marketing executives share this link)

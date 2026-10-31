@@ -11,8 +11,8 @@ import { getSetting } from './settings'
 // These template names MUST be created + approved on BUZWAP dashboard.
 // Parameter ORDER matters — matches template body {{1}}, {{2}}, ...
 export const WHATSAPP_TEMPLATES = {
-  hbs_client_welcome:            ['clientName', 'companyName', 'loginEmail', 'loginPassword', 'portalUrl'] as const,
-  hbs_employee_welcome:          ['employeeName', 'companyName', 'loginEmail', 'loginPassword', 'loginUrl'] as const,
+  hbs_client_welcome:            ['clientName'] as const,
+  hbs_employee_welcome:          ['employeeName'] as const,
   hbs_lead_meeting_scheduled:    ['clientName', 'meetingDate', 'meetingTime', 'marketingPersonName', 'marketingPhone'] as const,
   hbs_proposal_sent:             ['clientName', 'proposalNumber', 'amount', 'viewUrl'] as const,
   hbs_invoice_generated:         ['clientName', 'invoiceNumber', 'amount', 'dueDate', 'payUrl'] as const,
@@ -27,9 +27,21 @@ export const WHATSAPP_TEMPLATES = {
   hbs_ticket_created:            ['ticketNumber', 'subject', 'departmentName'] as const,
   hbs_ticket_resolved:           ['ticketNumber', 'subject'] as const,
   hbs_client_report_uploaded:    ['clientName', 'reportTitle', 'downloadUrl'] as const,
-  hbs_password_reset:            ['name', 'resetCode'] as const,
+  hbs_password_reset:            ['resetCode'] as const,
   hbs_otp:                       ['code'] as const,
 } as const
+
+// Internal key -> exact approved template name on the WhatsApp dashboard.
+const APPROVED_NAMES: Record<string, string> = {
+  hbs_client_welcome: 'client_onboarding',
+  hbs_employee_welcome: 'hbs_employee_welcome_v2',
+  hbs_password_reset: 'hbs_otp',
+  hbs_otp: 'hbs_otp',
+  hbs_ticket_created: 'hbs_ticket_created_0715',
+  hbs_ticket_resolved: 'hbs_ticket_resolved_0715',
+  hbs_payment_due_reminder: 'hbs_payment_due_reminder_0715',
+}
+const approvedName = (t: string) => APPROVED_NAMES[t] || (t.endsWith('_0715') ? t : `${t}_0715`)
 
 export type WhatsappTemplate = keyof typeof WHATSAPP_TEMPLATES
 
@@ -73,7 +85,7 @@ export async function sendWhatsapp(opts: SendWhatsappOptions): Promise<SendWhats
   const log = await prisma.whatsappLog.create({
     data: {
       toPhone,
-      templateName: opts.template,
+      templateName: approvedName(opts.template),
       params: JSON.stringify(opts.params),
       status: 'PENDING',
       referenceType: opts.referenceType,
@@ -97,7 +109,7 @@ export async function sendWhatsapp(opts: SendWhatsappOptions): Promise<SendWhats
       throw new Error('WhatsApp API not configured. Set WHATSAPP_* env vars.')
     }
 
-    const url = `${process.env.WHATSAPP_API_URL}?user=${encodeURIComponent(process.env.WHATSAPP_USER)}&pass=${encodeURIComponent(process.env.WHATSAPP_PASS || '')}&sender=${encodeURIComponent(process.env.WHATSAPP_SENDER || 'BUZWAP')}&phone=${toPhone}&text=${encodeURIComponent(opts.template)}&priority=wa&stype=normal&Params=${paramString}`
+    const url = `${process.env.WHATSAPP_API_URL}?user=${encodeURIComponent(process.env.WHATSAPP_USER)}&pass=${encodeURIComponent(process.env.WHATSAPP_PASS || '')}&sender=${encodeURIComponent(process.env.WHATSAPP_SENDER || 'BUZWAP')}&phone=${toPhone}&text=${encodeURIComponent(approvedName(opts.template))}&priority=wa&stype=normal&Params=${paramString}`
 
     const res = await fetch(url, { method: 'GET' })
     const text = await res.text()

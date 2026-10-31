@@ -93,6 +93,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     },
   })
 
+  let emailJob: Promise<any> | null = null
+  let waJob: Promise<any> | null = null
   // ---- 3. email ----
   if (notifyEmail && client.email) {
     const html = wrapEmailHtml(
@@ -110,18 +112,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       'Open My Dashboard',
       portalUrl
     )
-    sendMail({
+    emailJob = sendMail({
       to: client.email,
       subject: `${report.title} — ${report.reportMonth}`,
       html,
       referenceType: 'SEO_REPORT',
       referenceId: report.id,
-    }).catch(() => { })
+    })
   }
 
   // ---- 4. whatsapp ----
   if (notifyWhatsapp && client.phone) {
-    sendWhatsapp({
+    waJob = sendWhatsapp({
       toPhone: client.phone,
       template: 'hbs_client_report_uploaded',
       params: {
@@ -131,8 +133,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       },
       referenceType: 'SEO_REPORT',
       referenceId: report.id,
-    }).catch(() => { })
+    })
   }
+
+  // Wait for both so the server never drops them; failures are logged, not thrown.
+  await Promise.allSettled([emailJob, waJob])
 
   // ---- 5. push + in-app ----
   sendPushToClients([client.id], {
