@@ -11,7 +11,7 @@ import { Settings } from '@/lib/settings'
 import { canSeeBeyondOwn, isCompanyWideRole } from '@/lib/permissions'
 import { computeLeaveDays } from '@/lib/leaveDays'
 
-const LEAVE_TYPES = ['PAID', 'UNPAID', 'SICK', 'CASUAL', 'MATERNITY', 'PATERNITY']
+const LEAVE_TYPES = ['PAID', 'UNPAID', 'SICK', 'CASUAL', 'MATERNITY', 'PATERNITY', 'SHORT', 'HALF_DAY', 'OTHER']
 const DURATIONS   = ['SINGLE_DAY', 'MULTIPLE_DAYS', 'SHORT_HOURLY']
 
 export async function GET(req: NextRequest) {
@@ -117,7 +117,8 @@ export async function POST(req: NextRequest) {
 
     const calc = computeLeaveDays({ duration, startDate, endDate, hourlyStart, hourlyEnd, hourlyHours })
     if (calc.error) return errorResponse(calc.error)
-    const { start, end, days } = calc
+    const { start, end } = calc
+    const days = leaveType === 'HALF_DAY' && duration === 'SINGLE_DAY' ? 0.5 : calc.days
 
     const leave = await prisma.leave.create({
       data: {

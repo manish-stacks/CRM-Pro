@@ -43,6 +43,7 @@ export interface SeoReportData {
   gmbKeywords?: KeywordRow[]
   // Website SEO
   technicalWork?: string[]
+  mapMarker?: string[]
   gscScreenshot?: string | null
   gaScreenshot?: string | null
   // On-page
@@ -436,6 +437,21 @@ export function generateSeoReportPdf(meta: SeoReportMeta, data: SeoReportData): 
     need(work.length * 6 + 6)
     doc.setFont('helvetica', 'normal').setFontSize(9.5)
     work.forEach(item => {
+      const lines = doc.splitTextToSize(item, W - M * 2 - 8)
+      need(lines.length * 5 + 4)
+      doc.circle(M + 2, y + 2.6, 0.8, 'F')
+      doc.text(lines, M + 6, y + 4)
+      y += lines.length * 5 + 2
+    })
+    y += 6
+  }
+
+  const markers = (data.mapMarker || []).filter(w => w?.trim())
+  if (on('mapMarker') && markers.length) {
+    sectionBar('Map Marker Work')
+    need(markers.length * 6 + 6)
+    doc.setFont('helvetica', 'normal').setFontSize(9.5)
+    markers.forEach(item => {
       const lines = doc.splitTextToSize(item, W - M * 2 - 8)
       need(lines.length * 5 + 4)
       doc.circle(M + 2, y + 2.6, 0.8, 'F')

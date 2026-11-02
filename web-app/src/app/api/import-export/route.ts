@@ -419,7 +419,7 @@ export async function GET(req: NextRequest) {
           }),
           prisma.leave.findMany({
             where: { employeeId: { in: empIds }, status: 'APPROVED', startDate: { lte: monthEnd }, endDate: { gte: monthStart } },
-            select: { employeeId: true, duration: true, startDate: true, endDate: true },
+            select: { employeeId: true, duration: true, startDate: true, endDate: true, days: true, hourlyStart: true, hourlyEnd: true },
           }),
         ])
         const attBy: Record<string, any[]> = {}, lvBy: Record<string, any[]> = {}
@@ -440,45 +440,70 @@ export async function GET(req: NextRequest) {
           rows.forEach(r => { if (r.status === 'HOLIDAY') workSet.delete(dayNum(r.date)) })
           const onWork = rows.filter(r => workSet.has(dayNum(r.date)))
 
-          const present = onWork.filter(r => r.status === 'PRESENT').length
-          const halfDay = onWork.filter(r => r.status === 'HALF_DAY').length
+          const rowByDay = new Map<number, any>()
+          onWork.forEach(r => rowByDay.set(dayNum(r.date), r))
           const late = onWork.filter(r => r.isLate).length
           const wfh = onWork.filter(r => r.workMode === 'WFH' && r.punchIn).length
 
-          // Leave days = approved full-day leave dates inside the month, on working days only
-          // (clipped to the month, no Sundays/holidays, no double count with a punched-in day).
-          const punched = new Set(onWork.filter(r => r.punchIn || r.status === 'PRESENT' || r.status === 'HALF_DAY').map(r => dayNum(r.date)))
-          const leaveSet = new Set<number>()
+          // Approved full-day leave dates (working days only, clipped to the month)
+          const approvedLeave = new Set<number>()
+          const halfLeave = new Set<number>()
+          const shortNotes: string[] = []
+          const leaveNotes: string[] = []
           let shortLeave = 0
+          const mon = new Date(Date.UTC(y, m - 1, 1)).toLocaleString('en-US', { month: 'short', timeZone: 'UTC' })
           for (const lv of lvBy[e.id] || []) {
             if (lv.duration === 'SHORT_HOURLY') {
               const sd = new Date(lv.startDate)
-              if (sd.getUTCFullYear() === y && sd.getUTCMonth() + 1 === m) shortLeave++
+              if (sd.getUTCFullYear() === y && sd.getUTCMonth() + 1 === m) {
+                shortLeave++
+                shortNotes.push(`${sd.getUTCDate()} ${mon} (${lv.hourlyStart || ''}-${lv.hourlyEnd || ''})`)
+              }
               continue
             }
-            const s = dayStamp(lv.startDate), en = dayStamp(lv.endDate)
+            const s0 = dayStamp(lv.startDate), en = dayStamp(lv.endDate)
             for (const d of workSet) {
               const t = Date.UTC(y, m - 1, d)
-              if (t >= s && t <= en && !punched.has(d)) leaveSet.add(d)
+              if (t >= s0 && t <= en) { if (lv.days < 1) halfLeave.add(d); else { approvedLeave.add(d); leaveNotes.push(`${d} ${mon}`) } }
             }
           }
-          onWork.forEach(r => { if (r.status === 'LEAVE' && !r.punchIn) leaveSet.add(dayNum(r.date)) })
 
-          const accounted = new Set<number>([...onWork.map(r => dayNum(r.date)), ...leaveSet])
-          const absent = Math.max(0, workSet.size - accounted.size)
+          // Every working day is counted exactly once so the columns always add up:
+          // Present + Half days + Leave + Absent = Working days
+          let present = 0, halfDay = 0, leaveDays = 0, absent = 0
+          const halfNotes: string[] = [], absentNotes: string[] = []
+          for (const d of [...workSet].sort((x, y2) => x - y2)) {
+            const r = rowByDay.get(d)
+            if (r?.punchIn) { if (r.status === 'HALF_DAY') { halfDay++; halfNotes.push(`${d} ${mon}`) } else present++ }
+            else if (approvedLeave.has(d) || r?.status === 'LEAVE') leaveDays++
+            else if (r?.status === 'HALF_DAY' || halfLeave.has(d)) { halfDay++; halfNotes.push(`${d} ${mon}`) }
+            else if (r?.status === 'PRESENT') present++
+            else { absent++; absentNotes.push(`${d} ${mon}`) }
+          }
+
+          const monthHolidays = [...holidaySet].filter(h => h.startsWith(`${y}-${pad(m)}`)).map(h => `${Number(h.slice(8, 10))} ${mon}`)
+          const remarks = [
+            monthHolidays.length ? `Holidays (not counted): ${monthHolidays.join(', ')}` : '',
+            leaveDays ? `Leave: ${[...new Set(leaveNotes)].join(', ')}` : '',
+            shortLeave ? `Short leave: ${shortNotes.join(', ')}` : '',
+            halfDay ? `Half day: ${halfNotes.join(', ')}` : '',
+            absent ? `Absent: ${absentNotes.join(', ')}` : '',
+            late >= 4 ? `Late marks: ${late} (every 4 = 1 half day deduction)` : '',
+          ].filter(Boolean).join(' | ')
 
           return {
             EmployeeID: e.employeeId,
             Name: e.user.name,
-            Department: e.department?.name || '',
+            Department: (e.department?.name || '').trim(),
             'Working days': workSet.size,
             Present: present,
-            Leave: leaveSet.size,
+            Leave: leaveDays,
             Absent: absent,
             Late: late,
             WFH: wfh,
             'Short leave': shortLeave,
             'Half days': halfDay,
+            Remarks: remarks,
           }
         })
         filename = `attendance-summary-${monthParam}`

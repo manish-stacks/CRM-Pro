@@ -7,7 +7,7 @@ import { prisma } from '@/lib/prisma'
 import { requireMobileEmployee, ok, fail } from '@/lib/mobileAuth'
 import { logFromRequest } from '@/lib/audit'
 
-const LEAVE_TYPES = ['PAID', 'UNPAID', 'SICK', 'CASUAL', 'MATERNITY', 'PATERNITY']
+const LEAVE_TYPES = ['PAID', 'UNPAID', 'SICK', 'CASUAL', 'MATERNITY', 'PATERNITY', 'SHORT', 'HALF_DAY', 'OTHER']
 const DURATIONS   = ['SINGLE_DAY', 'MULTIPLE_DAYS', 'SHORT_HOURLY']
 
 export async function GET(req: NextRequest) {
@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
     if (!sDate) return fail('Date is required')
     start = new Date(sDate)
     end = new Date(sDate)
-    days = 1
+    days = lType === 'HALF_DAY' ? 0.5 : 1
   } else if (duration === 'MULTIPLE_DAYS') {
     if (!sDate || !eDate) return fail('Start and end dates are required')
     start = new Date(sDate)

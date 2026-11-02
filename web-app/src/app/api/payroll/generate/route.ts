@@ -150,20 +150,32 @@ export async function POST(req: NextRequest) {
           startDate: { lte: monthEnd },
           endDate: { gte: monthStart },
         },
-        select: { startDate: true, endDate: true },
+        select: { startDate: true, endDate: true, duration: true, days: true, leaveType: true },
       })
       const leaveDaySet = new Set<number>()
+      const unpaidTypeSet = new Set<number>()   // UNPAID leave type: always LOP, never uses the paid quota
+      const halfLeaveDays = new Set<number>()   // approved half-day leaves (count 0.5)
+      const halfMarked = new Set(marked.filter(r => r.status === 'HALF_DAY').map(r => new Date(r.date).getUTCDate()))
       for (const lv of approvedLeaves) {
+        // Short (hourly) leave is not a day off - no leave day, no LOP
+        if (lv.duration === 'SHORT_HOURLY') continue
+        if (lv.days < 1) {
+          const hd = new Date(lv.startDate).getUTCDate()
+          const sd = new Date(lv.startDate)
+          if (sd.getUTCFullYear() === year && sd.getUTCMonth() + 1 === month && workDaySet.has(hd) && !halfMarked.has(hd)) halfLeaveDays.add(hd)
+          continue
+        }
         const s = new Date(lv.startDate), e = new Date(lv.endDate)
         for (let d = 1; d <= total; d++) {
           const cur = new Date(Date.UTC(year, month - 1, d))
           if (cur >= new Date(Date.UTC(s.getUTCFullYear(), s.getUTCMonth(), s.getUTCDate())) &&
             cur <= new Date(Date.UTC(e.getUTCFullYear(), e.getUTCMonth(), e.getUTCDate())) &&
-            workDaySet.has(d)) leaveDaySet.add(d)
+            workDaySet.has(d)) { leaveDaySet.add(d); if (lv.leaveType === 'UNPAID') unpaidTypeSet.add(d) }
         }
       }
       for (const r of marked) if (r.status === 'LEAVE') leaveDaySet.add(new Date(r.date).getUTCDate())
-      const totalLeaveDays = leaveDaySet.size
+      const totalLeaveDays = leaveDaySet.size + halfLeaveDays.size * 0.5
+      const unpaidTypeDays = unpaidTypeSet.size
 
       // Late marks → half-day LOP
       const lateCount = marked.filter(r => r.isLate).length
@@ -171,13 +183,20 @@ export async function POST(req: NextRequest) {
 
       // Absent = working day with nothing recorded at all and no approved leave
       const accountedDays = new Set<number>()
-      for (const r of marked) accountedDays.add(new Date(r.date).getUTCDate())
+      // An explicit ABSENT row with no punch-in and no approved leave is an absent day
+      for (const r of marked) {
+        const dn = new Date(r.date).getUTCDate()
+        if (r.status === 'ABSENT' && !r.punchIn && !leaveDaySet.has(dn)) continue
+        accountedDays.add(dn)
+      }
       for (const d of leaveDaySet) accountedDays.add(d)
+      for (const d of halfLeaveDays) accountedDays.add(d)
       const absentDays = Math.max(0, effectiveWorkingDays - accountedDays.size)
 
       // Paid-leave quota — only `paidLeaveQuota` leaves per month are paid
-      const paidLeaveUsed = Math.min(totalLeaveDays, Math.max(0, paidLeaveQuota))
-      const unpaidLeaveDays = Math.max(0, totalLeaveDays - paidLeaveUsed)
+      const quotaLeaveDays = totalLeaveDays - unpaidTypeDays
+      const paidLeaveUsed = Math.min(quotaLeaveDays, Math.max(0, paidLeaveQuota))
+      const unpaidLeaveDays = Math.max(0, quotaLeaveDays - paidLeaveUsed) + unpaidTypeDays
 
       const lopDays = Math.round(
         (absentDays + unpaidLeaveDays + (halfDays * halfDayLop) + lateHalfDays) * 100

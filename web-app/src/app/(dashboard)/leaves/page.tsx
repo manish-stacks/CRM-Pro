@@ -11,7 +11,7 @@ import {
 import toast from 'react-hot-toast'
 import { formatLeaveDuration } from '@/lib/leaveDuration'
 
-const LEAVE_TYPES = ['PAID', 'UNPAID', 'SICK', 'CASUAL', 'MATERNITY', 'PATERNITY']
+const LEAVE_TYPES = ['PAID', 'UNPAID', 'SICK', 'CASUAL', 'MATERNITY', 'PATERNITY', 'SHORT', 'HALF_DAY', 'OTHER']
 const DURATIONS = [
   { key: 'SINGLE_DAY', label: 'Single Day', icon: Calendar },
   { key: 'MULTIPLE_DAYS', label: 'Multiple Days', icon: CalendarDays },
@@ -416,7 +416,7 @@ export default function LeavesPage() {
       <Modal open={modal === 'apply' || modal === 'edit'} onClose={() => { setModal('none'); setTarget(null) }} title={modal === 'edit' ? 'Edit Leave Request' : 'Apply for Leave'}>
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
-            <Select label="Leave Type" value={form.leaveType} onChange={e => setForm(p => ({ ...p, leaveType: e.target.value }))} options={LEAVE_TYPES.map(t => ({ value: t, label: t }))} />
+            <Select label="Leave Type" value={form.leaveType} onChange={e => setForm(p => ({ ...p, leaveType: e.target.value }))} options={LEAVE_TYPES.map(t => ({ value: t, label: t.replace('_', ' ') }))} />
             <div>
               <label className="label">Duration</label>
               <div className="grid grid-cols-3 gap-1">

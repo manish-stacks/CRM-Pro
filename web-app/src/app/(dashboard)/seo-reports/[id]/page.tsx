@@ -19,7 +19,7 @@ const DEFAULT_WORK = [
 ]
 
 const SECTION_KEYS = [
-  'gmb', 'analytics', 'localCitations', 'gmbKeywords', 'technicalWork', 'gmbPosts', 'onPage',
+  'gmb', 'analytics', 'localCitations', 'gmbKeywords', 'technicalWork', 'mapMarker', 'gmbPosts', 'onPage',
   'profileCreation', 'forumSubmission', 'classifiedAds', 'businessListings', 'web20', 'articles', 'websiteKeywords',
 ]
 
@@ -33,6 +33,7 @@ const EMPTY: SeoReportData = {
   extraGmb: [],
   gmbPosts: [], localCitations: [], gmbKeywords: [],
   technicalWork: DEFAULT_WORK,
+  mapMarker: [],
   gscScreenshot: null, gaScreenshot: null,
   pages: [], blogs: [],
   profileCreation: [], forumSubmission: [], classifiedAds: [], businessListings: [],
@@ -540,6 +541,33 @@ export default function SeoReportBuilderPage() {
                   if (!text) return
                   const added = text.split(/\r?\n/).map(t => t.trim()).filter(Boolean)
                   set('technicalWork', [...(d.technicalWork || []), ...added])
+                }} className="text-[11px] text-brand-600 hover:underline">Bulk paste</button>
+              </div>
+            )}
+          </div>
+        </Card>
+
+        <Card title="Map Marker Work" toggle={tg('mapMarker')}>
+          <div className="space-y-2">
+            {(d.mapMarker || []).map((w, i) => (
+              <div key={i} className="flex gap-1.5 items-center">
+                <input className="input flex-1 text-xs" value={w} disabled={locked}
+                  onChange={e => { const n = [...(d.mapMarker || [])]; n[i] = e.target.value; set('mapMarker', n) }} />
+                {!locked && (
+                  <button type="button" onClick={() => set('mapMarker', (d.mapMarker || []).filter((_, x) => x !== i))}
+                    className="p-1.5 text-red-500 hover:bg-red-50 rounded"><Trash2 size={13} /></button>
+                )}
+              </div>
+            ))}
+            {!locked && (
+              <div className="flex gap-1.5">
+                <button type="button" onClick={() => set('mapMarker', [...(d.mapMarker || []), ''])}
+                  className="text-[11px] text-brand-600 hover:underline flex items-center gap-0.5"><Plus size={11} /> Add point</button>
+                <button type="button" onClick={() => {
+                  const text = prompt('Paste multiple map marker points (one per line)')
+                  if (!text) return
+                  const added = text.split(/\r?\n/).map(t => t.trim()).filter(Boolean)
+                  set('mapMarker', [...(d.mapMarker || []), ...added])
                 }} className="text-[11px] text-brand-600 hover:underline">Bulk paste</button>
               </div>
             )}

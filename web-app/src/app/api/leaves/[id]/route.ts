@@ -14,7 +14,7 @@ import { getTeamScope } from '@/lib/teamScope'
 import { canSeeBeyondOwn, isCompanyWideRole } from '@/lib/permissions'
 import { computeLeaveDays } from '@/lib/leaveDays'
 
-const LEAVE_TYPES = ['PAID', 'UNPAID', 'SICK', 'CASUAL', 'MATERNITY', 'PATERNITY']
+const LEAVE_TYPES = ['PAID', 'UNPAID', 'SICK', 'CASUAL', 'MATERNITY', 'PATERNITY', 'SHORT', 'HALF_DAY', 'OTHER']
 const DURATIONS   = ['SINGLE_DAY', 'MULTIPLE_DAYS', 'SHORT_HOURLY']
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -44,7 +44,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
       const calc = computeLeaveDays({ duration, startDate, endDate, hourlyStart, hourlyEnd, hourlyHours })
       if (calc.error) return errorResponse(calc.error)
-      const { start, end, days } = calc
+      const { start, end } = calc
+      const days = leaveType === 'HALF_DAY' && duration === 'SINGLE_DAY' ? 0.5 : calc.days
 
       const updated = await prisma.leave.update({
         where: { id },
