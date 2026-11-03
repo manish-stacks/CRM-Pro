@@ -5,6 +5,8 @@ import LocationTracker from '@/components/LocationTracker'
 import { ChatNotificationPopup } from '@/components/ChatNotificationPopup'
 import { AnnouncementPopup } from '@/components/AnnouncementPopup'
 import { ImpersonationBanner } from '@/components/ImpersonationBanner'
+import DiwaliTheme from '@/components/DiwaliTheme'
+import ChristmasTheme from '@/components/ChristmasTheme'
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   return (
@@ -13,6 +15,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <LocationTracker />
       <ChatNotificationPopup />
       <AnnouncementPopup />
+      <DiwaliTheme />
+      <ChristmasTheme />
       <DashboardLayout>{children}</DashboardLayout>
     </>
   )
