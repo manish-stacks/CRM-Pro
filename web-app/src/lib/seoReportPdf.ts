@@ -218,25 +218,29 @@ export function generateSeoReportPdf(meta: SeoReportMeta, data: SeoReportData): 
     }
   }
 
-  chrome()
-
-  // ---- section bar (navy) ----
+  // ---- section bar (soft tint) ----
   const sectionBar = (label: string, keep = 40) => {
     need(keep)
+    doc.setFillColor(232, 238, 248)
+    doc.roundedRect(M, y, W - M * 2, 10, 1.5, 1.5, 'F')
     doc.setFillColor(...NAVY)
-    doc.rect(M, y, W - M * 2, 9, 'F')
-    doc.setTextColor(255, 255, 255).setFont('helvetica', 'bold').setFontSize(11)
-    doc.text(label, M + 4, y + 6.2)
+    doc.roundedRect(M, y, 3.2, 10, 1.2, 1.2, 'F')
+    doc.setFillColor(...RED)
+    doc.circle(W - M - 6, y + 5, 1.4, 'F')
+    doc.setTextColor(...NAVY).setFont('helvetica', 'bold').setFontSize(11.5)
+    doc.text(label, M + 8, y + 6.6)
     doc.setTextColor(0, 0, 0)
-    y += 14
+    y += 15
   }
 
   const bigHeading = (label: string, color: [number, number, number] = NAVY, keep = 56) => {
     need(keep)
     doc.setTextColor(...color).setFont('helvetica', 'bold').setFontSize(18)
     doc.text(label, W / 2, y + 6, { align: 'center' })
+    doc.setDrawColor(...RED).setLineWidth(0.8)
+    doc.line(W / 2 - 14, y + 9.5, W / 2 + 14, y + 9.5)
     doc.setTextColor(0, 0, 0)
-    y += 14
+    y += 16
   }
 
   const locName = (label: string) => {
@@ -250,7 +254,9 @@ export function generateSeoReportPdf(meta: SeoReportMeta, data: SeoReportData): 
   const subHeading = (label: string, color: [number, number, number] = RED, keep = 40) => {
     need(keep)
     doc.setTextColor(...color).setFont('helvetica', 'bold').setFontSize(13)
-    doc.text(label, M, y + 4.5)
+    doc.setFillColor(...color)
+    doc.rect(M, y, 1.6, 6, 'F')
+    doc.text(label, M + 4, y + 4.8)
     doc.setTextColor(0, 0, 0)
     doc.setFont('helvetica', 'normal').setFontSize(9.5)
     y += 12
@@ -337,6 +343,8 @@ export function generateSeoReportPdf(meta: SeoReportMeta, data: SeoReportData): 
       doc.setFillColor(...GREY)
       doc.setDrawColor(220).setLineWidth(0.3)
       doc.roundedRect(x, y, boxW, 20, 1.5, 1.5, 'FD')
+      doc.setFillColor(...RED)
+      doc.rect(x + 3, y, boxW - 6, 1.2, 'F')
       doc.setTextColor(...NAVY).setFont('helvetica', 'bold').setFontSize(15)
       doc.text(String(s.value), x + boxW / 2, y + 9, { align: 'center' })
       doc.setTextColor(90).setFont('helvetica', 'normal').setFontSize(6.5)
@@ -356,37 +364,65 @@ export function generateSeoReportPdf(meta: SeoReportMeta, data: SeoReportData): 
   }
 
   // ================================================== COVER
+  const NAVY_D: [number, number, number] = [18, 34, 66]
+  doc.setFillColor(...NAVY_D)
+  doc.rect(0, 0, W, 168, 'F')
+  doc.setFillColor(...NAVY)
+  doc.circle(W - 10, 20, 52, 'F')          // soft decorative circles
+  doc.circle(8, 150, 34, 'F')
+  doc.setFillColor(...RED)
+  doc.rect(0, 168, W, 3, 'F')
+
+  doc.setTextColor(255, 255, 255).setFont('helvetica', 'bold').setFontSize(11)
+  doc.text(meta.agencyName.toUpperCase(), M, 22)
+  if (meta.reportNumber) {
+    doc.setFont('helvetica', 'normal').setFontSize(9)
+    doc.text(meta.reportNumber.replace(/^SEO-/, 'RPT-'), W - M, 22, { align: 'right' })
+  }
+  doc.setFillColor(...RED)
+  doc.rect(M, 62, 14, 1.2, 'F')
+  doc.setTextColor(255, 150, 155).setFont('helvetica', 'bold').setFontSize(10)
+  doc.text('MONTHLY REPORT', M, 72)
+
+  doc.setTextColor(255, 255, 255).setFont('helvetica', 'bold').setFontSize(25)
+  const cvTitle = doc.splitTextToSize(meta.businessName, W - M * 2 - 10).slice(0, 3)
+  doc.text(cvTitle, M, 86)
+  let cy = 86 + cvTitle.length * 11
+  doc.setFont('helvetica', 'normal').setFontSize(14).setTextColor(200, 212, 235)
+  doc.text(String(meta.reportMonth || ''), M, cy + 2)
+
   if (data.clientLogo) {
-    const { w, h } = imgSize(doc, data.clientLogo, 80, 34)
-    doc.setDrawColor(220).setLineWidth(0.3)
-    doc.rect(M + 12, y, W - (M + 12) * 2, h + 10)
-    try { doc.addImage(data.clientLogo, (W - w) / 2, y + 5, w, h) } catch { }
-    y += h + 14
+    const { w, h } = imgSize(doc, data.clientLogo, 70, 26)
+    const cardH = h + 12
+    const cardW = w + 24
+    const cardY = 171 - cardH / 2
+    doc.setFillColor(255, 255, 255)
+    doc.setDrawColor(225).setLineWidth(0.3)
+    doc.roundedRect(M, cardY, cardW, cardH, 2.5, 2.5, 'FD')
+    try { doc.addImage(data.clientLogo, M + 12, cardY + 6, w, h) } catch { }
   }
 
-  doc.setTextColor(...NAVY).setFont('helvetica', 'bold').setFontSize(19)
-  const titleLines = doc.splitTextToSize(
-    data.reportTitle?.trim() || `${meta.businessName} SEO + GMB Monthly Report ${meta.reportMonth}`, W - M * 2 - 20
-  )
-  doc.text(titleLines, W / 2, y + 6, { align: 'center' })
-  y += titleLines.length * 9 + 4
+  // details card
+  const rows: [string, string][] = [
+    ['BUSINESS', meta.businessName],
+    ['REPORTING PERIOD', meta.reportMonth],
+    ['SERVICE', meta.serviceName || 'SEO + GMB'],
+    ['PREPARED BY', meta.agencyName],
+  ]
+  let dy = 206
+  rows.forEach(([k, v], i) => {
+    const lines = doc.splitTextToSize(String(v || '-'), W - M * 2 - 60).slice(0, 2)
+    doc.setFillColor(...RED)
+    doc.rect(M, dy - 4, 1.2, 5.2 + (lines.length - 1) * 5, 'F')
+    doc.setTextColor(130).setFont('helvetica', 'bold').setFontSize(7.5)
+    doc.text(k, M + 5, dy)
+    doc.setTextColor(...NAVY).setFont('helvetica', 'bold').setFontSize(11)
+    doc.text(lines, M + 55, dy)
+    dy += (lines.length - 1) * 5 + 13
+  })
   doc.setTextColor(0, 0, 0)
 
-  autoTable(doc, {
-    startY: y,
-    margin: { left: M, right: M },
-    body: [
-      ...(meta.reportNumber ? [['Report No.', meta.reportNumber.replace(/^SEO-/, 'RPT-')]] : []),
-      ['Business Name', meta.businessName],
-      ['Agency', meta.agencyName],
-      ['Reporting Period', meta.reportMonth],
-      ...(meta.serviceName ? [['Service', meta.serviceName]] : []),
-    ],
-    theme: 'grid',
-    styles: { fontSize: 10, cellPadding: 3 },
-    columnStyles: { 0: { cellWidth: 55, fontStyle: 'bold' } },
-  })
-  y = (doc as any).lastAutoTable.finalY + 10
+  newPage()
 
   // ================================================== GMB
   if (on('gmb')) {
@@ -564,14 +600,17 @@ export function generateSeoReportPdf(meta: SeoReportMeta, data: SeoReportData): 
   doc.text(meta.agencyName, W / 2, y + 17, { align: 'center' })
   doc.setTextColor(0, 0, 0)
 
-  // ---- page numbers ----
+  // ---- footer + page numbers ----
   const total = doc.getNumberOfPages()
-  for (let i = 1; i <= total; i++) {
+  for (let i = 2; i <= total; i++) {
     doc.setPage(i)
-    doc.setFont('helvetica', 'normal').setFontSize(7.5).setTextColor(130)
-    doc.text(`Page ${i} of ${total}`, W - M, H - 12, { align: 'right' })
+    doc.setDrawColor(...RED).setLineWidth(0.3)
+    doc.line(M, H - 14, W - M, H - 14)
+    doc.setTextColor(120).setFont('helvetica', 'normal').setFontSize(7.5)
+    doc.text(`${meta.businessName}  |  ${meta.reportMonth}`, M, H - 10)
+    doc.text(`Page ${i} of ${total}`, W - M, H - 10, { align: 'right' })
   }
-
+  doc.setTextColor(0, 0, 0)
   return doc
 }
 
