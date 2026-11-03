@@ -1303,6 +1303,7 @@ function SeoReportsSection({ clientId, services, canEdit }: { clientId: string; 
       const rep = full.data.data
       const meta = {
         businessName: rep.client?.companyName || '',
+        reportNumber: rep.reportNumber || '',
         agencyName: rep.agencyName || BRAND.name,
         reportMonth: rep.reportMonth || '',
         serviceName: rep.clientService?.serviceName || null,

@@ -18,6 +18,7 @@ import { BRAND } from '@/lib/branding'
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params
+  if (!token || token.length < 32 || token.length > 128) return errorResponse('Report not found', 404)
 
   const report = await prisma.seoReport.findFirst({
     where: { shareToken: token },
@@ -34,6 +35,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
   return successResponse({
     meta: {
       businessName: report.client?.companyName || '',
+      reportNumber: report.reportNumber || '',
       agencyName: BRAND.name,
       reportMonth: report.reportMonth || '',
       serviceName: report.clientService?.serviceName || null,

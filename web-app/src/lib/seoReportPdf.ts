@@ -69,6 +69,7 @@ export interface SeoReportMeta {
   agencyName: string
   reportMonth: string
   serviceName?: string | null
+  reportNumber?: string | null
 }
 
 // ---------------------------------------------------------------- theme
@@ -170,7 +171,21 @@ function imgSize(doc: jsPDF, dataUrl: string, maxW: number, maxH: number) {
 }
 
 // ---------------------------------------------------------------- main
+// English-only text: the PDF font cannot draw Hindi/other scripts (they print as garbage).
+const toEnglish = (v: string) =>
+  v.normalize('NFKD').replace(/[^\x20-\x7E\n]/g, '').replace(/\s{2,}/g, ' ').trim()
+const cleanDeep = (v: any): any => {
+  if (typeof v === 'string') return v.startsWith('data:') || /^https?:/.test(v) ? v : toEnglish(v)
+  if (Array.isArray(v)) return v.map(cleanDeep)
+  if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, cleanDeep(x)]))
+  return v
+}
+
 export function generateSeoReportPdf(meta: SeoReportMeta, data: SeoReportData): jsPDF {
+  const rawName = meta.businessName
+  data = cleanDeep(data) as SeoReportData
+  meta = cleanDeep(meta) as SeoReportMeta
+  if (!meta.businessName) meta.businessName = toEnglish(String((data as any).gmbName || '')) || toEnglish(rawName) || 'Business'
   const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true })
   let y = TOP
 
@@ -361,6 +376,7 @@ export function generateSeoReportPdf(meta: SeoReportMeta, data: SeoReportData): 
     startY: y,
     margin: { left: M, right: M },
     body: [
+      ...(meta.reportNumber ? [['Report No.', meta.reportNumber.replace(/^SEO-/, 'RPT-')]] : []),
       ['Business Name', meta.businessName],
       ['Agency', meta.agencyName],
       ['Reporting Period', meta.reportMonth],
@@ -451,11 +467,11 @@ export function generateSeoReportPdf(meta: SeoReportMeta, data: SeoReportData): 
     sectionBar('Map Marker Work')
     need(markers.length * 6 + 6)
     doc.setFont('helvetica', 'normal').setFontSize(9.5)
-    markers.forEach(item => {
+    markers.forEach((item, i) => {
       const lines = doc.splitTextToSize(item, W - M * 2 - 8)
       need(lines.length * 5 + 4)
-      doc.circle(M + 2, y + 2.6, 0.8, 'F')
-      doc.text(lines, M + 6, y + 4)
+      doc.text(`${i + 1}.`, M + 1, y + 4)
+      doc.text(lines, M + 8, y + 4)
       y += lines.length * 5 + 2
     })
     y += 6

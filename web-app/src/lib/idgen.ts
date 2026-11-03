@@ -150,7 +150,7 @@ export async function generateEmployeeTicketNumber(): Promise<string> {
 
 export async function generateSeoReportNumber(): Promise<string> {
   const last = await prisma.seoReport.findFirst({
-    orderBy: { reportNumber: 'desc' },
+    orderBy: { createdAt: 'desc' },
     select: { reportNumber: true },
   })
   let next = 1
@@ -161,10 +161,10 @@ export async function generateSeoReportNumber(): Promise<string> {
       if (!isNaN(n)) next = n + 1
     }
   }
-  let reportNumber = `SEO-${String(next).padStart(6, '0')}`
+  let reportNumber = `RPT-${String(next).padStart(6, '0')}`
   while (await prisma.seoReport.findUnique({ where: { reportNumber }, select: { id: true } })) {
     next++
-    reportNumber = `SEO-${String(next).padStart(6, '0')}`
+    reportNumber = `RPT-${String(next).padStart(6, '0')}`
   }
   return reportNumber
 }

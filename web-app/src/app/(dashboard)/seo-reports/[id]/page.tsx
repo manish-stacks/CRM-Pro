@@ -67,12 +67,15 @@ function Switch({ checked, onChange, disabled }: { checked: boolean; onChange: (
 // `toggle` controls whether this card is included in the PDF. Default is ON.
 function Card({ title, desc, children, right, toggle }: any) {
   const included = toggle ? toggle.on : true
+  const [open, setOpen] = useState(false)
   return (
     <div className={`bg-white rounded-xl border p-4 space-y-3 transition-colors ${included ? 'border-gray-200' : 'border-dashed border-gray-300 bg-gray-50'}`}>
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="font-semibold text-gray-900 text-sm">{title}</h3>
-          {desc && <p className="text-[11px] text-gray-500 mt-0.5">{desc}</p>}
+        <div className="min-w-0 flex-1 cursor-pointer select-none" onClick={() => setOpen(o => !o)}>
+          <h3 className="font-semibold text-gray-900 text-sm flex items-center gap-1.5">
+            <span className={`inline-block text-gray-400 text-xs transition-transform ${open ? 'rotate-90' : ''}`}>&#9656;</span>{title}
+          </h3>
+          {open && desc && <p className="text-[11px] text-gray-500 mt-0.5">{desc}</p>}
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {right}
@@ -84,7 +87,7 @@ function Card({ title, desc, children, right, toggle }: any) {
           )}
         </div>
       </div>
-      <div className={included ? '' : 'opacity-50'}>{children}</div>
+      {open && <div className={included ? '' : 'opacity-50'}>{children}</div>}
     </div>
   )
 }
@@ -305,6 +308,7 @@ export default function SeoReportBuilderPage() {
 
   const meta = {
     businessName: report?.client?.companyName || '',
+    reportNumber: report?.reportNumber || '',
     agencyName: report?.agencyName || BRAND.name,
     reportMonth: report?.reportMonth || '',
     serviceName: report?.clientService?.serviceName || null,
@@ -384,7 +388,7 @@ export default function SeoReportBuilderPage() {
           <div>
             <h1 className="text-lg font-bold text-gray-900">{report.title}</h1>
             <div className="flex flex-wrap items-center gap-2 mt-1 text-xs text-gray-500">
-              <span className="font-medium text-gray-700">{report.reportNumber}</span>
+              <span className="font-medium text-gray-700">{String(report.reportNumber || '').replace(/^SEO-/, 'RPT-')}</span>
               <span className="flex items-center gap-1"><Building2 size={12} /> {report.client?.companyName}</span>
               {report.clientService && <span>· {report.clientService.serviceName}</span>}
               <span>· {report.reportMonth}</span>
@@ -398,6 +402,7 @@ export default function SeoReportBuilderPage() {
           <Button variant="secondary" onClick={preview}><Eye size={14} /> Preview PDF</Button>
           {!locked && <Button variant="secondary" onClick={() => save()} loading={saving}><Save size={14} /> Save Draft</Button>}
           {!locked && <Button onClick={() => setSubmitModal(true)}><Send size={14} /> Submit to Client</Button>}
+          <Button variant="secondary" onClick={() => router.push(`/clients/${report.clientId}`)}><Building2 size={14} /> Go to Client</Button>
           {report.pdfUrl && (
             <Button variant="secondary" onClick={openReportLink}><Link2 size={14} /> Report Link</Button>
           )}
