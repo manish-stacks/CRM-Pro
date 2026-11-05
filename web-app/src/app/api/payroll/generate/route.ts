@@ -138,7 +138,7 @@ export async function POST(req: NextRequest) {
       const marked = records.filter(onWorkDay)
 
       const presentDays = marked.filter(r => r.status === 'PRESENT').length
-      const halfDays = marked.filter(r => r.status === 'HALF_DAY').length
+      let halfDays = marked.filter(r => r.status === 'HALF_DAY').length
       const leaveDays = marked.filter(r => r.status === 'LEAVE').length
 
       // Approved leaves recorded in the Leave table but not yet reflected in
@@ -174,11 +174,14 @@ export async function POST(req: NextRequest) {
         }
       }
       for (const r of marked) if (r.status === 'LEAVE') leaveDaySet.add(new Date(r.date).getUTCDate())
+      // A day is counted once: full leave wins over a half-day leave / HALF_DAY row (no double LOP)
+      for (const d of leaveDaySet) halfLeaveDays.delete(d)
+      halfDays = marked.filter(r => r.status === 'HALF_DAY' && !leaveDaySet.has(new Date(r.date).getUTCDate())).length
       const totalLeaveDays = leaveDaySet.size + halfLeaveDays.size * 0.5
       const unpaidTypeDays = unpaidTypeSet.size
 
       // Late marks → half-day LOP
-      const lateCount = marked.filter(r => r.isLate).length
+      const lateCount = marked.filter(r => r.isLate && !leaveDaySet.has(new Date(r.date).getUTCDate())).length
       const lateHalfDays = latesPerHalfDay > 0 ? Math.floor(lateCount / latesPerHalfDay) * 0.5 : 0
 
       // Absent = working day with nothing recorded at all and no approved leave

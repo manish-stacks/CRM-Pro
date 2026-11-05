@@ -442,20 +442,22 @@ export async function GET(req: NextRequest) {
 
           const rowByDay = new Map<number, any>()
           onWork.forEach(r => rowByDay.set(dayNum(r.date), r))
-          const late = onWork.filter(r => r.isLate).length
+          let late = 0
           const wfh = onWork.filter(r => r.workMode === 'WFH' && r.punchIn).length
 
-          // Approved full-day leave dates (working days only, clipped to the month)
+          // Approved leave dates (working days only, clipped to the month)
           const approvedLeave = new Set<number>()
           const halfLeave = new Set<number>()
           const shortNotes: string[] = []
-          const leaveNotes: string[] = []
           let shortLeave = 0
           const mon = new Date(Date.UTC(y, m - 1, 1)).toLocaleString('en-US', { month: 'short', timeZone: 'UTC' })
+          const seenShort = new Set<string>()
           for (const lv of lvBy[e.id] || []) {
             if (lv.duration === 'SHORT_HOURLY') {
               const sd = new Date(lv.startDate)
-              if (sd.getUTCFullYear() === y && sd.getUTCMonth() + 1 === m) {
+              const key = `${dayStamp(sd)}|${lv.hourlyStart}|${lv.hourlyEnd}`
+              if (sd.getUTCFullYear() === y && sd.getUTCMonth() + 1 === m && !seenShort.has(key)) {
+                seenShort.add(key)
                 shortLeave++
                 shortNotes.push(`${sd.getUTCDate()} ${mon} (${lv.hourlyStart || ''}-${lv.hourlyEnd || ''})`)
               }
@@ -464,27 +466,37 @@ export async function GET(req: NextRequest) {
             const s0 = dayStamp(lv.startDate), en = dayStamp(lv.endDate)
             for (const d of workSet) {
               const t = Date.UTC(y, m - 1, d)
-              if (t >= s0 && t <= en) { if (lv.days < 1) halfLeave.add(d); else { approvedLeave.add(d); leaveNotes.push(`${d} ${mon}`) } }
+              if (t >= s0 && t <= en) { if (lv.days < 1) halfLeave.add(d); else approvedLeave.add(d) }
             }
           }
 
-          // Every working day is counted exactly once so the columns always add up:
+          // Every working day is classified exactly once, and the Remarks are built from
+          // the SAME classification, so the columns always add up and always match the notes:
           // Present + Half days + Leave + Absent = Working days
           let present = 0, halfDay = 0, leaveDays = 0, absent = 0
-          const halfNotes: string[] = [], absentNotes: string[] = []
+          const halfNotes: string[] = [], absentNotes: string[] = [], leaveNotes: string[] = []
           for (const d of [...workSet].sort((x, y2) => x - y2)) {
             const r = rowByDay.get(d)
-            if (r?.punchIn) { if (r.status === 'HALF_DAY') { halfDay++; halfNotes.push(`${d} ${mon}`) } else present++ }
-            else if (approvedLeave.has(d) || r?.status === 'LEAVE') leaveDays++
-            else if (r?.status === 'HALF_DAY' || halfLeave.has(d)) { halfDay++; halfNotes.push(`${d} ${mon}`) }
+            const label = `${d} ${mon}`
+            if (approvedLeave.has(d)) {
+              // Approved full-day leave always counts as Leave (same rule as payroll), even if a punch-in exists.
+              leaveDays++; leaveNotes.push(label)
+            }
+            else if (halfLeave.has(d)) { halfDay++; halfNotes.push(label) }
+            else if (r?.punchIn) { if (r.status === 'HALF_DAY') { halfDay++; halfNotes.push(label) } else present++ }
+            else if (r?.status === 'LEAVE') { leaveDays++; leaveNotes.push(label) }
+            else if (r?.status === 'HALF_DAY') { halfDay++; halfNotes.push(label) }
             else if (r?.status === 'PRESENT') present++
-            else { absent++; absentNotes.push(`${d} ${mon}`) }
+            else { absent++; absentNotes.push(label) }
           }
+
+          // Late marks on an approved-leave day make no sense - skip them (same as payroll)
+          late = onWork.filter(r => r.isLate && !approvedLeave.has(dayNum(r.date))).length
 
           const monthHolidays = [...holidaySet].filter(h => h.startsWith(`${y}-${pad(m)}`)).map(h => `${Number(h.slice(8, 10))} ${mon}`)
           const remarks = [
             monthHolidays.length ? `Holidays (not counted): ${monthHolidays.join(', ')}` : '',
-            leaveDays ? `Leave: ${[...new Set(leaveNotes)].join(', ')}` : '',
+            leaveDays ? `Leave: ${leaveNotes.join(', ')}` : '',
             shortLeave ? `Short leave: ${shortNotes.join(', ')}` : '',
             halfDay ? `Half day: ${halfNotes.join(', ')}` : '',
             absent ? `Absent: ${absentNotes.join(', ')}` : '',
