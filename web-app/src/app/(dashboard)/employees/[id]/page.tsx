@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
 import { Button, Badge, Modal, Input, Select, Textarea, Pagination } from '@/components/ui'
 import { formatDate, formatCurrency, getInitials } from '@/lib/utils'
-import { ArrowLeft, User, Briefcase, CreditCard, FileText, Phone, Mail, Building2, Calendar, MapPin, Shield, Droplets, HeartPulse, KeyRound, Camera, Monitor, Loader2, X, Clock, Trash2 } from 'lucide-react'
+import { ArrowLeft, User, Briefcase, CreditCard, FileText, Phone, Mail, Building2, Calendar, MapPin, Shield, Droplets, HeartPulse, KeyRound, Camera, Monitor, Loader2, X, Clock, Trash2, Check } from 'lucide-react'
 import Link from 'next/link'
 import { generateEmployeeFormPdf } from '@/lib/employeeFormPdf'
 import api from '@/lib/axios'
@@ -79,6 +79,7 @@ export default function EmployeeDetailPage() {
 
   const [departments, setDepartments] = useState<any[]>([])
   const [allEmployees, setAllEmployees] = useState<any[]>([])
+  const [availableRoles, setAvailableRoles] = useState<any[]>([])
   const [editOpen, setEditOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState<any>(emptyForm)
@@ -101,6 +102,7 @@ export default function EmployeeDetailPage() {
   useEffect(() => {
     api.get('/departments').then(r => setDepartments(r.data.data || [])).catch(() => { })
     api.get('/employees?role=MANAGER&limit=200').then(r => setAllEmployees(r.data.data || [])).catch(() => { })
+    api.get('/roles').then(r => setAvailableRoles(r.data.data.roles || [])).catch(() => { })
   }, [])
 
   const toInputDate = (d: any) => d ? new Date(d).toISOString().split('T')[0] : ''
@@ -108,8 +110,20 @@ export default function EmployeeDetailPage() {
 
   const openEdit = () => {
     if (!emp) return
+    let parsedAssigned: string[] = []
+    try {
+      if (emp.user.assignedRoleIds) parsedAssigned = JSON.parse(emp.user.assignedRoleIds)
+    } catch {
+      parsedAssigned = []
+    }
+    if (emp.user.appRoleId && !parsedAssigned.includes(emp.user.appRoleId)) {
+      parsedAssigned.push(emp.user.appRoleId)
+    }
+
     setForm({
       name: emp.user.name || '', email: emp.user.email || '', phone: emp.user.phone || '', altPhone: emp.user.altPhone || '', role: emp.user.role || '',
+      appRoleId: emp.user.appRoleId || (parsedAssigned[0] || ''),
+      assignedRoleIds: parsedAssigned,
       departmentId: emp.department?.id || '', reportingToId: emp.reportingToId || '', position: emp.position || '', salary: emp.salary || '',
       area: emp.area || '',
       workMode: emp.workMode || 'WFO', joiningDate: toInputDate(emp.joiningDate),
@@ -275,6 +289,11 @@ export default function EmployeeDetailPage() {
                 {emp.department && <span className="text-xs text-gray-400">· {emp.department.name}</span>}
                 <Badge status={emp.user.isActive ? 'ACTIVE' : 'INACTIVE'} />
                 {emp.trackerExempt && <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-medium">Tracker Exempt</span>}
+                {emp.user.appRole?.name && (
+                  <span className="text-xs bg-indigo-50 text-indigo-700 border border-indigo-200 px-2.5 py-0.5 rounded-full font-medium flex items-center gap-1">
+                    <Shield size={11} /> {emp.user.appRole.name}
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -531,6 +550,48 @@ export default function EmployeeDetailPage() {
               <Input label="Salary" type="number" value={form.salary} onChange={e => setForm((p: any) => ({ ...p, salary: e.target.value }))} />
               <Select label="Work Mode" value={form.workMode} onChange={e => setForm((p: any) => ({ ...p, workMode: e.target.value }))} options={WORK_MODES.map(w => ({ value: w, label: w }))} />
               <Input label="Joining Date" type="date" value={form.joiningDate} onChange={e => setForm((p: any) => ({ ...p, joiningDate: e.target.value }))} />
+            </div>
+
+            {/* Custom Roles & Permission Sets */}
+            <div className="mt-3 bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wide">
+                  Dynamic Roles & Permission Sets
+                </label>
+                <span className="text-[11px] text-slate-500">
+                  Select one or more roles configured by Admin
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-2 pt-1">
+                {availableRoles.length === 0 ? (
+                  <p className="text-xs text-slate-400">Loading roles...</p>
+                ) : (
+                  availableRoles.map((r: any) => {
+                    const isChecked = form.assignedRoleIds?.includes(r.id) || form.appRoleId === r.id
+                    return (
+                      <button
+                        key={r.id}
+                        type="button"
+                        onClick={() => {
+                          setForm((prev: any) => {
+                            const curr = prev.assignedRoleIds || []
+                            const next = isChecked ? curr.filter((x: string) => x !== r.id) : [...curr, r.id]
+                            return { ...prev, assignedRoleIds: next, appRoleId: next[0] || null }
+                          })
+                        }}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                          isChecked
+                            ? 'bg-brand-600 text-white border-brand-600 shadow-sm'
+                            : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
+                        }`}
+                      >
+                        <span>{r.name}</span>
+                        {isChecked && <Check size={12} />}
+                      </button>
+                    )
+                  })
+                )}
+              </div>
             </div>
           </div>
 

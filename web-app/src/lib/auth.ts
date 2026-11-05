@@ -112,10 +112,10 @@ export function hasMinRole(userRole: string, minRole: string): boolean {
 }
 
 /**
- * Guard helper for route handlers. Returns { session } on success,
- * or a Response on failure (401/403).
+ * Guard helper for route handlers. Supports dynamic permissions and role hierarchy.
+ * Returns { session, access } on success, or a Response on failure (401/403).
  */
-export async function requireAuth(req: NextRequest, minRole?: string) {
+export async function requireAuth(req: NextRequest, minRole?: string, permission?: string) {
   const session = await getRequestSession(req)
   if (!session) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), {
@@ -123,11 +123,25 @@ export async function requireAuth(req: NextRequest, minRole?: string) {
       headers: { 'Content-Type': 'application/json' },
     })
   }
-  if (minRole && !hasMinRole(session.role, minRole)) {
-    return new Response(JSON.stringify({ error: 'Forbidden' }), {
-      status: 403,
-      headers: { 'Content-Type': 'application/json' },
-    })
+  if (permission || minRole) {
+    const { getEffectiveAccess } = await import('@/lib/permissions.server')
+    const { checkPermission } = await import('@/lib/permissions')
+    const access = await getEffectiveAccess(session.userId, session.role)
+
+    if (permission && checkPermission(access.permissions, permission, access.role)) {
+      return { session, access }
+    }
+
+    if (minRole) {
+      if (hasMinRole(access.role, minRole) || hasMinRole(session.role, minRole)) {
+        return { session, access }
+      }
+      return new Response(JSON.stringify({ error: 'Forbidden' }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+    return { session, access }
   }
   return { session }
 }

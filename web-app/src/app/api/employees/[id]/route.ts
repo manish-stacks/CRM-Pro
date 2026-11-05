@@ -7,7 +7,8 @@ import { requireAuth, getRequestSession } from '@/lib/auth'
 import { successResponse, errorResponse, notFoundResponse, unauthorizedResponse } from '@/lib/api'
 import { logFromRequest } from '@/lib/audit'
 import { getTeamScope } from '@/lib/teamScope'
-import { isCompanyWideRole } from '@/lib/permissions'
+import { isCompanyWideRole, sanitizePermissions } from '@/lib/permissions'
+import { bustRoleCache } from '@/lib/permissions.server'
 import { deleteFile, publicIdFromUrl } from '@/lib/cloudinary'
 
 // File-URL fields we clean up in R2 when replaced/cleared (userData key -> old value)
@@ -17,6 +18,7 @@ const EMP_FILE_FIELDS = ['idProofUrl', 'aadharFrontUrl', 'aadharBackUrl']
 // Fields admin can update on User row
 const USER_ADMIN_FIELDS = new Set([
   'name', 'email', 'phone', 'altPhone', 'avatar', 'role', 'dateOfBirth',
+  'appRoleId', 'assignedRoleIds', 'customPermissions',
 ])
 
 // Fields admin can update on Employee row
@@ -45,6 +47,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           id: true, name: true, email: true, phone: true, altPhone: true, role: true,
           avatar: true, dateOfBirth: true, isActive: true, disabledAt: true,
           disabledReason: true, lastLoginAt: true, createdAt: true,
+          appRoleId: true, assignedRoleIds: true, customPermissions: true,
+          appRole: { select: { id: true, key: true, name: true, permissions: true } },
         },
       },
       department: true,
@@ -86,6 +90,20 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     if (EMP_ADMIN_FIELDS.has(k)) empData[k] = v === '' ? null : v
   }
   if (userData.dateOfBirth) userData.dateOfBirth = new Date(userData.dateOfBirth)
+  if (userData.assignedRoleIds !== undefined) {
+    if (Array.isArray(userData.assignedRoleIds)) {
+      userData.assignedRoleIds = userData.assignedRoleIds.length > 0 ? JSON.stringify(userData.assignedRoleIds) : null
+    } else if (typeof userData.assignedRoleIds !== 'string') {
+      userData.assignedRoleIds = null
+    }
+  }
+  if (userData.customPermissions !== undefined) {
+    if (Array.isArray(userData.customPermissions)) {
+      userData.customPermissions = userData.customPermissions.length > 0 ? JSON.stringify(sanitizePermissions(userData.customPermissions)) : null
+    } else if (typeof userData.customPermissions !== 'string') {
+      userData.customPermissions = null
+    }
+  }
   if (empData.dateOfBirth) empData.dateOfBirth = new Date(empData.dateOfBirth)
   if (empData.joiningDate) empData.joiningDate = new Date(empData.joiningDate)
   if (empData.salary !== undefined) empData.salary = Number(empData.salary) || 0
@@ -117,6 +135,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   try {
     if (Object.keys(userData).length) {
       await prisma.user.update({ where: { id: emp.userId }, data: userData })
+      bustRoleCache(emp.userId)
     }
     if (Object.keys(empData).length) {
       await prisma.employee.update({ where: { id }, data: empData })

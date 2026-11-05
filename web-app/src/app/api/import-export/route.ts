@@ -472,7 +472,7 @@ export async function GET(req: NextRequest) {
 
           // Every working day is classified exactly once, and the Remarks are built from
           // the SAME classification, so the columns always add up and always match the notes:
-          // Present + Half days + Leave + Absent = Working days
+          // Present(full) + Half days + Leave + Absent = Working days  (the Present column adds 0.5 per half day)
           let present = 0, halfDay = 0, leaveDays = 0, absent = 0
           const halfNotes: string[] = [], absentNotes: string[] = [], leaveNotes: string[] = []
           for (const d of [...workSet].sort((x, y2) => x - y2)) {
@@ -508,7 +508,7 @@ export async function GET(req: NextRequest) {
             Name: e.user.name,
             Department: (e.department?.name || '').trim(),
             'Working days': workSet.size,
-            Present: present,
+            Present: present + halfDay * 0.5, // a half day counts as 0.5 day worked
             Leave: leaveDays,
             Absent: absent,
             Late: late,

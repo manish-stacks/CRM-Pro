@@ -24,6 +24,9 @@ export interface AuthUser {
   impersonatedByName?: string | null
   /** Custom permission role, when one is attached. */
   appRole?: { id: string; key: string; name: string } | null
+  /** Multi-assigned permission roles. */
+  appRoles?: { id: string; key: string; name: string }[]
+  customPermissions?: string[]
   /** Effective permission list resolved server-side in /api/auth/me. */
   permissions?: string[]
 }

@@ -59,7 +59,7 @@ export default function Header({ onMenuClick }: { onMenuClick?: () => void }) {
             <div className="hidden md:block text-left">
               <p className="text-sm font-semibold text-gray-900 leading-tight">{user?.name}</p>
               <p className="text-xs text-gray-500">
-                {user?.role?.replace(/_/g, ' ')}
+                {user?.appRole?.name || user?.role?.replace(/_/g, ' ')}
                 {user?.employee?.employeeId && <span className="ml-1 font-mono text-gray-400">· {user.employee.employeeId}</span>}
               </p>
             </div>

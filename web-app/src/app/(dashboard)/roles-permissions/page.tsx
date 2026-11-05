@@ -173,20 +173,35 @@ export default function RolesPage() {
   // ---------- assignment ----------
   const openAssign = async (role: Role) => {
     setAssignFor(role)
-    setPicked([])
     setPeopleSearch('')
     try {
       const r = await api.get('/employees?limit=200')
-      setPeople(r.data.data || [])
-    } catch { setPeople([]) }
+      const empList = r.data.data || []
+      setPeople(empList)
+      const initialPicked = empList
+        .filter((e: any) => {
+          if (e.user?.appRoleId === role.id) return true
+          try {
+            const arr = JSON.parse(e.user?.assignedRoleIds || '[]')
+            return Array.isArray(arr) && arr.includes(role.id)
+          } catch {
+            return false
+          }
+        })
+        .map((e: any) => e.user?.id)
+        .filter(Boolean)
+      setPicked(initialPicked)
+    } catch {
+      setPeople([])
+      setPicked([])
+    }
   }
 
   const doAssign = async () => {
-    if (!picked.length) { toast.error('Pick at least one person'); return }
     setAssigning(true)
     try {
       const r = await api.post('/roles/assign', { userIds: picked, roleId: assignFor!.id })
-      toast.success(`${r.data.data.updated} user(s) moved to ${assignFor!.name}`)
+      toast.success(`${r.data.data?.updated ?? picked.length} user(s) updated for ${assignFor!.name}`)
       setAssignFor(null)
       load()
     } catch (e: any) { toast.error(e.response?.data?.error || 'Failed') }

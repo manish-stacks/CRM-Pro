@@ -11,6 +11,8 @@ export interface EffectiveAccess {
   userId: string
   role: string
   appRole: { id: string; key: string; name: string } | null
+  appRoles: { id: string; key: string; name: string }[]
+  customPermissions: string[]
   permissions: string[]
 }
 
@@ -19,8 +21,12 @@ export interface EffectiveAccess {
 const cache = new Map<string, { value: EffectiveAccess; at: number }>()
 const TTL_MS = 60_000
 
-export function bustRoleCache() {
-  cache.clear()
+export function bustRoleCache(userId?: string) {
+  if (userId) {
+    cache.delete(userId)
+  } else {
+    cache.clear()
+  }
 }
 
 export async function getEffectiveAccess(userId: string, role: string): Promise<EffectiveAccess> {
@@ -31,46 +37,94 @@ export async function getEffectiveAccess(userId: string, role: string): Promise<
     where: { id: userId },
     select: {
       role: true,
+      appRoleId: true,
+      assignedRoleIds: true,
+      customPermissions: true,
       appRole: { select: { id: true, key: true, name: true, permissions: true, isActive: true } },
     },
   })
 
   const effectiveRole = user?.role || role
-  let permissions: string[]
-  let appRole: EffectiveAccess['appRole'] = null
+  const permissionsSet = new Set<string>()
+  const appRolesList: { id: string; key: string; name: string }[] = []
 
-  if (user?.appRole && user.appRole.isActive) {
-    appRole = { id: user.appRole.id, key: user.appRole.key, name: user.appRole.name }
+  // Parse multi-role IDs
+  let multiRoleIds: string[] = []
+  if (user?.assignedRoleIds) {
     try {
-      permissions = sanitizePermissions(JSON.parse(user.appRole.permissions || '[]'))
+      const parsed = JSON.parse(user.assignedRoleIds)
+      if (Array.isArray(parsed)) multiRoleIds = parsed.filter(Boolean)
     } catch {
-      permissions = []
+      multiRoleIds = []
     }
-  } else {
-    // No custom role attached — fall back to the editable system AppRole row
-    // for their built-in role (so editing "Manager" in /settings/roles really
-    // changes what every manager can do), and only then to the hardcoded
-    // defaults if that row hasn't been seeded yet.
+  }
+
+  // Combine primary appRoleId and any assigned multi-role IDs
+  const allRoleIds = Array.from(new Set([user?.appRoleId, ...multiRoleIds].filter(Boolean) as string[]))
+
+  if (allRoleIds.length > 0) {
+    const rolesData = await prisma.appRole.findMany({
+      where: { id: { in: allRoleIds }, isActive: true },
+      select: { id: true, key: true, name: true, permissions: true },
+    })
+
+    for (const r of rolesData) {
+      appRolesList.push({ id: r.id, key: r.key, name: r.name })
+      try {
+        const perms = sanitizePermissions(JSON.parse(r.permissions || '[]'))
+        for (const p of perms) permissionsSet.add(p)
+      } catch { /* ignore malformed JSON */ }
+    }
+  }
+
+  // If no custom roles attached, fall back to default / system role permissions
+  if (appRolesList.length === 0) {
     const systemRole = await prisma.appRole.findUnique({
       where: { key: effectiveRole },
       select: { id: true, key: true, name: true, permissions: true, isActive: true, isSystem: true },
     })
     if (systemRole?.isSystem && systemRole.isActive) {
-      appRole = { id: systemRole.id, key: systemRole.key, name: systemRole.name }
+      appRolesList.push({ id: systemRole.id, key: systemRole.key, name: systemRole.name })
       try {
-        permissions = sanitizePermissions(JSON.parse(systemRole.permissions || '[]'))
+        const perms = sanitizePermissions(JSON.parse(systemRole.permissions || '[]'))
+        for (const p of perms) permissionsSet.add(p)
       } catch {
-        permissions = DEFAULT_ROLE_PERMISSIONS[effectiveRole] || []
+        for (const p of (DEFAULT_ROLE_PERMISSIONS[effectiveRole] || [])) permissionsSet.add(p)
       }
     } else {
-      permissions = DEFAULT_ROLE_PERMISSIONS[effectiveRole] || []
+      for (const p of (DEFAULT_ROLE_PERMISSIONS[effectiveRole] || [])) permissionsSet.add(p)
     }
   }
 
-  // Super admin is never locked out, whatever a custom role says
-  if (effectiveRole === 'SUPER_ADMIN') permissions = DEFAULT_ROLE_PERMISSIONS.SUPER_ADMIN
+  // Direct extra user permissions
+  let directPerms: string[] = []
+  if (user?.customPermissions) {
+    try {
+      directPerms = sanitizePermissions(JSON.parse(user.customPermissions))
+      for (const p of directPerms) permissionsSet.add(p)
+    } catch {
+      directPerms = []
+    }
+  }
 
-  const value: EffectiveAccess = { userId, role: effectiveRole, appRole, permissions }
+  // Super admin always has all permissions
+  let finalPermissions: string[]
+  if (effectiveRole === 'SUPER_ADMIN') {
+    finalPermissions = DEFAULT_ROLE_PERMISSIONS.SUPER_ADMIN
+  } else {
+    finalPermissions = Array.from(permissionsSet)
+  }
+
+  const primaryAppRole = appRolesList[0] || null
+  const value: EffectiveAccess = {
+    userId,
+    role: effectiveRole,
+    appRole: primaryAppRole,
+    appRoles: appRolesList,
+    customPermissions: directPerms,
+    permissions: finalPermissions,
+  }
+
   cache.set(userId, { value, at: Date.now() })
   return value
 }

@@ -18,25 +18,26 @@ export async function GET(req: NextRequest) {
       const now = new Date()
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
 
-      // Birthday detection
+      // Birthday detection - query employees with user info once
       const today = { month: now.getMonth() + 1, day: now.getDate() }
-      const allUsers = await prisma.user.findMany({
-        where: { isActive: true, dateOfBirth: { not: null } },
-        select: { id: true, name: true, dateOfBirth: true, avatar: true },
-      })
       const allEmployees = await prisma.employee.findMany({
         where: { dateOfBirth: { not: null }, user: { isActive: true } },
-        include: {
-          user: { select: { id: true, name: true, avatar: true } },
+        select: {
+          id: true,
+          userId: true,
+          dateOfBirth: true,
           department: { select: { name: true } },
+          user: { select: { id: true, name: true, avatar: true } },
         },
       })
 
       // Today's birthdays
-      const birthdaysToday = allUsers.filter(u => {
-        const dob = u.dateOfBirth!
-        return dob.getMonth() + 1 === today.month && dob.getDate() === today.day
-      }).map(u => ({ id: u.id, name: u.name, isSelf: u.id === session.userId }))
+      const birthdaysToday = allEmployees
+        .filter(emp => {
+          const dob = emp.dateOfBirth!
+          return dob.getMonth() + 1 === today.month && dob.getDate() === today.day
+        })
+        .map(emp => ({ id: emp.user.id, name: emp.user.name, isSelf: emp.user.id === session.userId }))
 
       // Upcoming 30 days
       const upcomingBirthdays = allEmployees
@@ -63,10 +64,10 @@ export async function GET(req: NextRequest) {
       }
 
       const [totalEmployees, totalLeads, totalClients, totalProposals, pendingLeaves, monthRevenue] = await Promise.all([
-        prisma.employee.count({ where: { user: { isActive: true } } }),
-        cached('leads:total', 60_000, () => prisma.lead.count()),
-        prisma.client.count(),
-        prisma.proposal.count(),
+        cached('employees:total', 30_000, () => prisma.employee.count({ where: { user: { isActive: true } } })),
+        cached('leads:total', 30_000, () => prisma.lead.count()),
+        cached('clients:total', 30_000, () => prisma.client.count()),
+        cached('proposals:total', 30_000, () => prisma.proposal.count()),
         prisma.leave.count({ where: pendingLeavesWhere }),
         prisma.payment.aggregate({ _sum: { amount: true }, where: { paidAt: { gte: monthStart } } }),
       ])
@@ -83,13 +84,27 @@ export async function GET(req: NextRequest) {
       })
 
       // Revenue is admin-only — everyone else gets an empty series / zero.
+      // Optimized: 1 query for all 6 months instead of 6 separate sequential queries!
       const canSeeRevenue = isCompanyWideRole(session.role)
       const revenueChart: { month: string; revenue: number }[] = []
-      for (let i = 5; canSeeRevenue && i >= 0; i--) {
-        const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
-        const end = new Date(d.getFullYear(), d.getMonth() + 1, 0)
-        const res = await prisma.payment.aggregate({ _sum: { amount: true }, where: { paidAt: { gte: d, lte: end } } })
-        revenueChart.push({ month: d.toLocaleString('default', { month: 'short' }), revenue: res._sum.amount || 0 })
+      if (canSeeRevenue) {
+        const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1)
+        const pastPayments = await prisma.payment.findMany({
+          where: { paidAt: { gte: sixMonthsAgo } },
+          select: { amount: true, paidAt: true },
+        })
+        for (let i = 5; i >= 0; i--) {
+          const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+          const targetMonth = d.getMonth()
+          const targetYear = d.getFullYear()
+          const sum = pastPayments
+            .filter(p => {
+              const dt = new Date(p.paidAt)
+              return dt.getMonth() === targetMonth && dt.getFullYear() === targetYear
+            })
+            .reduce((acc, p) => acc + (p.amount || 0), 0)
+          revenueChart.push({ month: d.toLocaleString('default', { month: 'short' }), revenue: sum })
+        }
       }
 
       const leadsByStatus = (await cached('leads:byStatus', 60_000, () => prisma.lead.groupBy({ by: ['status'], _count: { _all: true } })))

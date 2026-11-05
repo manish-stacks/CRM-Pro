@@ -108,6 +108,8 @@ model User {
   leavesApproved         Leave[]              @relation("LeaveApprovedBy")
   appRoleId              String?
   appRole                AppRole?             @relation(fields: [appRoleId], references: [id])
+  assignedRoleIds        String?              @db.Text    // JSON array of AppRole IDs for multi-role support
+  customPermissions      String?              @db.LongText // JSON array of direct extra permissions
   seoReportsCreated      SeoReport[]          @relation("SeoReportCreator")
   seoReportsSubmitted    SeoReport[]          @relation("SeoReportSubmitter")
 

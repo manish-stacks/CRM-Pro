@@ -326,7 +326,16 @@ export default function EmployeesPage() {
                         </div>
                       </td>
                       <td className="font-mono text-xs">{e.employeeId}</td>
-                      <td><Badge status={e.user.role} /></td>
+                      <td>
+                        <div className="flex flex-wrap items-center gap-1">
+                          <Badge status={e.user.role} />
+                          {e.user.appRole?.name && (
+                            <span className="badge bg-indigo-50 text-indigo-700 border border-indigo-200">
+                              {e.user.appRole.name}
+                            </span>
+                          )}
+                        </div>
+                      </td>
                       <td className="text-sm">{e.department?.name || '—'}</td>
                       <td className="text-sm">{e.joiningDate ? formatDate(e.joiningDate) : '—'}</td>
                       <td>

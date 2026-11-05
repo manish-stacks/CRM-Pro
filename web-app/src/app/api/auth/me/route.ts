@@ -27,6 +27,9 @@ export async function GET(req: NextRequest) {
   const { password: _, ...safeUser } = user
   return NextResponse.json({
     ...safeUser,
+    appRole: access.appRole,
+    appRoles: access.appRoles,
+    customPermissions: access.customPermissions,
     permissions: access.permissions,
     impersonatedBy: session.impersonatedBy || null,
     impersonatedByName: session.impersonatedByName || null,

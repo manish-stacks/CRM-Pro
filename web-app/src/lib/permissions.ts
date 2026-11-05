@@ -184,7 +184,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
   CLIENT: [],
 }
 
-/** Does this permission list satisfy `permission`? `manage` implies the rest. */
+/** Does this permission list satisfy `permission`? `manage` or `*` implies the rest. */
 export function checkPermission(
   granted: string[] | null | undefined,
   permission: string,
@@ -193,11 +193,12 @@ export function checkPermission(
   if (role === 'SUPER_ADMIN') return true
   if (!permission) return true
   const list = granted && granted.length ? granted : (role ? DEFAULT_ROLE_PERMISSIONS[role] || [] : [])
+  if (list.includes('*') || list.includes('all')) return true
   if (list.includes(permission)) return true
 
-  // "<module>.manage" is a superset of every other action on that module
+  // "<module>.manage" or "<module>.*" is a superset of every other action on that module
   const [mod] = permission.split('.')
-  if (list.includes(`${mod}.manage`)) return true
+  if (list.includes(`${mod}.manage`) || list.includes(`${mod}.*`)) return true
   return false
 }
 

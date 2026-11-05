@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json()
   const {
     // MANDATORY (admin sets)
-    name, email, phone, password, role,
+    name, email, phone, password, role, appRoleId, roleIds, customPermissions,
     // ADMIN-ONLY employment
     position, salary, workMode, departmentId, joiningDate,
     dateOfBirth, reportingToId,
@@ -93,6 +93,11 @@ export async function POST(req: NextRequest) {
   const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } })
   if (existing) return errorResponse('Email already registered')
 
+  const assignedRoleIdsArr: string[] = Array.isArray(roleIds) ? roleIds.filter(Boolean) : (appRoleId ? [appRoleId] : [])
+  const primaryRoleId = assignedRoleIdsArr[0] || appRoleId || null
+  const assignedRoleIdsJson = assignedRoleIdsArr.length > 0 ? JSON.stringify(assignedRoleIdsArr) : null
+  const customPermissionsJson = Array.isArray(customPermissions) && customPermissions.length > 0 ? JSON.stringify(customPermissions) : null
+
   try {
     const hashedPwd = await hash(password, 10)
     const employeeId = await generateEmployeeId()
@@ -104,6 +109,9 @@ export async function POST(req: NextRequest) {
         phone: phone || null,
         password: hashedPwd,
         role: role || 'EMPLOYEE',
+        appRoleId: primaryRoleId,
+        assignedRoleIds: assignedRoleIdsJson,
+        customPermissions: customPermissionsJson,
         dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
         employee: {
           create: {
