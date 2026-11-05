@@ -203,10 +203,16 @@ export default function LoginPage() {
       <div className="hidden lg:flex lg:w-[46%] bg-brand-900 relative flex-col justify-between px-12 py-14 text-white overflow-hidden">
         <div>
           <div className="flex items-center gap-2.5">
-            <div className="w-200 h-auto rounded-lg bg-white flex items-center justify-center p-2">
-              <img src={BRAND.logoUrl} alt={BRAND.appName} className="h-14" />
+            <div className="rounded-xl bg-white flex items-center justify-center p-2.5 shadow-sm max-w-[220px]">
+              <img
+                src={BRAND.logoUrl}
+                alt={BRAND.appName}
+                className="h-12 w-auto object-contain"
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).src = '/images/hbs-logo.png'
+                }}
+              />
             </div>
-           
           </div>
         </div>
 
@@ -239,11 +245,17 @@ export default function LoginPage() {
       <div className="flex-1 flex items-center justify-center px-6 py-12 bg-gray-50">
         <div className="w-full max-w-sm">
           {/* mobile logo */}
-          <div className="lg:hidden flex items-center gap-2.5 mb-8">
-            <div className="w-200 h-auto rounded-lg bg-white flex items-center justify-center p-2">
-              <img src={BRAND.logoUrl} alt={BRAND.appName} className="h-14" />
+          <div className="lg:hidden flex items-center justify-center mb-8">
+            <div className="rounded-xl bg-white flex items-center justify-center p-2.5 shadow-sm border border-gray-200">
+              <img
+                src={BRAND.logoUrl}
+                alt={BRAND.appName}
+                className="h-12 w-auto object-contain"
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).src = '/images/hbs-logo.png'
+                }}
+              />
             </div>
-           
           </div>
 
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-8">

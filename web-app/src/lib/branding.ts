@@ -8,10 +8,13 @@
 // portal shell, etc.) can read them too — Next.js inlines these at build
 // time, so `npm run build` again after changing .env.
 
+const rawLogo = process.env.COMPANY_LOGO_URL || process.env.NEXT_PUBLIC_COMPANY_LOGO_URL || '/images/hbs-logo.png'
+const logoUrl = rawLogo.includes('hoverbusinessservices.com/images/hbs-logo.png') ? '/images/hbs-logo.png' : rawLogo
+
 export const BRAND = {
   name: process.env.COMPANY_NAME || process.env.NEXT_PUBLIC_COMPANY_NAME || 'Your Company',
   short: process.env.COMPANY_SHORT || process.env.NEXT_PUBLIC_COMPANY_SHORT || 'APP',
   domain: process.env.COMPANY_DOMAIN || process.env.NEXT_PUBLIC_COMPANY_DOMAIN || '',
-  logoUrl: process.env.COMPANY_LOGO_URL || process.env.NEXT_PUBLIC_COMPANY_LOGO_URL || '/images/hbs-logo.png',
+  logoUrl,
   appName: process.env.NEXT_PUBLIC_APP_NAME || 'CRM',
 }
