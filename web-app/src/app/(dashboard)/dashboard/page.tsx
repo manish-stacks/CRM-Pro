@@ -139,7 +139,7 @@ export default function DashboardPage() {
     <div className="space-y-6">
 
       <AnnouncementBanner />
-      <DiwaliBanner name={user?.name?.split(' ')[0]} />
+      {/* <DiwaliBanner name={user?.name?.split(' ')[0]} /> */}
 
       {/* Header */}
       <div
