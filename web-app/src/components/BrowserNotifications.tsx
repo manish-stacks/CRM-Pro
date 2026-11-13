@@ -4,17 +4,16 @@
 // Mounted once near the root of the dashboard so it keeps working no
 // matter which page is open, not just when the bell dropdown is open.
 //
-// Bonus: this also "just works" inside the Electron desktop app with zero
-// extra Electron code — Chromium (which Electron embeds) implements the
-// same window.Notification API and routes it straight to the OS's native
-// notification center.
+// In the desktop app (Electron), it seamlessly uses native desktop notifications,
+// sound chimes, taskbar flashing, and native download notifications.
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import api from '@/lib/axios'
 import { BRAND } from '@/lib/branding'
 import { useAuth } from '@/hooks/useAuth'
+import toast from 'react-hot-toast'
 
-const POLL_MS = 20_000
+const POLL_MS = 15_000
 const SEEN_KEY = 'hbs_notif_last_seen_at'
 
 export function BrowserNotifications() {
@@ -23,11 +22,46 @@ export function BrowserNotifications() {
   const [permission, setPermission] = useState<NotificationPermission | 'unsupported'>('default')
   const cutoffRef = useRef<string | null>(null)
 
-  // Ask once per session. Browsers ignore repeat calls if the person
-  // already granted/blocked it, so this is safe to run on every mount.
+  // Listen to desktop app events (navigation on notification click, download toasts)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const electron = (window as any).electronAPI
+    if (electron?.isDesktop) {
+      const unsubNav = electron.onNavigate?.((link: string) => {
+        if (link) router.push(link)
+      })
+      const unsubDlStart = electron.onDownloadStarted?.(({ fileName }: { fileName: string }) => {
+        toast.loading(`Downloading ${fileName}...`, { duration: 3000, id: `dl-${fileName}` })
+      })
+      const unsubDlDone = electron.onDownloadCompleted?.(({ fileName }: { fileName: string }) => {
+        toast.dismiss(`dl-${fileName}`)
+        toast.success(`Report downloaded: ${fileName}`)
+      })
+      const unsubDlFail = electron.onDownloadFailed?.(({ fileName }: { fileName: string }) => {
+        toast.dismiss(`dl-${fileName}`)
+        toast.error(`Download failed: ${fileName}`)
+      })
+
+      return () => {
+        unsubNav?.()
+        unsubDlStart?.()
+        unsubDlDone?.()
+        unsubDlFail?.()
+      }
+    }
+  }, [router])
+
+  // Ask once per session in web browser.
   useEffect(() => {
     if (!user) return
-    if (typeof window === 'undefined' || !('Notification' in window)) {
+    if (typeof window === 'undefined') return
+    const electron = (window as any).electronAPI
+    if (electron?.isDesktop) {
+      setPermission('granted')
+      return
+    }
+
+    if (!('Notification' in window)) {
       setPermission('unsupported')
       return
     }
@@ -38,12 +72,12 @@ export function BrowserNotifications() {
   }, [user])
 
   useEffect(() => {
-    if (!user || permission !== 'granted') return
+    if (!user) return
+    const electron = typeof window !== 'undefined' ? (window as any).electronAPI : null
+    const isDesktop = !!electron?.isDesktop
 
-    // Don't blast every historical unread notification the moment someone
-    // grants permission — only notify for things that arrive from now on.
-    // Persisted so a page refresh a few seconds later doesn't re-fire the
-    // same ones either.
+    if (!isDesktop && permission !== 'granted') return
+
     if (!cutoffRef.current) {
       cutoffRef.current = localStorage.getItem(SEEN_KEY) || new Date().toISOString()
     }
@@ -60,15 +94,23 @@ export function BrowserNotifications() {
         if (fresh.length === 0) return
 
         for (const n of fresh) {
-          const notif = new Notification(n.title, {
-            body: n.message || '',
-            icon: BRAND.logoUrl,
-            tag: n.id, // de-dupes if the same notification is polled twice
-          })
-          notif.onclick = () => {
-            window.focus()
-            if (n.link) router.push(n.link)
-            notif.close()
+          if (isDesktop && electron.showNotification) {
+            electron.showNotification({
+              title: n.title,
+              body: n.message || '',
+              link: n.link || undefined,
+            })
+          } else if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+            const notif = new Notification(n.title, {
+              body: n.message || '',
+              icon: BRAND.logoUrl,
+              tag: n.id,
+            })
+            notif.onclick = () => {
+              window.focus()
+              if (n.link) router.push(n.link)
+              notif.close()
+            }
           }
         }
 
@@ -76,7 +118,7 @@ export function BrowserNotifications() {
         cutoffRef.current = newest
         localStorage.setItem(SEEN_KEY, newest)
       } catch {
-        // Silent — this is a background enhancement, not core functionality.
+        // Silent background check
       }
     }
 

@@ -5,7 +5,7 @@
   "description": "HBS CRM",
   "author": "Manish Stacks",
   "scripts": {
-    "build": "tsc && node -e \"const fs=require('fs');fs.copyFileSync('src/tracking-alert.html','dist/tracking-alert.html');fs.copyFileSync('src/update-alert.html','dist/update-alert.html')\"",
+    "build": "tsc && node -e \"const fs=require('fs'),path=require('path');if(!fs.existsSync('dist'))fs.mkdirSync('dist',{recursive:true});fs.readdirSync('src').filter(f=>f.endsWith('.html')).forEach(f=>fs.copyFileSync(path.join('src',f),path.join('dist',f)))\"",
     "start": "npm run build && electron .",
     "dist": "npm run build && electron-builder --publish always"
   },

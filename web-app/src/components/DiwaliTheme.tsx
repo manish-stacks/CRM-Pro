@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 
 // Site-wide Diwali theme (header to footer). Pure overlay, never blocks clicks.
 const SHOW_FROM = new Date(2026, 9, 30)
-const SHOW_TILL = new Date(2026, 10, 15)
+const SHOW_TILL = new Date(2026, 10, 10)
 const KEY = 'diwali-theme-off'
 const C = ['#ff9f1c', '#ff4d6d', '#ffd60a', '#7bf1a8', '#4cc9f0', '#f72585']
 
