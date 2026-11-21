@@ -5,18 +5,34 @@ import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/auth'
 import { successResponse, errorResponse } from '@/lib/api'
+import { getTeamUserIds } from '@/lib/teamScope'
 
 const VALID_ROLES = ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'EMPLOYEE', 'TELECALLER', 'MARKETING_EXECUTIVE']
 
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req)
   if (auth instanceof Response) return auth
+  const session = (auth as any).session
 
   const { searchParams } = new URL(req.url)
   const role = searchParams.get('role')
   const roles = searchParams.get('roles') // comma-separated list
+  const includeInactive = searchParams.get('includeInactive') === 'true'
+  const teamOnly = searchParams.get('teamOnly') === 'true'
 
-  const where: any = { isActive: true }
+  const access = (auth as any).access
+  const effectiveRole = access?.role || session.role
+  const isCompanyAdmin = effectiveRole === 'SUPER_ADMIN' || effectiveRole === 'ADMIN'
+
+  const where: any = {}
+  if (!includeInactive) where.isActive = true
+
+  // Non-admins (such as TL / MANAGER) only see their own department/team members.
+  // Admins & Super Admins see all users company-wide unless teamOnly=true is requested.
+  if (!isCompanyAdmin || teamOnly) {
+    const team = await getTeamUserIds(session.userId)
+    where.id = { in: team.userIds }
+  }
   if (roles) {
     const arr = roles.split(',').filter(r => VALID_ROLES.includes(r))
     if (arr.length) where.role = { in: arr }
@@ -29,7 +45,7 @@ export async function GET(req: NextRequest) {
   const users = await prisma.user.findMany({
     where,
     select: {
-      id: true, name: true, email: true, phone: true, role: true, avatar: true, lastActiveAt: true,
+      id: true, name: true, email: true, phone: true, role: true, avatar: true, isActive: true, lastActiveAt: true,
       employee: {
         select: {
           employeeId: true,
@@ -37,7 +53,7 @@ export async function GET(req: NextRequest) {
         },
       },
     },
-    orderBy: { name: 'asc' },
+    orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
   })
 
   if (headOfRole && VALID_ROLES.includes(headOfRole)) {

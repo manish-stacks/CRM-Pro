@@ -88,6 +88,13 @@ export default function LeavesPage() {
     if (form.duration === 'SINGLE_DAY' && !form.startDate) { toast.error('Date required'); return }
     if (form.duration === 'MULTIPLE_DAYS' && (!form.startDate || !form.endDate)) { toast.error('Start & end dates required'); return }
     if (form.duration === 'SHORT_HOURLY' && (!form.startDate || !form.hourlyStart || !form.hourlyEnd)) { toast.error('Date + start/end times required'); return }
+    if (form.duration === 'SHORT_HOURLY') {
+      const [sh, sm] = (form.hourlyStart || '00:00').split(':').map(Number)
+      const [eh, em] = (form.hourlyEnd || '00:00').split(':').map(Number)
+      const diffHours = ((eh * 60 + em) - (sh * 60 + sm)) / 60
+      if (diffHours <= 0) { toast.error('End time must be after start time'); return }
+      if (diffHours > 2) { toast.error('Short leave cannot exceed 2 hours (maximum 2 hours allowed)'); return }
+    }
 
     setSaving(true)
     try {
@@ -123,6 +130,13 @@ export default function LeavesPage() {
     if (form.duration === 'SINGLE_DAY' && !form.startDate) { toast.error('Date required'); return }
     if (form.duration === 'MULTIPLE_DAYS' && (!form.startDate || !form.endDate)) { toast.error('Start & end dates required'); return }
     if (form.duration === 'SHORT_HOURLY' && (!form.startDate || !form.hourlyStart || !form.hourlyEnd)) { toast.error('Date + start/end times required'); return }
+    if (form.duration === 'SHORT_HOURLY') {
+      const [sh, sm] = (form.hourlyStart || '00:00').split(':').map(Number)
+      const [eh, em] = (form.hourlyEnd || '00:00').split(':').map(Number)
+      const diffHours = ((eh * 60 + em) - (sh * 60 + sm)) / 60
+      if (diffHours <= 0) { toast.error('End time must be after start time'); return }
+      if (diffHours > 2) { toast.error('Short leave cannot exceed 2 hours (maximum 2 hours allowed)'); return }
+    }
 
     setSaving(true)
     try {
@@ -448,6 +462,10 @@ export default function LeavesPage() {
               <div className="grid grid-cols-2 gap-3">
                 <Input label="Start Time" type="time" value={form.hourlyStart} onChange={e => setForm(p => ({ ...p, hourlyStart: e.target.value }))} />
                 <Input label="End Time" type="time" value={form.hourlyEnd} onChange={e => setForm(p => ({ ...p, hourlyEnd: e.target.value }))} />
+              </div>
+              <div className="bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-xl p-2.5">
+                <p className="font-semibold">⏱️ Short Leave Policy:</p>
+                <p className="mt-0.5">Maximum 2 hours allowed. 1 short leave per month is free; taking 2 short leaves in a month incurs a half-day deduction.</p>
               </div>
             </>
           )}

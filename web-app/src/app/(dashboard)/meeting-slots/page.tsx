@@ -263,25 +263,18 @@ export default function MeetingSlotsPage() {
                             return (
                               <td key={sl.label} className="border-b border-l border-gray-100 p-1">
                                 {
-                                  isAdmin ? (
-                                    <button onClick={() => setDetail({ ...sl.lead, exec: e, slot: sl.label })}
-                                      className="w-full text-left bg-red-50 hover:bg-red-100 border border-red-200 rounded-md px-2 py-1.5 min-h-[46px] transition-colors">
-                                      <div className="text-[11px] font-semibold text-red-800 truncate">
-                                        Booked
-                                      </div>
-                                      {sl.lead.area && (
-                                        <div className="text-[10px] text-red-600/80 truncate">
-                                          {sl.lead.area}
-                                        </div>
-                                      )}
-                                    </button>
-                                  ) :
-                                    (
-                                      <div className="bg-red-50 border border-red-200 rounded-md min-h-[46px] flex flex-col items-center justify-center text-[10px] font-medium text-red-700 px-1">
-                                        <span>Booked</span>
-                                        {sl.lead.area && <span className="truncate text-red-600/80">{sl.lead.area}</span>}
+                                  <button onClick={() => setDetail({ ...sl.lead, exec: e, slot: sl.label })}
+                                    className="w-full text-left bg-red-50 hover:bg-red-100 border border-red-200 rounded-md px-2 py-1.5 min-h-[46px] transition-colors">
+                                    <div className="text-[11px] font-semibold text-red-800 truncate">
+                                      Booked
+                                    </div>
+                                    {sl.lead.area && (
+                                      <div className="text-[10px] text-red-600/80 truncate">
+                                        {sl.lead.area}
                                       </div>
                                     )}
+                                  </button>
+                                }
                               </td>
                             )
                           }
@@ -323,7 +316,7 @@ export default function MeetingSlotsPage() {
               <Row label="Slot" value={detail.slot} />
               {detail.meetingTime && <Row label="Time" value={detail.meetingTime} />}
               {detail.clientName && detail.companyName && <Row label="Contact" value={detail.clientName} />}
-              {detail.clientPhone && <Row label="Phone" value={detail.clientPhone} />}
+              {detail.clientPhone && <Row label="Phone" value={isAdmin ? detail.clientPhone : null} />}
               {detail.city && <Row label="City" value={detail.city} />}
               {detail.service && <Row label="Service" value={detail.service} />}
               {detail.price ? <Row label="Value" value={formatCurrency(detail.price)} /> : null}
@@ -336,13 +329,15 @@ export default function MeetingSlotsPage() {
                 {detail.meetingLocation}
               </div>
             )}
-            {isAdmin &&
+            {
+              isAdmin &&
               <div className="flex justify-end gap-2 pt-1">
                 {detail.clientPhone && (
                   <a href={`tel:${detail.clientPhone}`} className="btn-secondary"><Phone size={14} /> Call</a>
                 )}
                 <Link href={`/leads/${detail.id}`} className="btn-primary">Open Lead</Link>
-              </div>}
+              </div>
+            }
           </div>
         )}
       </Modal>

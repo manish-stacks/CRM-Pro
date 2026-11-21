@@ -72,4 +72,18 @@ export async function register() {
   })
 
   console.log('[instrumentation] Audit log cleanup cron scheduled (daily 3 AM, 7-day retention).')
+
+  // Monthly on the 2nd at 9:00 AM IST — email previous month's salary slips (with PDF attached) to all active employees
+  cron.schedule('0 9 2 * *', async () => {
+    try {
+      console.log('[monthly-payslips-cron] Starting automated 2nd-of-month payslip email run...')
+      const { sendMonthlyPayslips } = await import('@/lib/monthlyPayslipMailer')
+      const result = await sendMonthlyPayslips()
+      console.log(`[monthly-payslips-cron] Finished: ${result.sent} sent, ${result.failed} failed for ${result.monthName} ${result.year}.`)
+    } catch (err) {
+      console.error('[monthly-payslips-cron] failed:', err)
+    }
+  })
+
+  console.log('[instrumentation] Monthly payslip email cron scheduled (every month on the 2nd at 9:00 AM).')
 }

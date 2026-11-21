@@ -32,11 +32,11 @@ export function computeLeaveDays(input: {
   }
   const start = new Date(startDate)
   const end = new Date(startDate)
-  const hours = Number(hourlyHours) || (() => {
-    const [sh, sm] = hourlyStart.split(':').map(Number)
-    const [eh, em] = hourlyEnd.split(':').map(Number)
-    return ((eh * 60 + em) - (sh * 60 + sm)) / 60
-  })()
-  if (!hours || hours <= 0) return { start, end, days: 0, error: 'Invalid hourly time range' }
+  const [sh, sm] = hourlyStart.split(':').map(Number)
+  const [eh, em] = hourlyEnd.split(':').map(Number)
+  const diffHours = ((eh * 60 + em) - (sh * 60 + sm)) / 60
+  const hours = diffHours > 0 ? diffHours : (Number(hourlyHours) || 0)
+  if (!hours || hours <= 0) return { start, end, days: 0, error: 'End time must be after start time' }
+  if (hours > 2) return { start, end, days: 0, error: 'Short leave cannot exceed 2 hours (maximum 2 hours allowed)' }
   return { start, end, days: hours / 8 }
 }

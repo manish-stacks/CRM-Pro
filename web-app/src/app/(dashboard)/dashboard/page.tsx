@@ -1,12 +1,16 @@
 'use client'
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useAuth } from '@/hooks/useAuth'
-import { StatCard } from '@/components/ui'
 import { PunchOutConfirmModal } from '@/components/PunchOutConfirmModal'
 import { CelebrationWidget } from '@/components/dashboard/CelebrationWidget'
 import { AnnouncementBanner } from '@/components/dashboard/AnnouncementBanner'
-import { DiwaliBanner } from '@/components/dashboard/DiwaliBanner'
-import { Users, Target, FileText, DollarSign, Clock, UserCheck, LogIn, LogOut, Wifi, CalendarCheck, AlertTriangle, CheckCircle2, MapPin, Briefcase, Home, Loader2 } from 'lucide-react'
+import { MonthStartSummaryWidget } from '@/components/dashboard/MonthStartSummaryWidget'
+import {
+  Users, Target, FileText, DollarSign, Clock, UserCheck,
+  LogIn, LogOut, CalendarCheck, AlertTriangle, CheckCircle2,
+  MapPin, Briefcase, Home, Loader2, Sparkles, ArrowUpRight,
+  TrendingUp, Shield, Sun, Moon, Sunrise, Calendar, ChevronRight
+} from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import api from '@/lib/axios'
@@ -17,19 +21,30 @@ import { isCompanyWideRole } from '@/lib/permissions'
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316', '#84cc16', '#6366f1']
 const STATUS_COLORS: Record<string, string> = {
-  NEW: '#8b5cf6', RINGING: '#3b82f6', CALLBACK: '#06b6d4', FOLLOW_UP: '#f59e0b',
-  MEETING_SCHEDULED: '#ef4444', CONVERTED: '#10b981', NOT_INTERESTED: '#ec4899',
+  NEW: '#8b5cf6',
+  RINGING: '#3b82f6',
+  CALLBACK: '#06b6d4',
+  FOLLOW_UP: '#f59e0b',
+  MEETING_SCHEDULED: '#ef4444',
+  CONVERTED: '#10b981',
+  NOT_INTERESTED: '#ec4899',
 }
-const getLeadColor = (status: string, i: number) => STATUS_COLORS[status?.toUpperCase()?.replace(/\s+/g, '_')] || COLORS[i % COLORS.length]
-const WORK_MODES = ['WFO', 'WFH', 'FIELD']
-// Fixed default location used for all web punch-ins (browser geolocation is
-// unreliable on desktop). The mobile app still sends the real GPS fix.
+const getLeadColor = (status: string, i: number) =>
+  STATUS_COLORS[status?.toUpperCase()?.replace(/\s+/g, '_')] || COLORS[i % COLORS.length]
+
+const WORK_MODES = [
+  { id: 'WFO', label: 'Office (WFO)', icon: Briefcase },
+  { id: 'WFH', label: 'Home (WFH)', icon: Home },
+  { id: 'FIELD', label: 'Field Visit', icon: MapPin },
+]
+
 const DEFAULT_PUNCH_LOCATION = {
   latitude: 28.6959,
   longitude: 77.1525,
-  address: 'NSP, Netaji Subhash Place, Pitampura, New Delhi',
+  address: 'Netaji Subhash Place, Pitampura, New Delhi',
   accuracy: 0,
 }
+
 export default function DashboardPage() {
   const { user } = useAuth()
   const [data, setData] = useState<any>(null)
@@ -37,11 +52,13 @@ export default function DashboardPage() {
   const [todayAttendance, setTodayAttendance] = useState<any>(null)
   const [time, setTime] = useState(new Date())
   const [punching, setPunching] = useState(false)
+  const [selectedMode, setSelectedMode] = useState<string>('WFO')
   const [myProjects, setMyProjects] = useState<any[]>([])
   const [leaveBalance, setLeaveBalance] = useState<any>(null)
   const [profileCompletion, setProfileCompletion] = useState<{ percent: number; missingFields: string[] } | null>(null)
+  const [confirmOut, setConfirmOut] = useState(false)
 
-  // Live clock
+  // Live digital clock with second updates
   useEffect(() => {
     const t = setInterval(() => setTime(new Date()), 1000)
     return () => clearInterval(t)
@@ -60,14 +77,16 @@ export default function DashboardPage() {
   }, [])
 
   useEffect(() => { fetchDashboard() }, [fetchDashboard])
+
   useEffect(() => {
     api.get('/leaves/balance').then(r => setLeaveBalance(r.data.data)).catch(() => { })
   }, [])
+
   useEffect(() => {
     api.get('/auth/profile').then(r => setProfileCompletion(r.data.data?.profileCompletion || null)).catch(() => { })
   }, [])
 
-  // Assigned projects — for heads (MANAGER) and team members (EMPLOYEE)
+  // Assigned projects for managers and employees
   useEffect(() => {
     if (user?.role === 'MANAGER' || user?.role === 'EMPLOYEE') {
       api.get('/projects?isActive=true&limit=20')
@@ -76,20 +95,13 @@ export default function DashboardPage() {
     }
   }, [user?.role])
 
-  // Punch Out asks for confirmation first (see PunchOutConfirmModal) — a
-  // mis-click here used to end someone's whole working day silently.
-  const [confirmOut, setConfirmOut] = useState(false)
-
-  const handlePunch = async (workMode: string = 'WFO') => {
+  const handlePunch = async (workMode: string = selectedMode) => {
     const isOut = todayAttendance?.punchIn && !todayAttendance?.punchOut
     if (isOut && !confirmOut) { setConfirmOut(true); return }
     setConfirmOut(false)
     setPunching(true)
     try {
       const action = todayAttendance?.punchIn && !todayAttendance?.punchOut ? 'punch_out' : 'punch_in'
-      // Web punch-in doesn't rely on browser geolocation (unreliable on desktop —
-      // no GPS, permission prompts, etc). Always use the fixed office default
-      // (NSP, Pitampura) instead; the mobile app still sends the real GPS fix.
       const geo: any = DEFAULT_PUNCH_LOCATION
       const res = await api.post('/attendance', {
         action,
@@ -99,14 +111,14 @@ export default function DashboardPage() {
         accuracy: geo.accuracy ?? null,
       })
       setTodayAttendance(res.data.data)
-      toast.success(action === 'punch_in' ? '✅ Punched In!' : '👋 Punched Out!')
+      toast.success(action === 'punch_in' ? 'Successfully Punched In' : 'Successfully Punched Out')
     } catch (e: any) {
-      toast.error(e.response?.data?.error || 'Failed')
+      toast.error(e.response?.data?.error || 'Failed to update attendance')
     } finally { setPunching(false) }
   }
 
-  const isPunchedIn = todayAttendance?.punchIn && !todayAttendance?.punchOut
-  const isPunchedOut = todayAttendance?.punchIn && todayAttendance?.punchOut
+  const isPunchedIn = !!(todayAttendance?.punchIn && !todayAttendance?.punchOut)
+  const isPunchedOut = !!(todayAttendance?.punchIn && todayAttendance?.punchOut)
 
   const workedSecs = useMemo(() => {
     if (!todayAttendance?.punchIn) return 0
@@ -115,184 +127,281 @@ export default function DashboardPage() {
   }, [todayAttendance, time])
 
   const fmtDuration = (secs: number) => {
-    const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60), s = secs % 60
+    const h = Math.floor(secs / 3600)
+    const m = Math.floor((secs % 3600) / 60)
+    const s = secs % 60
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
   }
-  // Regular employees don't see business/revenue metrics
+
   const showBiz = user?.role !== 'EMPLOYEE'
-  // Revenue Trend chart + Month Revenue stat: admins only
   const showRevenue = isCompanyWideRole(user?.role || '')
 
   const greeting = () => {
-    const h = new Date().getHours()
-    if (h < 12) return 'Good morning'
-    if (h < 17) return 'Good afternoon'
-    return 'Good evening'
+    const h = time.getHours()
+    if (h < 12) return { text: 'Good morning', icon: Sunrise }
+    if (h < 17) return { text: 'Good afternoon', icon: Sun }
+    return { text: 'Good evening', icon: Moon }
   }
 
+  const greet = greeting()
+  const GreetIcon = greet.icon
   const stats = data?.stats
-  // const birthdays = data?.birthdays || []
-  // const selfBirthday = birthdays.find((b: any) => b.id === user?.id)
-  // const upcomingBirthdays = data?.upcomingBirthdays || []
 
   return (
-    <div className="space-y-6">
-
+    <div className="space-y-6 pb-12">
       <AnnouncementBanner />
-      {/* <DiwaliBanner name={user?.name?.split(' ')[0]} /> */}
 
-      {/* Header */}
-      <div
-        className="animate-rise relative overflow-hidden rounded-2xl px-6 py-6 flex items-start justify-between bg-brand-50"
-        style={{
-          backgroundImage: "url('/images/city-skyline.png')",
-          backgroundRepeat: 'no-repeat',
-          backgroundPosition: 'center right',
-          backgroundSize: 'contain',
-        }}
-      >
-        <div className="relative">
-          <h1 className="text-2xl font-bold text-gray-900">{greeting()}, {user?.name?.split(' ')[0]}! 👋</h1>
-          <p className="text-gray-500 text-sm mt-0.5">{time.toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
-        </div>
-        <div className="relative text-right flex items-center gap-3">
-          <div className="w-11 h-11 rounded-full bg-white flex items-center justify-center shadow-sm flex-shrink-0">
-            <Clock className="text-brand-400" size={20} />
+      {/* ============================================================ */}
+      {/* 1. EXECUTIVE HERO BANNER */}
+      {/* ============================================================ */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 p-6 md:p-8 text-white shadow-xl shadow-slate-950/20 border border-slate-800/80">
+        <div className="pointer-events-none absolute -right-16 -top-16 h-72 w-72 rounded-full bg-indigo-500/15 blur-3xl" />
+        <div className="pointer-events-none absolute -left-16 -bottom-16 h-72 w-72 rounded-full bg-sky-500/10 blur-3xl" />
+
+        <div className="relative flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-amber-300 backdrop-blur-md border border-white/10">
+                <GreetIcon size={14} className="shrink-0" />
+                <span>{greet.text}</span>
+              </span>
+              <span className="inline-flex items-center rounded-full bg-indigo-500/20 px-3 py-1 text-xs font-semibold text-indigo-200 border border-indigo-400/20">
+                {user?.role?.replace(/_/g, ' ') || 'Staff Member'}
+              </span>
+              <span className="hidden sm:inline-block text-xs text-slate-400">
+                {time.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })}
+              </span>
+            </div>
+
+            <h1 className="text-2xl font-black tracking-tight sm:text-3xl md:text-4xl text-white">
+              Welcome back, <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-200 via-white to-sky-200">{user?.name?.split(' ')[0] || 'User'}</span>!
+            </h1>
+
+            <p className="max-w-xl text-xs sm:text-sm text-slate-300 leading-relaxed">
+              Enterprise operations live dashboard. Track sales performance, biometric shifts, and revenue metrics in real-time.
+            </p>
+
+            {/* Quick Action Pills */}
+            <div className="flex flex-wrap items-center gap-2 pt-2">
+              <Link
+                href="/leaves"
+                className="inline-flex items-center gap-1.5 rounded-full bg-white/10 hover:bg-white/20 px-3.5 py-1.5 text-xs font-semibold text-white backdrop-blur-md border border-white/10 transition shadow-sm"
+              >
+                <Calendar size={13} className="text-indigo-300" /> Apply Leave
+              </Link>
+              <Link
+                href="/payroll"
+                className="inline-flex items-center gap-1.5 rounded-full bg-white/10 hover:bg-white/20 px-3.5 py-1.5 text-xs font-semibold text-white backdrop-blur-md border border-white/10 transition shadow-sm"
+              >
+                <DollarSign size={13} className="text-emerald-300" /> View Payslips
+              </Link>
+              {showBiz && (
+                <Link
+                  href="/leads"
+                  className="inline-flex items-center gap-1.5 rounded-full bg-indigo-600 hover:bg-indigo-500 px-3.5 py-1.5 text-xs font-bold text-white shadow-md shadow-indigo-600/30 transition"
+                >
+                  <Target size={13} /> Manage Leads
+                </Link>
+              )}
+            </div>
           </div>
-          <div>
-            <p className="text-2xl font-bold tabular-nums text-gray-900">{time.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</p>
-            <p className="text-xs text-gray-500 text-right">India Standard Time (IST)</p>
+
+          {/* Digital Clock & IST Indicator */}
+          <div className="flex items-center gap-4 rounded-2xl bg-white/10 p-4 backdrop-blur-md border border-white/10 lg:flex-col lg:items-end lg:p-5 shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-500/30 text-indigo-200 shadow-inner border border-white/10">
+                <Clock size={22} />
+              </div>
+              <div>
+                <p className="text-2xl font-mono font-bold tracking-tight sm:text-3xl">
+                  {time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}
+                </p>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  </span>
+                  <span className="text-[11px] font-medium text-slate-300">India Standard Time (IST)</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Profile completion — nudge/block until required details are filled */}
+      {/* ============================================================ */}
+      {/* 2. MONTH-START STATEMENT CARD (Visible 1st-5th only) */}
+      {/* ============================================================ */}
+      <MonthStartSummaryWidget />
+
+      {/* Profile completion warning */}
       {profileCompletion && profileCompletion.percent < 100 && (
-        <div className="card p-5 rounded-2xl bg-white shadow-sm">
+        <div className="rounded-3xl border border-amber-200 bg-gradient-to-r from-amber-50/90 to-amber-100/50 p-5 shadow-xs">
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div className="flex items-center gap-4">
               <div
-                className="relative w-14 h-14 flex-shrink-0 rounded-full grid place-items-center"
+                className="relative h-13 w-13 shrink-0 rounded-full grid place-items-center shadow-inner"
                 style={{
-                  background: `conic-gradient(#ef4444 ${profileCompletion.percent * 3.6}deg, #fde2e2 0deg)`,
+                  background: `conic-gradient(#f59e0b ${profileCompletion.percent * 3.6}deg, #fef3c7 0deg)`,
                 }}
               >
-                <div className="w-11 h-11 rounded-full bg-white grid place-items-center">
-                  <span className="text-xs font-bold text-red-500">{profileCompletion.percent}%</span>
+                <div className="h-10 w-10 rounded-full bg-white grid place-items-center shadow-xs">
+                  <span className="text-xs font-black text-amber-600">{profileCompletion.percent}%</span>
                 </div>
               </div>
               <div>
-                <p className="font-semibold text-gray-900">
-                  {profileCompletion.percent < 90 ? 'Complete your profile to check in' : 'Almost there — finish your profile'}
+                <p className="font-bold text-slate-900 text-sm sm:text-base">
+                  {profileCompletion.percent < 90 ? 'Profile Completion Pending' : 'Almost Done — Complete Profile Verification'}
                 </p>
-                <p className="text-sm text-gray-500 mt-0.5">
-                  {profileCompletion.percent < 90
-                    ? `Your profile is only ${profileCompletion.percent}% complete. You need at least 90% to punch in.`
-                    : `Your profile is ${profileCompletion.percent}% complete. Fill the rest for full records.`}
+                <p className="text-xs sm:text-sm text-slate-600 mt-0.5">
+                  Ensure all KYC documents and emergency contacts are filled to avoid payroll delays.
                 </p>
                 {profileCompletion.missingFields.length > 0 && (
-                  <p className="text-xs text-gray-400 mt-1.5">
-                    Missing: {profileCompletion.missingFields.slice(0, 4).map(f => FIELD_LABELS[f] || f).join(', ')}
-                    {profileCompletion.missingFields.length > 4 ? ` +${profileCompletion.missingFields.length - 4} more` : ''}
+                  <p className="text-xs text-amber-700/80 font-medium mt-1">
+                    Pending fields: {profileCompletion.missingFields.slice(0, 4).map(f => FIELD_LABELS[f] || f).join(', ')}
                   </p>
                 )}
               </div>
             </div>
 
-            <div className="flex items-center gap-4 flex-shrink-0">
-              <Link
-                href="/profile"
-                className="px-5 py-2.5 rounded-full text-sm font-semibold text-white bg-brand-500 hover:bg-brand-700 transition-colors whitespace-nowrap"
-              >
-                Complete Now →
-              </Link>
-              <img src="/images/profile-clipboard.png" alt="" className="w-14 h-14 object-contain hidden sm:block" />
-            </div>
+            <Link
+              href="/profile"
+              className="rounded-full bg-slate-900 px-5 py-2.5 text-xs font-bold text-white hover:bg-slate-800 transition shadow-sm flex items-center gap-1.5"
+            >
+              Complete Profile <ChevronRight size={14} />
+            </Link>
           </div>
         </div>
       )}
 
-      {/* Attendance punch card */}
-      <div className="animate-rise stagger-1 p-6 rounded-2xl bg-white shadow-sm">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
-          <div>
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Today</p>
-            <p className="text-lg font-bold text-gray-900">{formatDate(time)}</p>
+      {/* ============================================================ */}
+      {/* 3. BIOMETRIC ATTENDANCE & WORKSTATION PUNCH CARD */}
+      {/* ============================================================ */}
+      <div className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white p-6 shadow-sm">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-5">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+              <CalendarCheck size={18} />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-slate-900">Biometric Attendance Workstation</h2>
+              <p className="text-[11px] text-slate-500">Real-time punch terminal & shift compliance</p>
+            </div>
+          </div>
+          <span className="text-xs font-medium text-slate-400">
+            Shift: 10:00 AM – 06:30 PM
+          </span>
+        </div>
 
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide my-1">Status</p>
-            <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-semibold ${isPunchedIn ? 'bg-emerald-100 text-emerald-700' :
-              isPunchedOut ? 'bg-gray-100 text-gray-700' :
-                'bg-brand-50 text-brand-500'
-              }`}>
-              <span className="relative w-2 h-2 rounded-full bg-current">
-                {isPunchedIn && <span className="pulse-ring absolute inset-0 text-emerald-500" />}
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-3 md:items-center">
+          {/* Status Column */}
+          <div className="space-y-2.5">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Shift Status</p>
+            <div>
+              <span
+                className={`inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-extrabold ${
+                  isPunchedIn
+                    ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                    : isPunchedOut
+                    ? 'bg-slate-100 text-slate-800 border border-slate-200'
+                    : 'bg-amber-50 text-amber-800 border border-amber-200'
+                }`}
+              >
+                <span className="relative flex h-2.5 w-2.5">
+                  {isPunchedIn && (
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                  )}
+                  <span className={`relative inline-flex h-2.5 w-2.5 rounded-full ${isPunchedIn ? 'bg-emerald-500' : isPunchedOut ? 'bg-slate-500' : 'bg-amber-500'}`} />
+                </span>
+                {isPunchedIn ? 'ON DUTY · ACTIVE' : isPunchedOut ? 'SHIFT COMPLETED' : 'NOT PUNCHED IN'}
               </span>
-              {isPunchedIn ? 'Working' : isPunchedOut ? 'Day Ended' : 'Not Punched In'}
+            </div>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Standard shift 8.5 hours. 10-minute grace period allowed till 10:10 AM IST.
+            </p>
+          </div>
+
+          {/* Time & Duration Column */}
+          <div className="space-y-2 border-y border-slate-100 py-4 md:border-y-0 md:border-x md:px-6 md:py-0">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Logged Hours Today</p>
+            <p className="font-mono text-3xl font-black text-slate-900 tracking-tight">
+              {isPunchedOut
+                ? `${todayAttendance.hoursWorked?.toFixed(2)}h`
+                : todayAttendance?.punchIn
+                ? fmtDuration(workedSecs)
+                : '00:00:00'}
+            </p>
+            <div className="flex items-center gap-1.5 text-xs text-slate-500 truncate">
+              <MapPin size={13} className="text-slate-400 shrink-0" />
+              <span className="truncate">{todayAttendance?.punchInAddress || DEFAULT_PUNCH_LOCATION.address}</span>
             </div>
           </div>
 
-          <div>
-            {todayAttendance?.punchIn && (
-              <p className="text-sm text-gray-600 mt-3 tabular-nums">
-                {isPunchedOut ? `Worked: ${todayAttendance.hoursWorked?.toFixed(2)}h` : `Working: ${fmtDuration(workedSecs)}`}
-              </p>
-            )}
-            {todayAttendance?.punchInAddress && (
-              <p className="text-xs text-gray-500 mt-1 flex items-start gap-1 max-w-xs">
-                <MapPin size={11} className="text-gray-400 flex-shrink-0 mt-0.5" />
-                <span className="truncate">{todayAttendance.punchInAddress}</span>
-              </p>
-            )}
-          </div>
-
-          <div className="flex flex-col gap-2">
-            {!isPunchedOut && (
+          {/* Actions Column */}
+          <div className="flex flex-col gap-3">
+            {!isPunchedOut ? (
               <>
                 {!isPunchedIn && (
-                  <div className="flex gap-2">
-                    {WORK_MODES.map(mode => (
-                      <button
-                        key={mode}
-                        onClick={() => handlePunch(mode)}
-                        disabled={punching}
-                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-full bg-white border border-gray-200 hover:border-brand-300 hover:bg-brand-50 hover:-translate-y-0.5 text-xs font-semibold text-gray-700 hover:text-brand-500 transition-all duration-200 disabled:opacity-50"
-                      >
-                        {mode === 'WFO' ? <Briefcase size={13} /> : mode === 'WFH' ? <Home size={13} /> : <MapPin size={13} />}
-                        {mode}
-                      </button>
-                    ))}
+                  <div className="grid grid-cols-3 gap-2">
+                    {WORK_MODES.map(mode => {
+                      const Icon = mode.icon
+                      const isSelected = selectedMode === mode.id
+                      return (
+                        <button
+                          key={mode.id}
+                          type="button"
+                          onClick={() => setSelectedMode(mode.id)}
+                          disabled={punching}
+                          className={`flex items-center justify-center gap-1 rounded-xl py-2 px-1 text-xs font-bold transition border ${
+                            isSelected
+                              ? 'bg-indigo-50 border-indigo-300 text-indigo-700 shadow-xs'
+                              : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                          } disabled:opacity-50`}
+                        >
+                          <Icon size={12} className={isSelected ? 'text-indigo-600' : 'text-slate-400'} />
+                          <span>{mode.id}</span>
+                        </button>
+                      )
+                    })}
                   </div>
                 )}
+
                 <button
-                  onClick={() => handlePunch()}
+                  onClick={() => handlePunch(selectedMode)}
                   disabled={punching}
-                  className={`flex items-center justify-center gap-2 px-5 py-3 rounded-full font-semibold text-sm transition-all duration-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 ${isPunchedIn ? 'bg-gray-700 hover:bg-gray-800 text-white' : 'bg-brand-500 hover:bg-brand-700 text-white'
-                    } disabled:opacity-50`}
+                  className={`flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-bold shadow-md transition active:scale-[0.99] disabled:opacity-50 ${
+                    isPunchedIn
+                      ? 'bg-slate-900 text-white hover:bg-slate-800 shadow-slate-900/20'
+                      : 'bg-gradient-to-r from-indigo-600 to-indigo-700 text-white hover:from-indigo-500 hover:to-indigo-600 shadow-indigo-600/20'
+                  }`}
                 >
-                  {punching ? <Loader2 size={16} className="animate-spin" /> :
-                    isPunchedIn ? <><LogOut size={15} /> Punch Out</> :
-                      <><LogIn size={15} /> Punch In</>}
+                  {punching ? (
+                    <Loader2 size={16} className="animate-spin" />
+                  ) : isPunchedIn ? (
+                    <><LogOut size={16} /> Punch Out (End Shift)</>
+                  ) : (
+                    <><LogIn size={16} /> Punch In ({selectedMode})</>
+                  )}
                 </button>
 
-                {/* Confirm before ending the day */}
                 <PunchOutConfirmModal
                   open={confirmOut}
                   onClose={() => setConfirmOut(false)}
-                  onConfirm={() => handlePunch()}
+                  onConfirm={() => handlePunch(selectedMode)}
                   loading={punching}
                   punchInAt={todayAttendance?.punchIn}
                 />
-                <p className="text-xs text-gray-500 text-center">
-                  <MapPin size={10} className="inline mr-0.5" />
-                  Location will be recorded
-                </p>
               </>
-            )}
-            {isPunchedOut && (
-              <div className="text-center">
-                <p className="text-sm text-gray-500">✅ Day complete</p>
-                <p className="text-xs text-gray-400 mt-0.5">
-                  {todayAttendance.hoursWorked?.toFixed(2)}h · {todayAttendance.status}
+            ) : (
+              <div className="rounded-2xl bg-emerald-50/80 border border-emerald-200 p-4 text-center">
+                <div className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 mb-1">
+                  <CheckCircle2 size={16} />
+                </div>
+                <p className="text-xs font-black uppercase tracking-wide text-emerald-800">
+                  Shift Completed Successfully
+                </p>
+                <p className="text-xs text-emerald-700 mt-0.5">
+                  Logged: {todayAttendance.hoursWorked?.toFixed(2)}h · Status: {todayAttendance.status}
                 </p>
               </div>
             )}
@@ -300,178 +409,358 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* My leave balance (auto carry-forward, capped) — employees see this inside CelebrationWidget instead */}
+      {/* Leave balance quick card */}
       {leaveBalance && user?.role !== 'SUPER_ADMIN' && user?.role !== 'EMPLOYEE' && (
-        <div className="card card-glow hover-lift animate-rise stagger-2 p-4 flex items-center justify-between gap-4 flex-wrap">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-brand-100 flex items-center justify-center">
-              <CalendarCheck size={22} className="text-brand-600" />
+        <div className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-slate-200/80 bg-white p-5 shadow-xs">
+          <div className="flex items-center gap-3.5">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-sky-50 text-sky-600">
+              <CalendarCheck size={20} />
             </div>
             <div>
-              <p className="font-semibold text-gray-900">Paid Leave Balance</p>
-              <p className="text-sm text-gray-500">
-                Carried forward + accrued · max {leaveBalance.maxCap} · {leaveBalance.monthlyAccrual}/month
-                {leaveBalance.wasReset && leaveBalance.countingFrom && <> · from {leaveBalance.countingFrom}</>}
+              <p className="font-bold text-slate-900 text-sm">Paid Leave Entitlement</p>
+              <p className="text-xs text-slate-500">
+                Accrual: {leaveBalance.monthlyAccrual}d/mo · Cap: {leaveBalance.maxCap}d
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-5 text-center">
+
+          <div className="flex items-center gap-6 text-center">
             <div>
-              <p className="text-2xl font-bold text-brand-600">{leaveBalance.available}</p>
-              <p className="text-[11px] text-gray-400">Available</p>
+              <p className="text-xl font-black text-sky-600">{leaveBalance.available}d</p>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Available</p>
             </div>
-            <div><p className="text-lg font-bold text-gray-700">{leaveBalance.taken}</p><p className="text-[11px] text-gray-400">Taken</p></div>
-            {leaveBalance.lapsed > 0 && <div><p className="text-lg font-bold text-amber-500">{leaveBalance.lapsed}</p><p className="text-[11px] text-gray-400">Lapsed</p></div>}
-            <Link href="/leaves" className="text-xs text-brand-600 hover:underline whitespace-nowrap">Details →</Link>
+            <div>
+              <p className="text-xl font-black text-slate-700">{leaveBalance.taken}d</p>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Taken</p>
+            </div>
+            {leaveBalance.lapsed > 0 && (
+              <div>
+                <p className="text-xl font-black text-amber-500">{leaveBalance.lapsed}d</p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Lapsed</p>
+              </div>
+            )}
+            <Link href="/leaves" className="text-xs font-bold text-indigo-600 hover:text-indigo-700 hover:underline">
+              View History →
+            </Link>
           </div>
         </div>
       )}
 
-      {/* Stats grid */}
+      {/* ============================================================ */}
+      {/* 4. EXECUTIVE KPI STATS CARDS */}
+      {/* ============================================================ */}
       {showBiz && (loading ? (
-        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-          {Array.from({ length: 6 }).map((_, i) => <div key={i} className="skeleton h-28 rounded-xl" />)}
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-6">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="h-28 rounded-3xl bg-slate-100 animate-pulse border border-slate-200/50" />
+          ))}
         </div>
       ) : (
-        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-          <div className="animate-rise stagger-1"><StatCard label="Employees" value={stats?.totalEmployees || 0} icon={Users} color="text-brand-600" /></div>
-          <div className="animate-rise stagger-2"><StatCard label="Leads" value={stats?.totalLeads || 0} icon={Target} color="text-purple-600" /></div>
-          <div className="animate-rise stagger-3"><StatCard label="Clients" value={stats?.totalClients || 0} icon={UserCheck} color="text-green-600" /></div>
-          <div className="animate-rise stagger-4"><StatCard label="Proposals" value={stats?.totalProposals || 0} icon={FileText} color="text-indigo-600" /></div>
-          <div className="animate-rise stagger-5"><StatCard label="Pending Leaves" value={stats?.pendingLeaves || 0} icon={Clock} color="text-yellow-600" /></div>
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-6">
+          <div className="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-xs hover:shadow-md transition">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Employees</span>
+              <div className="h-8 w-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                <Users size={16} />
+              </div>
+            </div>
+            <p className="text-2xl font-black text-slate-900 mt-2">{stats?.totalEmployees || 0}</p>
+            <p className="text-[11px] font-medium text-slate-500 mt-0.5">Active team</p>
+          </div>
+
+          <div className="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-xs hover:shadow-md transition">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Total Leads</span>
+              <div className="h-8 w-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
+                <Target size={16} />
+              </div>
+            </div>
+            <p className="text-2xl font-black text-purple-700 mt-2">{stats?.totalLeads || 0}</p>
+            <p className="text-[11px] font-medium text-slate-500 mt-0.5">Pipeline volume</p>
+          </div>
+
+          <div className="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-xs hover:shadow-md transition">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Active Clients</span>
+              <div className="h-8 w-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                <UserCheck size={16} />
+              </div>
+            </div>
+            <p className="text-2xl font-black text-emerald-700 mt-2">{stats?.totalClients || 0}</p>
+            <p className="text-[11px] font-medium text-slate-500 mt-0.5">Retained accounts</p>
+          </div>
+
+          <div className="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-xs hover:shadow-md transition">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Proposals</span>
+              <div className="h-8 w-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                <FileText size={16} />
+              </div>
+            </div>
+            <p className="text-2xl font-black text-indigo-700 mt-2">{stats?.totalProposals || 0}</p>
+            <p className="text-[11px] font-medium text-slate-500 mt-0.5">Commercial bids</p>
+          </div>
+
+          <div className="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-xs hover:shadow-md transition">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Pending Leaves</span>
+              <div className="h-8 w-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                <Clock size={16} />
+              </div>
+            </div>
+            <p className="text-2xl font-black text-amber-600 mt-2">{stats?.pendingLeaves || 0}</p>
+            <p className="text-[11px] font-medium text-slate-500 mt-0.5">Awaiting review</p>
+          </div>
+
           {showRevenue && (
-            <div className="animate-rise stagger-6"><StatCard label="Month Revenue" value={formatCurrency(stats?.monthRevenue || 0)} icon={DollarSign} color="text-brand-600" /></div>
+            <div className="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-xs hover:shadow-md transition">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Month Revenue</span>
+                <div className="h-8 w-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                  <DollarSign size={16} />
+                </div>
+              </div>
+              <p className="text-xl font-black text-emerald-700 mt-2 truncate">
+                {formatCurrency(stats?.monthRevenue || 0)}
+              </p>
+              <p className="text-[11px] font-medium text-slate-500 mt-0.5">Gross billing</p>
+            </div>
           )}
         </div>
       ))}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Revenue chart — admin only */}
+      {/* ============================================================ */}
+      {/* 5. REVENUE GROWTH TREND & CELEBRATIONS */}
+      {/* ============================================================ */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {showBiz && showRevenue && (
-          <div className="card card-glow hover-lift animate-rise stagger-1 p-5 lg:col-span-2">
-            <h3 className="font-semibold text-gray-900 mb-4">Revenue Trend</h3>
-            <ResponsiveContainer width="100%" height={220}>
+          <div className="rounded-3xl border border-slate-200/80 bg-white p-6 shadow-xs lg:col-span-2">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Revenue Growth Trend</h3>
+                <p className="text-xs text-slate-500">Monthly gross billing and collections overview</p>
+              </div>
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-3 py-1 text-xs font-bold text-emerald-700">
+                <TrendingUp size={12} /> Active Trend
+              </span>
+            </div>
+
+            <ResponsiveContainer width="100%" height={240}>
               <AreaChart data={data?.revenueChart || []}>
                 <defs>
-                  <linearGradient id="rev" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#be123c" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="#be123c" stopOpacity={0} />
+                  <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.28} />
+                    <stop offset="95%" stopColor="#4f46e5" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="month" tick={{ fill: '#9ca3af', fontSize: 12 }} />
-                <YAxis tick={{ fill: '#9ca3af', fontSize: 11 }} tickFormatter={v => `₹${(v / 1000).toFixed(0)}k`} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                <XAxis dataKey="month" tick={{ fill: '#64748b', fontSize: 11 }} />
+                <YAxis tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={v => `₹${(v / 1000).toFixed(0)}k`} />
                 <Tooltip formatter={(v: any) => formatCurrency(v)} />
-                <Area type="monotone" dataKey="revenue" stroke="#be123c" fill="url(#rev)" strokeWidth={2.5} dot={false} animationDuration={900} />
+                <Area type="monotone" dataKey="revenue" stroke="#4f46e5" strokeWidth={2.5} fill="url(#revGrad)" animationDuration={900} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
         )}
 
-        {/* Celebration widget */}
-        <div className={`animate-rise stagger-2 ${showBiz && showRevenue ? '' : 'lg:col-span-3'}`}>
+        <div className={`space-y-6 ${showBiz && showRevenue ? '' : 'lg:col-span-3'}`}>
           <CelebrationWidget leaveBalance={user?.role === 'EMPLOYEE' ? leaveBalance : null} />
         </div>
       </div>
 
+      {/* ============================================================ */}
+      {/* 6. PIPELINE STATUS & RECENT LEADS FEED */}
+      {/* ============================================================ */}
       {showBiz && showRevenue && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Lead pipeline */}
-          <div className="card card-glow hover-lift animate-rise stagger-1 p-5">
-            <h3 className="font-semibold text-gray-900 mb-4">Lead Pipeline</h3>
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          {/* Donut Pipeline Card */}
+          <div className="rounded-3xl border border-slate-200/80 bg-white p-6 shadow-xs">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Lead Pipeline Breakdown</h3>
+                <p className="text-xs text-slate-500">Distribution across sales conversion stages</p>
+              </div>
+              <span className="text-xs font-bold text-slate-500">
+                {stats?.totalLeads || 0} Total
+              </span>
+            </div>
+
             {(data?.leadsByStatus || []).length > 0 ? (
-              <div className="flex items-center gap-4">
-                <ResponsiveContainer width="100%" height={180}>
-                  <PieChart>
-                    <Pie data={data?.leadsByStatus || []} cx="50%" cy="50%" innerRadius={50} outerRadius={80} dataKey="count" nameKey="status" paddingAngle={3}>
-                      {(data?.leadsByStatus || []).map((s: any, i: number) => <Cell key={i} fill={getLeadColor(s.status, i)} />)}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="space-y-1.5 flex-shrink-0">
+              <div className="flex flex-col sm:flex-row items-center gap-6">
+                <div className="w-full sm:w-1/2">
+                  <ResponsiveContainer width="100%" height={200}>
+                    <PieChart>
+                      <Pie
+                        data={data?.leadsByStatus || []}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={55}
+                        outerRadius={80}
+                        dataKey="count"
+                        nameKey="status"
+                        paddingAngle={3}
+                      >
+                        {(data?.leadsByStatus || []).map((s: any, i: number) => (
+                          <Cell key={i} fill={getLeadColor(s.status, i)} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="w-full sm:w-1/2 space-y-2">
                   {(data?.leadsByStatus || []).map((s: any, i: number) => (
-                    <div key={s.status} className="flex items-center gap-2 text-sm">
-                      <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: getLeadColor(s.status, i) }} />
-                      <span className="text-gray-600">{s.status.replace('_', ' ')}</span>
-                      <span className="font-bold text-gray-900 ml-auto">{s.count}</span>
+                    <div key={s.status} className="flex items-center justify-between text-xs py-1 border-b border-slate-50 last:border-0">
+                      <div className="flex items-center gap-2 truncate">
+                        <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: getLeadColor(s.status, i) }} />
+                        <span className="text-slate-600 truncate">{s.status.replace(/_/g, ' ')}</span>
+                      </div>
+                      <span className="font-extrabold text-slate-900 ml-2">{s.count}</span>
                     </div>
                   ))}
                 </div>
               </div>
-            ) : <div className="py-10 text-center text-gray-400 text-sm">No leads yet</div>}
+            ) : (
+              <div className="py-14 text-center text-xs text-slate-400">No leads recorded yet</div>
+            )}
           </div>
 
-          {/* Recent leads */}
-          <div className="card card-glow hover-lift animate-rise stagger-2 overflow-hidden">
-            <div className="card-header flex items-center justify-between">
-              <h3 className="font-semibold text-gray-900">Recent Leads</h3>
-              <Link href="/leads" className="text-xs text-brand-600 hover:underline">View all</Link>
+          {/* Recent Inquiries Feed */}
+          <div className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-xs">
+            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Recent Inquiries</h3>
+                <p className="text-xs text-slate-500">Latest prospects registered by sales & telecallers</p>
+              </div>
+              <Link href="/leads" className="text-xs font-bold text-indigo-600 hover:text-indigo-700 hover:underline">
+                View all leads →
+              </Link>
             </div>
-            <div className="divide-y divide-gray-50">
-              {(data?.recentLeads || []).slice(0, 5).map((lead: any) => (
-                <div key={lead.id} className="flex items-center justify-between px-5 py-3 transition-colors duration-150 hover:bg-brand-50/40">
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">{lead.clientName}</p>
-                    <p className="text-xs text-gray-400">{lead.source} · {lead.createdBy?.name}</p>
+            <div className="divide-y divide-slate-100">
+              {(data?.recentLeads || []).slice(0, 5).map((lead: any) => {
+                const initials = (lead.clientName || 'Lead')
+                  .split(' ')
+                  .map((n: string) => n[0])
+                  .slice(0, 2)
+                  .join('')
+                  .toUpperCase()
+
+                return (
+                  <div key={lead.id} className="flex items-center justify-between px-6 py-3.5 hover:bg-slate-50/70 transition">
+                    <div className="flex items-center gap-3">
+                      <div className="h-9 w-9 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center font-bold text-xs shrink-0 border border-indigo-100">
+                        {initials}
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-slate-900">{lead.clientName}</p>
+                        <p className="text-xs text-slate-500">
+                          {lead.source || 'Direct'} · Added by {lead.createdBy?.name || 'Inbound'}
+                        </p>
+                      </div>
+                    </div>
+                    <span className={`rounded-full px-2.5 py-1 text-[10px] font-black tracking-wide ${
+                      lead.status === 'NEW'
+                        ? 'bg-purple-100 text-purple-700'
+                        : lead.status === 'CONVERTED'
+                        ? 'bg-emerald-100 text-emerald-700'
+                        : lead.status === 'MEETING_SCHEDULED'
+                        ? 'bg-red-100 text-red-700'
+                        : 'bg-amber-100 text-amber-700'
+                    }`}>
+                      {lead.status?.replace(/_/g, ' ')}
+                    </span>
                   </div>
-                  <span className={`badge ${lead.status === 'NEW' ? 'bg-brand-100 text-brand-700' :
-                    lead.status === 'CONVERTED' ? 'bg-green-100 text-green-700' :
-                      'bg-yellow-100 text-yellow-700'
-                    }`}>{lead.status}</span>
-                </div>
-              ))}
+                )
+              })}
               {(!data?.recentLeads || data.recentLeads.length === 0) && (
-                <div className="py-8 text-center text-gray-400 text-sm">No leads yet</div>
+                <div className="py-12 text-center text-xs text-slate-400">No recent leads found</div>
               )}
             </div>
           </div>
         </div>
       )}
 
-      {/* My Projects — heads & team members */}
+      {/* ============================================================ */}
+      {/* 7. MY ASSIGNED PROJECTS */}
+      {/* ============================================================ */}
       {(user?.role === 'MANAGER' || user?.role === 'EMPLOYEE') && myProjects.length > 0 && (
-        <div className="card card-glow hover-lift animate-rise p-5">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold text-gray-900">🗂️ My Projects</h3>
-            <Link href="/projects" className="text-xs text-brand-600 hover:underline">Manage →</Link>
+        <div className="rounded-3xl border border-slate-200/80 bg-white p-6 shadow-xs">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-base font-bold text-slate-900">My Active Projects</h3>
+              <p className="text-xs text-slate-500">Engagements and deliverables assigned to you</p>
+            </div>
+            <Link href="/projects" className="text-xs font-bold text-indigo-600 hover:text-indigo-700 hover:underline">
+              Manage Projects →
+            </Link>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 gap-3.5 md:grid-cols-2 lg:grid-cols-3">
             {Object.values(myProjects.reduce((acc: any, p: any) => {
               const key = p.clientService.id
               if (!acc[key]) acc[key] = { service: p.clientService, isHead: false }
               if ((p.role === 'MANAGER' || p.managerId) && p.managerId === user?.id) acc[key].isHead = true
               return acc
             }, {})).map((g: any) => (
-              <Link key={g.service.id} href={`/clients/${g.service.client.id}`}
-                className="border border-gray-200 rounded-xl p-3 hover:border-brand-300 hover:bg-brand-50/40 hover:-translate-y-0.5 transition-all duration-200">
+              <Link
+                key={g.service.id}
+                href={`/clients/${g.service.client.id}`}
+                className="rounded-2xl border border-slate-200/70 p-4 hover:border-indigo-300 hover:bg-indigo-50/20 transition group"
+              >
                 <div className="flex items-center justify-between">
-                  <p className="text-sm font-semibold text-gray-900 truncate">{g.service.serviceName}</p>
-                  <span className={`badge text-[10px] ${g.isHead ? 'bg-purple-100 text-purple-700' : 'bg-brand-100 text-brand-700'}`}>
-                    {g.isHead ? 'Head' : 'Member'}
+                  <p className="text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition truncate">
+                    {g.service.serviceName}
+                  </p>
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                    g.isHead ? 'bg-purple-100 text-purple-700' : 'bg-indigo-100 text-indigo-700'
+                  }`}>
+                    {g.isHead ? 'Project Lead' : 'Team Member'}
                   </span>
                 </div>
-                <p className="text-xs text-gray-500 mt-0.5">{g.service.client?.clientName}</p>
-                {g.service.department && <p className="text-[10px] text-gray-400 mt-1">{g.service.department.name}</p>}
+                <p className="text-xs text-slate-500 mt-1">{g.service.client?.clientName}</p>
+                {g.service.department && (
+                  <p className="text-[11px] text-slate-400 mt-1">{g.service.department.name}</p>
+                )}
               </Link>
             ))}
           </div>
         </div>
       )}
 
-      {/* Expiring services */}
+      {/* ============================================================ */}
+      {/* 8. SERVICES EXPIRING SOON */}
+      {/* ============================================================ */}
       {(data?.expiringServices || []).length > 0 && (
-        <div className="card card-glow hover-lift animate-rise p-5">
-          <h3 className="font-semibold text-gray-900 mb-3">⚠️ Services Expiring Soon</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="rounded-3xl border border-slate-200/80 bg-white p-6 shadow-xs">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-base font-bold text-slate-900">Service Renewals Due</h3>
+              <p className="text-xs text-slate-500">Client contracts up for renewal within the next 30 days</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 gap-3.5 md:grid-cols-2 lg:grid-cols-3">
             {data.expiringServices.map((svc: any) => {
               const days = Math.ceil((new Date(svc.expiryDate).getTime() - Date.now()) / 86400000)
+              const isUrgent = days <= 7
               return (
-                <div key={svc.id} className={`rounded-xl p-3 border ${days <= 7 ? 'bg-red-50 border-red-200' : 'bg-yellow-50 border-yellow-200'}`}>
-                  <p className="text-sm font-semibold text-gray-900">{svc.serviceName}</p>
-                  <p className="text-xs text-gray-500">{svc.client?.companyName}</p>
-                  <p className={`text-xs font-bold mt-1 ${days <= 7 ? 'text-red-600' : 'text-yellow-600'}`}>
-                    Expires in {days} day{days !== 1 ? 's' : ''}
+                <div
+                  key={svc.id}
+                  className={`rounded-2xl p-4 border transition ${
+                    isUrgent
+                      ? 'bg-red-50/70 border-red-200'
+                      : 'bg-amber-50/60 border-amber-200'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-bold text-slate-900 truncate">{svc.serviceName}</p>
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-black ${
+                      isUrgent ? 'bg-red-200/80 text-red-800' : 'bg-amber-200/80 text-amber-800'
+                    }`}>
+                      {days <= 0 ? 'Expired' : `${days}d left`}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600 mt-1">{svc.client?.companyName || svc.client?.clientName}</p>
+                  <p className={`text-xs font-bold mt-2 ${isUrgent ? 'text-red-700' : 'text-amber-700'}`}>
+                    {days <= 0 ? 'Contract expired' : `Expires on ${formatDate(svc.expiryDate)}`}
                   </p>
                 </div>
               )

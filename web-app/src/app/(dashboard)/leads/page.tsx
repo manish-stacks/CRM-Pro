@@ -67,12 +67,26 @@ function LeadsPageInner({ forceMine = false }: { forceMine?: boolean }) {
   const [viewRemark, setViewRemark] = useState<string | null>(null)
   const [bulkDeleting, setBulkDeleting] = useState(false)
 
+  const initialPage = Number(searchParams?.get('page')) || 1
   const [leads, setLeads] = useState<any[]>([])
   const [total, setTotal] = useState(0)
-  const [page, setPage] = useState(1)
+  const [page, setPage] = useState(initialPage)
   const [loading, setLoading] = useState(true)
   const [showFilter, setShowFilter] = useState(false)
-  const [filters, setFilters] = useState({ ...EMPTY_FILTERS })
+
+  // Initialize filters from searchParams so filters persist across page refresh
+  const getInitialFilters = () => {
+    const f: any = { ...EMPTY_FILTERS }
+    if (searchParams) {
+      for (const [key, val] of searchParams.entries()) {
+        if (key in EMPTY_FILTERS) {
+          f[key] = val
+        }
+      }
+    }
+    return f
+  }
+  const [filters, setFilters] = useState<typeof EMPTY_FILTERS>(getInitialFilters)
   const [telecallers, setTelecallers] = useState<any[]>([])
   const [marketingPersons, setMarketingPersons] = useState<any[]>([])
   const [admins, setAdmins] = useState<any[]>([])
@@ -140,17 +154,21 @@ function LeadsPageInner({ forceMine = false }: { forceMine?: boolean }) {
   }, [mine, user?.id])
   useEffect(() => {
     if (canSeeAll) {
-      api.get('/users/by-role?roles=TELECALLER')
+      api.get('/users/by-role?roles=TELECALLER&includeInactive=true')
         .then(r => setTelecallers(r.data.data || []))
         .catch(() => { })
-      api.get('/users/by-role?roles=MARKETING_EXECUTIVE')
+      api.get('/users/by-role?roles=MARKETING_EXECUTIVE&includeInactive=true')
         .then(r => setMarketingPersons(r.data.data || []))
         .catch(() => { })
-      api.get('/users/by-role?roles=SUPER_ADMIN,ADMIN')
-        .then(r => setAdmins(r.data.data || []))
-        .catch(() => { })
+      if (isAdminUser) {
+        api.get('/users/by-role?roles=SUPER_ADMIN,ADMIN&includeInactive=true')
+          .then(r => setAdmins(r.data.data || []))
+          .catch(() => { })
+      } else {
+        setAdmins([])
+      }
     }
-  }, [canSeeAll])
+  }, [canSeeAll, isAdminUser])
 
   const openAdd = () => {
     setForm({
@@ -300,9 +318,42 @@ function LeadsPageInner({ forceMine = false }: { forceMine?: boolean }) {
   }
 
 
+  const isMountedRef = useRef(false)
+  useEffect(() => {
+    if (!isMountedRef.current) {
+      isMountedRef.current = true
+      return
+    }
+    const timer = setTimeout(() => {
+      if (typeof window === 'undefined') return
+      const params = new URLSearchParams()
+      if (mine) params.set('mine', '1')
+      if (page > 1) params.set('page', String(page))
+      Object.entries(filters).forEach(([k, v]) => {
+        if (v && v !== (EMPTY_FILTERS as any)[k]) {
+          params.set(k, String(v))
+        }
+      })
+      const qs = params.toString()
+      const newUrl = qs ? `${window.location.pathname}?${qs}` : window.location.pathname
+      window.history.replaceState(null, '', newUrl)
+    }, 0)
+    return () => clearTimeout(timer)
+  }, [filters, page, mine])
+
   const activeFilterCount = Object.entries(filters).filter(([k, v]) => k !== 'sortBy' && v).length
-  const setF = (patch: Record<string, string>) => { setFilters(p => ({ ...p, ...patch })); setPage(1) }
-  const resetFilters = () => { setFilters({ ...EMPTY_FILTERS }); setPage(1) }
+  const setF = (patch: Record<string, string>) => {
+    setPage(1)
+    setFilters(prev => ({ ...prev, ...patch }))
+  }
+  const resetFilters = () => {
+    const cleared = { ...EMPTY_FILTERS, assignedToId: mine && user?.id ? user.id : '' }
+    setPage(1)
+    setFilters(cleared)
+  }
+  const handlePageChange = (p: number) => {
+    setPage(p)
+  }
 
   const statusPill = (status: string) => {
     const s = STATUSES.find(x => x.key === status)
@@ -391,10 +442,18 @@ function LeadsPageInner({ forceMine = false }: { forceMine?: boolean }) {
             {canSeeAll && (
               <select value={filters.assignedToId} onChange={e => setF({ assignedToId: e.target.value })} className="input">
                 <option value="">Telecaller: All</option>
-                {telecallers.map((u: any) => <option key={u.id} value={u.id}>{u.name}</option>)}
-                {admins.length > 0 && (
+                {telecallers.map((u: any) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name}{!u.isActive ? ' (Inactive)' : ''}
+                  </option>
+                ))}
+                {isAdminUser && admins.length > 0 && (
                   <optgroup label="Admin">
-                    {admins.map((u: any) => <option key={u.id} value={u.id}>{u.name}</option>)}
+                    {admins.map((u: any) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name}{!u.isActive ? ' (Inactive)' : ''}
+                      </option>
+                    ))}
                   </optgroup>
                 )}
               </select>
@@ -402,13 +461,21 @@ function LeadsPageInner({ forceMine = false }: { forceMine?: boolean }) {
             {canSeeAll && (
               <select value={filters.meetingAssignedToId} onChange={e => setF({ meetingAssignedToId: e.target.value })} className="input">
                 <option value="">Marketing Person: All</option>
-                {marketingPersons.map((u: any) => <option key={u.id} value={u.id}>{u.name}</option>)}
+                {marketingPersons.map((u: any) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name}{!u.isActive ? ' (Inactive)' : ''}
+                  </option>
+                ))}
               </select>
             )}
             {canSeeAll && (
               <select value={filters.createdById} onChange={e => setF({ createdById: e.target.value })} className="input">
                 <option value="">Added By: All</option>
-                {[...telecallers, ...marketingPersons, ...admins].map((u: any) => <option key={u.id} value={u.id}>{u.name}</option>)}
+                {Array.from(new Map([...telecallers, ...marketingPersons, ...(isAdminUser ? admins : [])].map(u => [u.id, u])).values()).map((u: any) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name}{!u.isActive ? ' (Inactive)' : ''}
+                  </option>
+                ))}
               </select>
             )}
             <select value={filters.hasMeeting} onChange={e => setF({ hasMeeting: e.target.value })} className="input">
@@ -641,7 +708,7 @@ function LeadsPageInner({ forceMine = false }: { forceMine?: boolean }) {
           </table>
         </div>
         <div className="px-5 py-3 border-t border-gray-100">
-          <Pagination page={page} totalPages={Math.ceil(total / 20)} onChange={setPage} />
+          <Pagination page={page} totalPages={Math.ceil(total / 20)} onChange={handlePageChange} />
         </div>
       </div>
 

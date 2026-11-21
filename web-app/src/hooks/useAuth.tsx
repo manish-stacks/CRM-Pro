@@ -11,6 +11,8 @@ export interface AuthUser {
   email: string
   name: string
   role: string
+  baseRole?: string
+  dataScope?: string
   avatar?: string
   phone?: string
   employee?: {
@@ -150,11 +152,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refreshUser = fetchUser
 
-  const hasRole = (...roles: string[]) => !!user && roles.includes(user.role)
+  const hasRole = (...roles: string[]) => {
+    if (!user) return false
+    if (user.role === 'SUPER_ADMIN') return true
+    if (roles.includes(user.role)) return true
+    if (user.baseRole && roles.includes(user.baseRole)) return true
+    if ((user.appRole as any)?.baseRole && roles.includes((user.appRole as any).baseRole)) return true
+    if (user.appRoles?.some((r: any) => r.baseRole && roles.includes(r.baseRole))) return true
+    return false
+  }
 
   const isAtLeast = (role: string) => {
     if (!user) return false
-    return (ROLE_HIERARCHY[user.role] || 0) >= (ROLE_HIERARCHY[role] || 0)
+    if (user.role === 'SUPER_ADMIN') return true
+    const roleLevel = ROLE_HIERARCHY[role] || 0
+    const directLevel = ROLE_HIERARCHY[user.role] || 0
+    const baseRoleLevel = user.baseRole ? (ROLE_HIERARCHY[user.baseRole] || 0) : ((user.appRole as any)?.baseRole ? (ROLE_HIERARCHY[(user.appRole as any).baseRole] || 0) : 0)
+    const multiRoleLevel = Math.max(0, ...(user.appRoles?.map((r: any) => ROLE_HIERARCHY[r.baseRole] || 0) || [0]))
+    return Math.max(directLevel, baseRoleLevel, multiRoleLevel) >= roleLevel
   }
 
   const permissions = user?.permissions || []

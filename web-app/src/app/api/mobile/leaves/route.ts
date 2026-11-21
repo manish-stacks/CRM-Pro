@@ -88,12 +88,12 @@ export async function POST(req: NextRequest) {
     if (!sDate || !hStart || !hEnd) return fail('Date and start/end times are required')
     start = new Date(sDate)
     end = new Date(sDate)
-    const hours = Number(hHours) || (() => {
-      const [sh, sm] = hStart.split(':').map(Number)
-      const [eh, em] = hEnd.split(':').map(Number)
-      return ((eh * 60 + em) - (sh * 60 + sm)) / 60
-    })()
-    if (!hours || hours <= 0) return fail('Invalid hourly time range')
+    const [sh, sm] = hStart.split(':').map(Number)
+    const [eh, em] = hEnd.split(':').map(Number)
+    const diffHours = ((eh * 60 + em) - (sh * 60 + sm)) / 60
+    const hours = diffHours > 0 ? diffHours : (Number(hHours) || 0)
+    if (!hours || hours <= 0) return fail('End time must be after start time')
+    if (hours > 2) return fail('Short leave cannot exceed 2 hours (maximum 2 hours allowed)')
     days = hours / 8 // 8 hours = 1 day
   }
 

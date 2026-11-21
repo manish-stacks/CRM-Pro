@@ -16,9 +16,12 @@ export async function requireMobileEmployee(req: NextRequest) {
     return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 })
   }
   const employee = await prisma.employee.findFirst({
-    where: { userId: session.userId },
+    where: { userId: session.userId, user: { isActive: true } },
     include: { department: true },
   })
+  if (!employee) {
+    return NextResponse.json({ success: false, message: 'Account is disabled or employee profile not found' }, { status: 403 })
+  }
   return { session, employee }
 }
 

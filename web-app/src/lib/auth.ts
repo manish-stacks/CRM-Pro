@@ -133,9 +133,41 @@ export async function requireAuth(req: NextRequest, minRole?: string, permission
     }
 
     if (minRole) {
+      if (access.role === 'SUPER_ADMIN' || session.role === 'SUPER_ADMIN') {
+        return { session, access }
+      }
+
       if (hasMinRole(access.role, minRole) || hasMinRole(session.role, minRole)) {
         return { session, access }
       }
+
+      if (access.baseRole && hasMinRole(access.baseRole, minRole)) {
+        return { session, access }
+      }
+
+      if (access.appRoles?.some((r: any) => r.baseRole && hasMinRole(r.baseRole, minRole))) {
+        return { session, access }
+      }
+
+      // Dynamic permission fallback: custom roles with administrative privileges
+      if (minRole === 'ADMIN' && (
+        access.permissions.includes('roles.manage') ||
+        access.permissions.includes('employees.manage') ||
+        access.permissions.includes('settings.manage') ||
+        access.permissions.includes('payroll.manage')
+      )) {
+        return { session, access }
+      }
+
+      if (minRole === 'MANAGER' && (
+        access.permissions.includes('leaves.approve') ||
+        access.permissions.includes('attendance.manage') ||
+        access.permissions.includes('leads.manage') ||
+        access.permissions.includes('projects.manage')
+      )) {
+        return { session, access }
+      }
+
       return new Response(JSON.stringify({ error: 'Forbidden' }), {
         status: 403,
         headers: { 'Content-Type': 'application/json' },

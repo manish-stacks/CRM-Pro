@@ -13,14 +13,22 @@ export interface TeamScope {
 }
 
 export async function getTeamScope(userId: string): Promise<TeamScope> {
-  const me = await prisma.employee.findFirst({ where: { userId }, select: { id: true } })
+  const me = await prisma.employee.findFirst({
+    where: { userId },
+    select: { id: true, departmentId: true },
+  })
   if (!me) return { empId: null, visibleIds: [], canSeeTeam: false }
 
   const ids = new Set<string>([me.id])
 
-  // Departments I head → all their employees
+  // Departments I head (managerId may match employee id or user id) → all their employees
   const headedDepts = await prisma.department.findMany({
-    where: { managerId: me.id },
+    where: {
+      OR: [
+        { managerId: me.id },
+        { managerId: userId },
+      ],
+    },
     select: { id: true },
   })
   if (headedDepts.length) {
@@ -31,12 +39,27 @@ export async function getTeamScope(userId: string): Promise<TeamScope> {
     deptEmps.forEach(e => ids.add(e.id))
   }
 
-  // Direct reports (team-lead relationship).
-  // Wrapped in try/catch so a not-yet-migrated `reportingToId` column can't crash
-  // attendance/leaves/employees pages — run the migration to enable team-lead scoping.
+  // If user is a MANAGER in a department, include all employees in that department
+  if (me.departmentId) {
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } })
+    if (user?.role === 'MANAGER') {
+      const deptEmps = await prisma.employee.findMany({
+        where: { departmentId: me.departmentId },
+        select: { id: true },
+      })
+      deptEmps.forEach(e => ids.add(e.id))
+    }
+  }
+
+  // Direct reports (team-lead relationship). Check both employee id and user id.
   try {
     const reports = await prisma.employee.findMany({
-      where: { reportingToId: me.id },
+      where: {
+        OR: [
+          { reportingToId: me.id },
+          { reportingToId: userId },
+        ],
+      },
       select: { id: true },
     })
     reports.forEach(e => ids.add(e.id))
@@ -53,11 +76,24 @@ export async function getTeamScope(userId: string): Promise<TeamScope> {
  */
 export async function getTeamUserIds(userId: string): Promise<{ userIds: string[]; canSeeTeam: boolean }> {
   const scope = await getTeamScope(userId)
-  if (!scope.visibleIds.length) return { userIds: [userId], canSeeTeam: false }
-  const emps = await prisma.employee.findMany({
-    where: { id: { in: scope.visibleIds } },
-    select: { userId: true },
-  })
-  const userIds = Array.from(new Set([userId, ...emps.map(e => e.userId).filter(Boolean) as string[]]))
-  return { userIds, canSeeTeam: scope.canSeeTeam }
+  const ids = new Set<string>([userId])
+  if (scope.visibleIds.length) {
+    const emps = await prisma.employee.findMany({
+      where: { id: { in: scope.visibleIds } },
+      select: { userId: true },
+    })
+    emps.forEach(e => { if (e.userId) ids.add(e.userId) })
+  }
+
+  // Also include any creator of leads currently assigned to or managed by this user
+  try {
+    const leadCreators = await prisma.lead.findMany({
+      where: { assignedToId: userId },
+      select: { createdById: true },
+      distinct: ['createdById'],
+    })
+    leadCreators.forEach(l => { if (l.createdById) ids.add(l.createdById) })
+  } catch { }
+
+  return { userIds: Array.from(ids), canSeeTeam: ids.size > 1 }
 }

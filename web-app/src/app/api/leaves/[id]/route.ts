@@ -77,11 +77,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         }
         const newDay = dateOnly(start)
         const newEnd = dateOnly(end)
+        const attStatus = (leaveType === 'HALF_DAY' || days === 0.5) ? 'HALF_DAY' : 'LEAVE'
         while (newDay <= newEnd) {
           await prisma.attendance.upsert({
             where: { employeeId_date: { employeeId: existing.employeeId, date: new Date(newDay) } },
-            update: { status: 'LEAVE' },
-            create: { employeeId: existing.employeeId, date: new Date(newDay), status: 'LEAVE' },
+            update: { status: attStatus },
+            create: { employeeId: existing.employeeId, date: new Date(newDay), status: attStatus },
           })
           newDay.setUTCDate(newDay.getUTCDate() + 1)
         }
@@ -206,7 +207,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       }).catch(() => {})
     }
 
-    // Mark attendance as LEAVE for full-day leaves only (not SHORT_HOURLY)
+    // Mark attendance as LEAVE or HALF_DAY for approved leaves (not SHORT_HOURLY)
     if (newStatus === 'APPROVED' && leave.duration !== 'SHORT_HOURLY') {
       const days: Date[] = []
       const current = dateOnly(leave.startDate)
@@ -215,11 +216,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         days.push(new Date(current))
         current.setUTCDate(current.getUTCDate() + 1)
       }
+      const attStatus = (leave.leaveType === 'HALF_DAY' || leave.days === 0.5) ? 'HALF_DAY' : 'LEAVE'
       await Promise.all(days.map(date =>
         prisma.attendance.upsert({
           where: { employeeId_date: { employeeId: leave.employeeId, date } },
-          update: { status: 'LEAVE' },
-          create: { employeeId: leave.employeeId, date, status: 'LEAVE' },
+          update: { status: attStatus },
+          create: { employeeId: leave.employeeId, date, status: attStatus },
         })
       ))
     }

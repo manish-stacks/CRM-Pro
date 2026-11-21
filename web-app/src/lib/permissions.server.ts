@@ -4,16 +4,18 @@
 // and gives route handlers a one-line guard.
 import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { getRequestSession } from '@/lib/auth'
-import { checkPermission, DEFAULT_ROLE_PERMISSIONS, sanitizePermissions } from '@/lib/permissions'
+import { getRequestSession, ROLE_HIERARCHY } from '@/lib/auth'
+import { checkPermission, DEFAULT_ROLE_PERMISSIONS, sanitizePermissions, getDataScope, SYSTEM_ROLES, DataScope } from '@/lib/permissions'
 
 export interface EffectiveAccess {
   userId: string
   role: string
-  appRole: { id: string; key: string; name: string } | null
-  appRoles: { id: string; key: string; name: string }[]
+  baseRole: string
+  appRole: { id: string; key: string; name: string; baseRole?: string } | null
+  appRoles: { id: string; key: string; name: string; baseRole?: string }[]
   customPermissions: string[]
   permissions: string[]
+  dataScope: DataScope
 }
 
 // Small in-process cache — role permissions change rarely but are read on
@@ -40,13 +42,13 @@ export async function getEffectiveAccess(userId: string, role: string): Promise<
       appRoleId: true,
       assignedRoleIds: true,
       customPermissions: true,
-      appRole: { select: { id: true, key: true, name: true, permissions: true, isActive: true } },
+      appRole: { select: { id: true, key: true, name: true, permissions: true, isActive: true, baseRole: true } },
     },
   })
 
   const effectiveRole = user?.role || role
   const permissionsSet = new Set<string>()
-  const appRolesList: { id: string; key: string; name: string }[] = []
+  const appRolesList: { id: string; key: string; name: string; baseRole?: string }[] = []
 
   // Parse multi-role IDs
   let multiRoleIds: string[] = []
@@ -65,11 +67,11 @@ export async function getEffectiveAccess(userId: string, role: string): Promise<
   if (allRoleIds.length > 0) {
     const rolesData = await prisma.appRole.findMany({
       where: { id: { in: allRoleIds }, isActive: true },
-      select: { id: true, key: true, name: true, permissions: true },
+      select: { id: true, key: true, name: true, permissions: true, baseRole: true },
     })
 
     for (const r of rolesData) {
-      appRolesList.push({ id: r.id, key: r.key, name: r.name })
+      appRolesList.push({ id: r.id, key: r.key, name: r.name, baseRole: r.baseRole || 'EMPLOYEE' })
       try {
         const perms = sanitizePermissions(JSON.parse(r.permissions || '[]'))
         for (const p of perms) permissionsSet.add(p)
@@ -81,10 +83,10 @@ export async function getEffectiveAccess(userId: string, role: string): Promise<
   if (appRolesList.length === 0) {
     const systemRole = await prisma.appRole.findUnique({
       where: { key: effectiveRole },
-      select: { id: true, key: true, name: true, permissions: true, isActive: true, isSystem: true },
+      select: { id: true, key: true, name: true, permissions: true, isActive: true, isSystem: true, baseRole: true },
     })
     if (systemRole?.isSystem && systemRole.isActive) {
-      appRolesList.push({ id: systemRole.id, key: systemRole.key, name: systemRole.name })
+      appRolesList.push({ id: systemRole.id, key: systemRole.key, name: systemRole.name, baseRole: systemRole.baseRole || effectiveRole })
       try {
         const perms = sanitizePermissions(JSON.parse(systemRole.permissions || '[]'))
         for (const p of perms) permissionsSet.add(p)
@@ -116,13 +118,30 @@ export async function getEffectiveAccess(userId: string, role: string): Promise<
   }
 
   const primaryAppRole = appRolesList[0] || null
+  let highestBaseRole = primaryAppRole?.baseRole || (SYSTEM_ROLES.some(r => r.key === effectiveRole) ? effectiveRole : 'EMPLOYEE')
+  for (const r of appRolesList) {
+    if (r.baseRole && (ROLE_HIERARCHY[r.baseRole] || 0) > (ROLE_HIERARCHY[highestBaseRole] || 0)) {
+      highestBaseRole = r.baseRole
+    }
+  }
+  const baseRole = highestBaseRole
+
+  // Resolve scope across all attached roles
+  const allScopes = [getDataScope(effectiveRole, baseRole), ...appRolesList.map(r => getDataScope(r.key, r.baseRole))]
+  let resolvedScope: DataScope = 'own'
+  if (effectiveRole === 'SUPER_ADMIN' || allScopes.includes('company')) resolvedScope = 'company'
+  else if (allScopes.includes('team')) resolvedScope = 'team'
+  else if (allScopes.includes('assigned')) resolvedScope = 'assigned'
+
   const value: EffectiveAccess = {
     userId,
     role: effectiveRole,
+    baseRole,
     appRole: primaryAppRole,
     appRoles: appRolesList,
     customPermissions: directPerms,
     permissions: finalPermissions,
+    dataScope: resolvedScope,
   }
 
   cache.set(userId, { value, at: Date.now() })

@@ -2,8 +2,13 @@
 import axios from 'axios'
 import { impersonationHeaders } from './impersonation'
 
+const rawApiUrl = process.env.NEXT_PUBLIC_API_URL ? process.env.NEXT_PUBLIC_API_URL.replace(/\/+$/, '') : ''
+const apiBase = typeof window !== 'undefined' && rawApiUrl
+  ? (rawApiUrl.endsWith('/api') ? rawApiUrl : `${rawApiUrl}/api`)
+  : '/api'
+
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: apiBase,
   headers: { 'Content-Type': 'application/json' },
   withCredentials: true,
 })

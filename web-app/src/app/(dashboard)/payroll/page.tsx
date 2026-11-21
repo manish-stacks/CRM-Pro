@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '@/hooks/useAuth'
 import { Button, Badge, Modal, Input, Select, EmptyState, Pagination, SearchInput } from '@/components/ui'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { DollarSign, Plus, Download, Edit, Trash2, Zap, Filter, X, CalendarOff, Settings2 } from 'lucide-react'
+import { DollarSign, Plus, Download, Edit, Trash2, Zap, Filter, X, CalendarOff, Settings2, Mail } from 'lucide-react'
 import api from '@/lib/axios'
 import toast from 'react-hot-toast'
 
@@ -14,6 +14,7 @@ export default function PayrollPage() {
   const [departments, setDepartments] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
+  const [emailing, setEmailing] = useState(false)
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
   const [search, setSearch] = useState('')
@@ -281,6 +282,30 @@ export default function PayrollPage() {
   const del = (id: string) => deleteIds([id])
   const deleteSelected = () => deleteIds(selectedIds)
 
+  const handleSendMonthlyEmails = async (employeeId?: string) => {
+    const targetMonth = filters.month || genForm.month || String(new Date().getMonth() + 1)
+    const targetYear = filters.year || genForm.year || String(new Date().getFullYear())
+    const promptMsg = employeeId
+      ? 'Send salary slip email (with PDF) to this employee?'
+      : `Email salary slips (with PDF) to all active employees for ${targetMonth}/${targetYear}?`
+    if (!confirm(promptMsg)) return
+
+    setEmailing(true)
+    try {
+      const res = await api.post('/payroll/send-monthly-emails', {
+        month: Number(targetMonth),
+        year: Number(targetYear),
+        employeeId,
+      })
+      const result = res.data.data || res.data
+      toast.success(`Payslip emails: ${result.sent} sent, ${result.failed} failed for ${result.monthName} ${result.year}`)
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Failed to send monthly payslip emails')
+    } finally {
+      setEmailing(false)
+    }
+  }
+
   const currentYear = new Date().getFullYear()
 
   const years = [
@@ -361,6 +386,16 @@ export default function PayrollPage() {
                   {holidays.length}
                 </span>
               )}
+            </Button>
+
+            <Button
+              variant="secondary"
+              onClick={() => handleSendMonthlyEmails()}
+              disabled={emailing}
+              title="Email salary slips (with PDF) to active employees"
+            >
+              <Mail size={14} />
+              {emailing ? 'Sending...' : 'Email Slips'}
             </Button>
 
             <Button
@@ -664,8 +699,20 @@ export default function PayrollPage() {
                             '_blank'
                           )
                         }
+                        title="Download PDF"
                       >
                         <Download size={13} />
+                      </Button>
+
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="p-1.5"
+                        title="Email salary slip to this employee"
+                        onClick={() => handleSendMonthlyEmails(ps.employee.id)}
+                        disabled={emailing}
+                      >
+                        <Mail size={13} />
                       </Button>
                     </div>
                   </td>
@@ -728,9 +775,7 @@ export default function PayrollPage() {
               </p>
 
               <p>
-                <b>{policy.paidLeaves}</b> paid leave(s)/month
-                · <b>{policy.latesPerHalfDay}</b> late marks = 1
-                half day
+                <b>{policy.paidLeaves}</b> paid leave(s)/month · <b>4</b> late marks forgiven (5th late = 0.5d LOP) · <b>1</b> short leave free (2nd short leave = 0.5d LOP)
               </p>
             </div>
 
@@ -981,10 +1026,7 @@ export default function PayrollPage() {
             </div>
 
             <p className="text-[11px] text-gray-500">
-              Leave beyond this quota counts as LOP and is
-              deducted from salary. Every{' '}
-              {policy.latesPerHalfDay || 4} late punch-ins
-              result in a half-day deduction.
+              Leave beyond paid quota counts as LOP. 4 late punch-ins per month are forgiven; starting from the 5th late, each incurs a 0.5-day deduction. 1 short leave (max 2 hrs) per month is free; taking 2 short leaves triggers a 0.5-day deduction.
             </p>
           </div>
 

@@ -85,8 +85,8 @@ const NAV: NavItem[] = [
       // Live field-staff location tracking — intentionally hardcoded to
       // Admin/Super Admin only (not permission-gated), so it can never be
       // opened up to other roles via Roles & Permissions settings.
-      { label: 'Field Tracking', href: '/tracking', icon: MapPin, roles: ['SUPER_ADMIN', 'ADMIN'] },
-    ], roles: ['SUPER_ADMIN', 'ADMIN']
+      { label: 'Field Tracking', href: '/tracking', icon: MapPin, permission: 'tracking.view', roles: ['SUPER_ADMIN', 'ADMIN'] },
+    ], permission: 'visits.view', roles: ['SUPER_ADMIN', 'ADMIN']
   },
 
   { label: 'Announcements', href: '/announcements', icon: PartyPopper, permission: 'announcements.view' },
@@ -131,8 +131,18 @@ function NavLink({ item, depth = 0 }: { item: NavItem; depth?: number }) {
 
   // A `permission` gate wins over the legacy `roles` list, so a custom role
   // can open or close a menu entry without touching this file.
-  const allowed = (it: NavItem) =>
-    it.permission ? can(it.permission) : (!it.roles || !user || it.roles.includes(user.role))
+  const allowed = (it: NavItem) => {
+    if (!user) return false
+    if (user.role === 'SUPER_ADMIN') return true
+    if (it.permission && can(it.permission)) return true
+    if (it.permission && !it.roles) return false
+    if (!it.roles) return true
+    if (it.roles.includes(user.role)) return true
+    if (user.baseRole && it.roles.includes(user.baseRole)) return true
+    if ((user.appRole as any)?.baseRole && it.roles.includes((user.appRole as any).baseRole)) return true
+    if (user.appRoles?.some((r: any) => r.baseRole && it.roles?.includes(r.baseRole))) return true
+    return false
+  }
 
   if (!allowed(item)) return null
 

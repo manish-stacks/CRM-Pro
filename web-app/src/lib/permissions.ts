@@ -97,25 +97,36 @@ export const BASE_ROLES: string[] = SYSTEM_ROLES.filter(r => r.key !== 'SUPER_AD
 
 const ROLE_SCOPE: Record<string, DataScope> = Object.fromEntries(SYSTEM_ROLES.map(r => [r.key, r.scope]))
 
-/** Resolve a role key's data scope. Unknown keys (custom roles seeded with a baseRole) fall back to 'own'. */
-export function getDataScope(role: string | null | undefined): DataScope {
-  if (!role) return 'own'
-  return ROLE_SCOPE[role] || 'own'
+/** Resolve a role key's data scope. If custom role key, falls back to its baseRole, else 'own'. */
+export function getDataScope(
+  roleOrObj: string | { role?: string; baseRole?: string; dataScope?: DataScope } | null | undefined,
+  baseRole?: string | null
+): DataScope {
+  if (!roleOrObj) return 'own'
+  if (typeof roleOrObj === 'object') {
+    if (roleOrObj.dataScope) return roleOrObj.dataScope
+    return getDataScope(roleOrObj.role, baseRole || roleOrObj.baseRole)
+  }
+  const role = roleOrObj
+  if (role === 'SUPER_ADMIN') return 'company'
+  if (ROLE_SCOPE[role]) return ROLE_SCOPE[role]
+  if (baseRole && ROLE_SCOPE[baseRole]) return ROLE_SCOPE[baseRole]
+  return 'own'
 }
 
-export const isCompanyWideRole = (role: string | null | undefined) => getDataScope(role) === 'company'
-export const isTeamScopeRole = (role: string | null | undefined) => getDataScope(role) === 'team'
-export const isAssignedScopeRole = (role: string | null | undefined) => getDataScope(role) === 'assigned'
-export const isOwnScopeRole = (role: string | null | undefined) => getDataScope(role) === 'own'
+export const isCompanyWideRole = (role: string | null | undefined, baseRole?: string | null) => getDataScope(role, baseRole) === 'company'
+export const isTeamScopeRole = (role: string | null | undefined, baseRole?: string | null) => getDataScope(role, baseRole) === 'team'
+export const isAssignedScopeRole = (role: string | null | undefined, baseRole?: string | null) => getDataScope(role, baseRole) === 'assigned'
+export const isOwnScopeRole = (role: string | null | undefined, baseRole?: string | null) => getDataScope(role, baseRole) === 'own'
 
 /** True for roles that see everything, or a whole team's worth (i.e. more than just their own/assigned records). */
-export const canSeeBeyondOwn = (role: string | null | undefined) => {
-  const s = getDataScope(role)
+export const canSeeBeyondOwn = (role: string | null | undefined, baseRole?: string | null) => {
+  const s = getDataScope(role, baseRole)
   return s === 'company' || s === 'team'
 }
 
 /** True for roles that see more than just their own records — company-wide, team, or assigned-to-them (i.e. NOT the strict "own only" tier). */
-export const isNotOwnScopeRole = (role: string | null | undefined) => getDataScope(role) !== 'own'
+export const isNotOwnScopeRole = (role: string | null | undefined, baseRole?: string | null) => getDataScope(role, baseRole) !== 'own'
 
 /** Role keys with company-wide scope, e.g. for "fall back to an admin" defaults. */
 export const COMPANY_WIDE_ROLES: string[] = SYSTEM_ROLES.filter(r => r.scope === 'company').map(r => r.key)

@@ -156,7 +156,10 @@ export async function GET(req: NextRequest) {
 
   // Role-based visibility.
   const and: any[] = []
-  let canFilterOthers = canSeeBeyondOwn(session.role)
+  const access = (auth as any).access
+  const effectiveRole = access?.role || session.role
+  const baseRole = access?.baseRole || effectiveRole
+  let canFilterOthers = canSeeBeyondOwn(effectiveRole, baseRole)
 
   // ---- "Due" quick filter -------------------------------------------------
   // Next action = whichever of followUp / callback / meeting is set. A lead is
@@ -190,16 +193,20 @@ export async function GET(req: NextRequest) {
     and.push({ OR: [{ assignedToId: session.userId }, { createdById: session.userId }] })
   } else if (session.role === 'MARKETING_EXECUTIVE') {
     and.push({ OR: [{ meetingAssignedToId: session.userId }, { createdById: session.userId }] })
-  } else if (session.role === 'MANAGER') {
+  } else if (effectiveRole === 'MANAGER' || baseRole === 'MANAGER') {
     const team = await getTeamUserIds(session.userId)
+    const allowedUserIds = new Set(team.userIds)
+    if (assignedToId) allowedUserIds.add(assignedToId)
+    if (createdById) allowedUserIds.add(createdById)
+    const validIds = Array.from(allowedUserIds)
     and.push({
       OR: [
-        { assignedToId: { in: team.userIds } },
-        { createdById: { in: team.userIds } },
-        { meetingAssignedToId: { in: team.userIds } },
+        { assignedToId: { in: validIds } },
+        { createdById: { in: validIds } },
+        { meetingAssignedToId: { in: validIds } },
       ],
     })
-  } else if (session.role === 'EMPLOYEE') {
+  } else if (effectiveRole === 'EMPLOYEE' || baseRole === 'EMPLOYEE') {
     const team = await getTeamUserIds(session.userId)
     if (!team.canSeeTeam) return successResponse([], 0)
     canFilterOthers = true
@@ -213,7 +220,14 @@ export async function GET(req: NextRequest) {
   }
   // ADMIN, SUPER_ADMIN see all (respecting filters)
 
-  if (assignedToId && canFilterOthers) and.push({ assignedToId })
+  if (assignedToId && canFilterOthers) {
+    and.push({
+      OR: [
+        { assignedToId },
+        { createdById: assignedToId },
+      ],
+    })
+  }
   if (meetingAssignedToId && canFilterOthers) and.push({ meetingAssignedToId })
   if (createdById && canFilterOthers) and.push({ createdById })
 

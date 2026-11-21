@@ -14,11 +14,13 @@ export async function GET(req: NextRequest) {
     where: { id: session.userId },
     include: {
       employee: { include: { department: true } },
-      appRole: { select: { id: true, key: true, name: true } },
+      appRole: { select: { id: true, key: true, name: true, baseRole: true } },
     }
   })
 
-  if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
+  if (!user || !user.isActive) {
+    return NextResponse.json({ error: 'User not found or account has been disabled' }, { status: 401 })
+  }
 
   // Effective permission list — the custom role if one is attached, otherwise
   // the built-in defaults. The client uses this for can() checks.
@@ -27,6 +29,8 @@ export async function GET(req: NextRequest) {
   const { password: _, ...safeUser } = user
   return NextResponse.json({
     ...safeUser,
+    baseRole: access.baseRole,
+    dataScope: access.dataScope,
     appRole: access.appRole,
     appRoles: access.appRoles,
     customPermissions: access.customPermissions,

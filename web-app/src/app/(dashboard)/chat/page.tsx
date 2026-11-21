@@ -9,7 +9,7 @@ import {
   MessageSquare, Search, Plus, Send, Loader2, Users2, User,
   Paperclip, X, ChevronLeft, Smile, Trash2, Image as ImageIcon,
   UserPlus, ShieldCheck, MoreVertical, LogOut, Info, Pin, Reply,
-  Check, CheckCheck, SmilePlus
+  Check, CheckCheck, SmilePlus, ChevronDown
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useChatSocket } from '@/hooks/useChatSocket'
@@ -140,6 +140,38 @@ export default function ChatPage() {
   const activeIdRef = useRef<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const wishHandled = useRef(false)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const [showScrollBottom, setShowScrollBottom] = useState(false)
+
+  const adjustTextareaHeight = useCallback(() => {
+    const el = textareaRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    const nextH = Math.min(Math.max(el.scrollHeight, 42), 140)
+    el.style.height = `${nextH}px`
+  }, [])
+
+  const handleScroll = () => {
+    const el = scrollRef.current
+    if (!el) return
+    const isUp = el.scrollHeight - el.scrollTop - el.clientHeight > 200
+    setShowScrollBottom(isUp)
+  }
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData?.items
+    if (!items) return
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf('image') !== -1) {
+        const file = items[i].getAsFile()
+        if (file) {
+          e.preventDefault()
+          sendImage(file)
+          return
+        }
+      }
+    }
+  }
 
   // Works out where a floating menu should land on screen, given the
   // trigger button's rect: opens upward when that has more room, downward
@@ -355,6 +387,9 @@ export default function ChatPage() {
     const mentionIds = pendingMentionIds
     const replyToId = replyingTo?.id
     setMsgText('')
+    if (textareaRef.current) {
+      textareaRef.current.style.height = '42px'
+    }
     setPendingMentionIds([])
     setReplyingTo(null)
     pingTyping(true) // tell others we stopped typing
@@ -379,11 +414,13 @@ export default function ChatPage() {
 
   const insertEmoji = (e: string) => {
     setMsgText(t => t + e)
+    setTimeout(adjustTextareaHeight, 0)
   }
 
   // Detect "@" so we can show a mention picker (GROUP chats only).
   const onComposeChange = (val: string) => {
     setMsgText(val)
+    setTimeout(adjustTextareaHeight, 0)
     if (val.trim()) pingTyping(false)
     else pingTyping(true)
     if (activeGroup?.type !== 'GROUP') { setShowMentionPicker(false); return }
@@ -402,6 +439,7 @@ export default function ChatPage() {
     })
     setPendingMentionIds(ids => Array.from(new Set([...ids, m.id])))
     setShowMentionPicker(false)
+    setTimeout(adjustTextareaHeight, 0)
   }
 
   const sendImage = async (file: File) => {
@@ -584,12 +622,16 @@ export default function ChatPage() {
     setEditingMessage(m)
     setReplyingTo(null)
     setMsgText(m.content || '')
+    setTimeout(adjustTextareaHeight, 0)
     setOpenMsgMenu(null)
   }
 
   const cancelEdit = () => {
     setEditingMessage(null)
     setMsgText('')
+    if (textareaRef.current) {
+      textareaRef.current.style.height = '42px'
+    }
   }
 
   const saveEdit = async () => {
@@ -600,6 +642,9 @@ export default function ChatPage() {
     setMessages(prev => prev.map(m => m.id === msgId ? { ...m, content: newContent, isEdited: true } : m))
     setEditingMessage(null)
     setMsgText('')
+    if (textareaRef.current) {
+      textareaRef.current.style.height = '42px'
+    }
     try {
       await api.patch(`/chat/messages/${msgId}/edit`, { content: newContent })
       if (activeId) loadMessages(activeId, true)
@@ -803,7 +848,7 @@ export default function ChatPage() {
             </div>
 
             {/* Messages */}
-            <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 bg-slate-50" style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'40\' height=\'40\'%3E%3Ccircle cx=\'20\' cy=\'20\' r=\'1\' fill=\'%23cbd5e1\'/%3E%3C/svg%3E")' }}>
+            <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto p-4 bg-slate-50 relative" style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'40\' height=\'40\'%3E%3Ccircle cx=\'20\' cy=\'20\' r=\'1\' fill=\'%23cbd5e1\'/%3E%3C/svg%3E")' }}>
               {loadingMsgs ? (
                 <div className="space-y-3 py-2">
                   {[70, 45, 60, 35, 55].map((w, i) => (
@@ -958,6 +1003,17 @@ export default function ChatPage() {
               )}
             </div>
 
+            {showScrollBottom && (
+              <button
+                type="button"
+                onClick={() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })}
+                className="absolute bottom-24 right-8 h-10 w-10 rounded-full bg-white text-slate-700 shadow-xl border border-slate-200 flex items-center justify-center hover:bg-slate-50 hover:scale-105 transition-all z-20 group"
+                title="Scroll to bottom"
+              >
+                <ChevronDown size={20} className="group-hover:translate-y-0.5 transition-transform text-slate-600" />
+              </button>
+            )}
+
             {/* Compose */}
             <div className="bg-white border-t border-gray-200 p-3">
               {editingMessage ? (
@@ -1010,11 +1066,23 @@ export default function ChatPage() {
                   className="w-10 h-10 rounded-full hover:bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 disabled:opacity-50" title="Send image">
                   {uploading ? <Loader2 size={16} className="animate-spin" /> : <ImageIcon size={18} />}
                 </button>
-                <textarea className="flex-1 border border-gray-200 rounded-2xl px-4 py-2 text-sm resize-none focus:outline-none focus:border-brand-500"
-                  placeholder={editingMessage ? 'Edit message...' : isGroupChat ? 'Type a message... (@ to mention)' : 'Type a message...'} value={msgText}
-                  onChange={e => onComposeChange(e.target.value)} rows={1}
+                <textarea
+                  ref={textareaRef}
+                  className="flex-1 border border-slate-200 rounded-2xl px-4 py-2.5 text-sm resize-none focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all bg-white"
+                  style={{ minHeight: '42px', maxHeight: '140px', overflowY: 'auto' }}
+                  placeholder={editingMessage ? 'Edit message...' : isGroupChat ? 'Type a message... (@ to mention)' : 'Type a message...'}
+                  value={msgText}
+                  onChange={e => onComposeChange(e.target.value)}
+                  onPaste={handlePaste}
+                  rows={1}
                   onFocus={() => setShowEmoji(false)}
-                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }} />
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault()
+                      send()
+                    }
+                  }}
+                />
                 <button onClick={send} disabled={sending || !msgText.trim()}
                   className="w-10 h-10 rounded-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white flex items-center justify-center flex-shrink-0">
                   {editingMessage ? <Check size={16} /> : <Send size={15} />}

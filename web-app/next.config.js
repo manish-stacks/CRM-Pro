@@ -8,6 +8,23 @@ const nextConfig = {
     ],
   },
   typescript: { ignoreBuildErrors: false },
+  // Decoupled Backend Proxy: Forward API and Socket.io to standalone backend if BACKEND_API_URL is configured
+  async rewrites() {
+    if (process.env.BACKEND_API_URL) {
+      const backendUrl = process.env.BACKEND_API_URL.replace(/\/+$/, '').replace(/\/api$/, '')
+      return [
+        {
+          source: '/api/:path*',
+          destination: `${backendUrl}/api/:path*`,
+        },
+        {
+          source: '/socket.io/:path*',
+          destination: `${backendUrl}/socket.io/:path*`,
+        },
+      ]
+    }
+    return []
+  },
 }
 
 module.exports = nextConfig

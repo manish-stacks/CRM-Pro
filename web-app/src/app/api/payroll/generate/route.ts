@@ -180,9 +180,13 @@ export async function POST(req: NextRequest) {
       const totalLeaveDays = leaveDaySet.size + halfLeaveDays.size * 0.5
       const unpaidTypeDays = unpaidTypeSet.size
 
-      // Late marks → half-day LOP
+      // Short leaves: 1 allowed per month free. Taking 2 short leaves in a month counts as a half-day deduction.
+      const shortLeaveCount = approvedLeaves.filter(lv => lv.duration === 'SHORT_HOURLY').length
+      const shortLeavePenaltyDays = shortLeaveCount >= 2 ? (shortLeaveCount - 1) * 0.5 : 0
+
+      // Late marks: 4 lates forgiven per month. On the 5th late (and subsequent excess lates beyond 4), 0.5 day (half day) deduction.
       const lateCount = marked.filter(r => r.isLate && !leaveDaySet.has(new Date(r.date).getUTCDate())).length
-      const lateHalfDays = latesPerHalfDay > 0 ? Math.floor(lateCount / latesPerHalfDay) * 0.5 : 0
+      const lateHalfDays = lateCount >= 5 ? (lateCount - 4) * 0.5 : 0
 
       // Absent = working day with nothing recorded at all and no approved leave
       const accountedDays = new Set<number>()
@@ -202,7 +206,7 @@ export async function POST(req: NextRequest) {
       const unpaidLeaveDays = Math.max(0, quotaLeaveDays - paidLeaveUsed) + unpaidTypeDays
 
       const lopDays = Math.round(
-        (absentDays + unpaidLeaveDays + (halfDays * halfDayLop) + lateHalfDays) * 100
+        (absentDays + unpaidLeaveDays + (halfDays * halfDayLop) + lateHalfDays + shortLeavePenaltyDays) * 100
       ) / 100
       const payableDays = Math.max(0, effectiveWorkingDays - lopDays)
 
@@ -237,8 +241,9 @@ export async function POST(req: NextRequest) {
         `Present ${presentDays}d`,
         halfDays ? `Half ${halfDays}d` : '',
         totalLeaveDays ? `Leave ${totalLeaveDays}d (paid ${paidLeaveUsed}, unpaid ${unpaidLeaveDays})` : '',
+        shortLeaveCount ? `Short Leave ${shortLeaveCount}${shortLeavePenaltyDays ? ` → ${shortLeavePenaltyDays}d LOP` : ' (allowed)'}` : '',
         absentDays ? `Absent ${absentDays}d` : '',
-        lateCount ? `Late ${lateCount} → ${lateHalfDays}d LOP` : '',
+        lateCount ? `Late ${lateCount}${lateHalfDays ? ` → ${lateHalfDays}d LOP` : ' (within grace)'}` : '',
         `LOP ${lopDays}d (₹${lopAmount})`,
       ].filter(Boolean)
 
@@ -265,7 +270,17 @@ export async function POST(req: NextRequest) {
           status: 'PENDING',
         },
       })
-      generated.push({ ...payslip, lateCount, absentDays, unpaidLeaveDays, lopAmount, fullGross: grossSalary })
+      generated.push({
+        ...payslip,
+        lateCount,
+        lateHalfDays,
+        shortLeaveCount,
+        shortLeavePenaltyDays,
+        absentDays,
+        unpaidLeaveDays,
+        lopAmount,
+        fullGross: grossSalary,
+      })
     }
 
     await logFromRequest(req, {
