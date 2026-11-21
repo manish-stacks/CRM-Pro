@@ -145,15 +145,65 @@ function ImageBox({ label, hint, value, onChange, disabled }: {
   )
 }
 
+function BulkPasteModal({
+  open,
+  onClose,
+  title,
+  hint,
+  placeholder,
+  onApply,
+}: {
+  open: boolean
+  onClose: () => void
+  title: string
+  hint?: string
+  placeholder?: string
+  onApply: (text: string) => void
+}) {
+  const [val, setVal] = useState('')
+  useEffect(() => {
+    if (open) setVal('')
+  }, [open])
+
+  const handleApply = () => {
+    if (!val.trim()) return
+    onApply(val)
+    onClose()
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} title={title} className="max-w-lg">
+      <div className="space-y-4">
+        {hint && <p className="text-xs text-gray-500">{hint}</p>}
+        <Textarea
+          rows={7}
+          placeholder={placeholder}
+          value={val}
+          onChange={e => setVal(e.target.value)}
+          className="font-mono text-xs"
+        />
+        <div className="flex items-center justify-between pt-1">
+          <span className="text-[11px] text-gray-400">
+            {val.split(/\r?\n/).map(s => s.trim()).filter(Boolean).length} line(s) entered
+          </span>
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={onClose} size="sm">Cancel</Button>
+            <Button onClick={handleApply} disabled={!val.trim()} size="sm">Add entries</Button>
+          </div>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
 function LinkRows({ label, rows, onChange, disabled, placeholder = 'https://...' }: {
   label: string; rows: any[]; onChange: (r: any[]) => void; disabled?: boolean; placeholder?: string
 }) {
+  const [bulkOpen, setBulkOpen] = useState(false)
   const set = (i: number, key: string, v: string) => {
     const next = [...rows]; next[i] = { ...next[i], [key]: v }; onChange(next)
   }
-  const bulk = () => {
-    const text = prompt(`Paste multiple ${label} links (one per line)`)
-    if (!text) return
+  const onBulkApply = (text: string) => {
     const added = text.split(/\r?\n/).map(t => t.trim()).filter(Boolean).map(url => ({ url, status: 'Live' }))
     onChange([...rows, ...added])
   }
@@ -163,7 +213,7 @@ function LinkRows({ label, rows, onChange, disabled, placeholder = 'https://...'
         <span className="text-xs font-medium text-gray-700">{label} <span className="text-gray-400">({rows.length})</span></span>
         {!disabled && (
           <div className="flex gap-1.5">
-            <button type="button" onClick={bulk} className="text-[11px] text-brand-600 hover:underline">Bulk paste</button>
+            <button type="button" onClick={() => setBulkOpen(true)} className="text-[11px] text-brand-600 hover:underline">Bulk paste</button>
             <button type="button" onClick={() => onChange([...rows, { url: '', status: 'Live' }])}
               className="text-[11px] text-brand-600 hover:underline flex items-center gap-0.5"><Plus size={11} /> Add</button>
           </div>
@@ -183,6 +233,14 @@ function LinkRows({ label, rows, onChange, disabled, placeholder = 'https://...'
           )}
         </div>
       ))}
+      <BulkPasteModal
+        open={bulkOpen}
+        onClose={() => setBulkOpen(false)}
+        title={`Bulk paste — ${label}`}
+        hint={`Paste multiple ${label} links below (one per line). They will be added with 'Live' status.`}
+        placeholder={`https://example.com/item-1\nhttps://example.com/item-2`}
+        onApply={onBulkApply}
+      />
     </div>
   )
 }
@@ -190,12 +248,11 @@ function LinkRows({ label, rows, onChange, disabled, placeholder = 'https://...'
 function KeywordRows({ label, rows, onChange, disabled }: {
   label: string; rows: any[]; onChange: (r: any[]) => void; disabled?: boolean
 }) {
+  const [bulkOpen, setBulkOpen] = useState(false)
   const set = (i: number, key: string, v: string) => {
     const next = [...rows]; next[i] = { ...next[i], [key]: v }; onChange(next)
   }
-  const bulk = () => {
-    const text = prompt(`Paste multiple ${label} (one per line — "keyword, position" or just "keyword")`)
-    if (!text) return
+  const onBulkApply = (text: string) => {
     const added = text.split(/\r?\n/).map(t => t.trim()).filter(Boolean).map(line => {
       const [keyword, position] = line.split(/,|\t/).map(s => s?.trim())
       return { keyword: keyword || '', position: position || '' }
@@ -208,7 +265,7 @@ function KeywordRows({ label, rows, onChange, disabled }: {
         <span className="text-xs font-medium text-gray-700">{label} <span className="text-gray-400">({rows.length})</span></span>
         {!disabled && (
           <div className="flex gap-1.5">
-            <button type="button" onClick={bulk} className="text-[11px] text-brand-600 hover:underline">Bulk paste</button>
+            <button type="button" onClick={() => setBulkOpen(true)} className="text-[11px] text-brand-600 hover:underline">Bulk paste</button>
             <button type="button" onClick={() => onChange([...rows, { keyword: '', position: '' }])}
               className="text-[11px] text-brand-600 hover:underline flex items-center gap-0.5"><Plus size={11} /> Add</button>
           </div>
@@ -228,6 +285,14 @@ function KeywordRows({ label, rows, onChange, disabled }: {
           )}
         </div>
       ))}
+      <BulkPasteModal
+        open={bulkOpen}
+        onClose={() => setBulkOpen(false)}
+        title={`Bulk paste — ${label}`}
+        hint={`Paste multiple keywords (one per line). Format: "keyword, position" or just "keyword".`}
+        placeholder={`best institute in delhi, 1\ndigital marketing course, 3`}
+        onApply={onBulkApply}
+      />
     </div>
   )
 }
@@ -278,6 +343,13 @@ export default function SeoReportBuilderPage() {
   const [submitting, setSubmitting] = useState(false)
   const [submitModal, setSubmitModal] = useState(false)
   const [notify, setNotify] = useState({ email: true, whatsapp: true, message: '' })
+  const [bulkDialog, setBulkDialog] = useState<{
+    open: boolean
+    title: string
+    hint?: string
+    placeholder?: string
+    onApply: (text: string) => void
+  }>({ open: false, title: '', onApply: () => {} })
 
   const autoTitle: string = report?.title || `${report?.client?.companyName || ''} SEO + GMB Monthly Report ${report?.reportMonth || ''}`
   const locked = report?.status === 'SUBMITTED' && !isAtLeast('ADMIN')
@@ -541,12 +613,16 @@ export default function SeoReportBuilderPage() {
               <div className="flex gap-1.5">
                 <button type="button" onClick={() => set('technicalWork', [...(d.technicalWork || []), ''])}
                   className="text-[11px] text-brand-600 hover:underline flex items-center gap-0.5"><Plus size={11} /> Add point</button>
-                <button type="button" onClick={() => {
-                  const text = prompt('Paste multiple points (one per line)')
-                  if (!text) return
-                  const added = text.split(/\r?\n/).map(t => t.trim()).filter(Boolean)
-                  set('technicalWork', [...(d.technicalWork || []), ...added])
-                }} className="text-[11px] text-brand-600 hover:underline">Bulk paste</button>
+                <button type="button" onClick={() => setBulkDialog({
+                  open: true,
+                  title: 'Bulk paste Technical SEO Points',
+                  hint: 'Paste multiple technical work points (one per line).',
+                  placeholder: 'Robots.txt optimized\nXML Sitemap updated\nCanonical tags checked',
+                  onApply: (text) => {
+                    const added = text.split(/\r?\n/).map(t => t.trim()).filter(Boolean)
+                    set('technicalWork', [...(d.technicalWork || []), ...added])
+                  }
+                })} className="text-[11px] text-brand-600 hover:underline">Bulk paste</button>
               </div>
             )}
           </div>
@@ -568,12 +644,16 @@ export default function SeoReportBuilderPage() {
               <div className="flex gap-1.5">
                 <button type="button" onClick={() => set('mapMarker', [...(d.mapMarker || []), ''])}
                   className="text-[11px] text-brand-600 hover:underline flex items-center gap-0.5"><Plus size={11} /> Add point</button>
-                <button type="button" onClick={() => {
-                  const text = prompt('Paste multiple map marker points (one per line)')
-                  if (!text) return
-                  const added = text.split(/\r?\n/).map(t => t.trim()).filter(Boolean)
-                  set('mapMarker', [...(d.mapMarker || []), ...added])
-                }} className="text-[11px] text-brand-600 hover:underline">Bulk paste</button>
+                <button type="button" onClick={() => setBulkDialog({
+                  open: true,
+                  title: 'Bulk paste Map Marker Points',
+                  hint: 'Paste multiple map marker points (one per line).',
+                  placeholder: 'Radius 5km marked\nGeo-tagging completed',
+                  onApply: (text) => {
+                    const added = text.split(/\r?\n/).map(t => t.trim()).filter(Boolean)
+                    set('mapMarker', [...(d.mapMarker || []), ...added])
+                  }
+                })} className="text-[11px] text-brand-600 hover:underline">Bulk paste</button>
               </div>
             )}
           </div>
@@ -615,15 +695,19 @@ export default function SeoReportBuilderPage() {
               <span className="text-xs font-medium text-gray-700">Web 2.0 <span className="text-gray-400">({(d.web20 || []).length})</span></span>
               {!locked && (
                 <div className="flex gap-1.5">
-                  <button type="button" onClick={() => {
-                    const text = prompt('Paste multiple Web 2.0 entries (one per line — "website, url, status")')
-                    if (!text) return
-                    const added = text.split(/\r?\n/).map(t => t.trim()).filter(Boolean).map(line => {
-                      const [website, url, status] = line.split(',').map(s => s?.trim())
-                      return { website: website || '', url: url || '', status: status || 'Live' }
-                    })
-                    set('web20', [...(d.web20 || []), ...added])
-                  }} className="text-[11px] text-brand-600 hover:underline">Bulk paste</button>
+                  <button type="button" onClick={() => setBulkDialog({
+                    open: true,
+                    title: 'Bulk paste Web 2.0 Submissions',
+                    hint: 'Paste multiple Web 2.0 entries (one per line — "website, url, status" or "website, url").',
+                    placeholder: 'wix.com, https://mysite.wixsite.com, Live\nwordpress.com, https://myblog.wordpress.com',
+                    onApply: (text) => {
+                      const added = text.split(/\r?\n/).map(t => t.trim()).filter(Boolean).map(line => {
+                        const [website, url, status] = line.split(',').map(s => s?.trim())
+                        return { website: website || '', url: url || '', status: status || 'Live' }
+                      })
+                      set('web20', [...(d.web20 || []), ...added])
+                    }
+                  })} className="text-[11px] text-brand-600 hover:underline">Bulk paste</button>
                   <button type="button" onClick={() => set('web20', [...(d.web20 || []), { website: '', url: '', status: 'Live' }])}
                     className="text-[11px] text-brand-600 hover:underline flex items-center gap-0.5"><Plus size={11} /> Add</button>
                 </div>
@@ -685,6 +769,15 @@ export default function SeoReportBuilderPage() {
           </div>
         </div>
       </Modal>
+
+      <BulkPasteModal
+        open={bulkDialog.open}
+        onClose={() => setBulkDialog(p => ({ ...p, open: false }))}
+        title={bulkDialog.title}
+        hint={bulkDialog.hint}
+        placeholder={bulkDialog.placeholder}
+        onApply={bulkDialog.onApply}
+      />
     </div>
   )
 }

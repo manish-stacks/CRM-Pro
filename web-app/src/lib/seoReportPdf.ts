@@ -632,7 +632,13 @@ export async function openSeoReportPdf(meta: SeoReportMeta, data: SeoReportData)
   const resolved = await preloadReportImages(data)
   const doc = generateSeoReportPdf(meta, resolved)
   const url = doc.output('bloburl') as unknown as string
-  const win = window.open(url, '_blank')
-  if (!win) throw new Error('Popup blocked — allow popups to preview the report')
+  try {
+    const win = window.open(url, '_blank')
+    if (!win) {
+      doc.save(`${meta.businessName}-SEO-Report-${meta.reportMonth}.pdf`.replace(/\s+/g, '-'))
+    }
+  } catch {
+    doc.save(`${meta.businessName}-SEO-Report-${meta.reportMonth}.pdf`.replace(/\s+/g, '-'))
+  }
   return url
 }
